@@ -7,7 +7,7 @@ Built with [Tauri](https://tauri.app/) — [Rust](https://www.rust-lang.org) + [
 Using GitHub flavored markdown style by [sindresorhus](https://github.com/sindresorhus/generate-github-markdown-css) and rendered with [comrak](https://github.com/kivikakk/comrak).
 
 > [!NOTE]
-> ## Changes in v1.0
+> ## Changes in v2.0
 > - Fixed relative image embeds
 > - Added YouTube embed support
 > - Added shortcut to edit in Notepad
@@ -19,7 +19,7 @@ Using GitHub flavored markdown style by [sindresorhus](https://github.com/sindre
 
 ## Usage
 
-- Download the latest `.exe` executable or installer from the [releases page](https://github.com/alecames/MarkdownViewer/releases/latest)
+- Download the latest installer from the [releases page](https://github.com/alecames/MarkdownViewer/releases/latest)
 - Right click on a markdown file and select "Open with" and select the downloaded or installed executable
 - [Optional] Set the executable as the default program to open `.md` files
 
@@ -27,7 +27,7 @@ Alternatively, you can install from source:
 
 - Clone the repository
 - Run `npm install` to install dependencies
-- Run `npm run tauri build` to build the `.exe` executable and installer
+- Run `npm run tauri build` to build the installer
 - Repeat the steps above to set the executable as the default program to open `.md` files
 
 ## Screenshots

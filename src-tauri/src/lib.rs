@@ -82,12 +82,12 @@ fn unwatch_file(state: State<'_, WatcherState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn send_markdown_path() -> Result<String, String> {
+fn send_markdown_path() -> Vec<String> {
     let args: Vec<String> = std::env::args().collect();
-    if let Some(path) = args.get(1) {
-        Ok(path.clone())
+    if args.len() > 1 {
+        args[1..].to_vec()
     } else {
-        Err("Markdown file path not provided.".to_string())
+        Vec::new()
     }
 }
 
