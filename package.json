@@ -1,6 +1,6 @@
 {
-  "name": "markdown-viewer-v2",
-  "version": "0.1.0",
+  "name": "markdown-viewer",
+  "version": "1.0.0",
   "description": "",
   "type": "module",
   "scripts": {

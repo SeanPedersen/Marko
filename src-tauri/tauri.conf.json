@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "markdown-viewer-v2",
-  "version": "0.1.0",
-  "identifier": "com.aleca.markdown-viewer-v2",
+  "productName": "MarkdownViewer",
+  "version": "1.0.0",
+  "identifier": "com.alecdotdev.markdownviewer",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -44,7 +44,7 @@
       {
         "ext": ["md", "markdown"],
         "name": "Markdown File",
-        "description": "Opens Markdown files with Markdown Viewer v2",
+        "description": "Opens Markdown files with Markdown Viewer",
         "role": "Viewer"
       }
     ],

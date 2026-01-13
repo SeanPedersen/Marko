@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+	import { listen } from '@tauri-apps/api/event';
 	import { onMount, tick } from 'svelte';
 	import { openUrl, openPath } from '@tauri-apps/plugin-opener';
 	import { open } from '@tauri-apps/plugin-dialog';
@@ -13,6 +14,7 @@
 	let scrollTop = $state(0);
 	let isScrolled = $derived(scrollTop > 0);
 	let markdownBody = $state<HTMLElement | null>(null);
+	let liveMode = $state(false);
 
 	const appWindow = getCurrentWindow();
 
@@ -111,8 +113,16 @@
 					}
 				}
 			}
-
+			if (markdownBody) {
+				markdownBody.innerHTML = doc.body.innerHTML;
+			}
 			htmlContent = doc.body.innerHTML;
+
+			if (liveMode) {
+				invoke('watch_file', { path: filePath }).catch(console.error);
+			}
+
+			await tick();
 			if (filePath) {
 				saveRecentFile(filePath);
 			}
@@ -232,6 +242,9 @@
 		htmlContent = '';
 		scrollTop = 0;
 		contextMenu.show = false;
+		if (liveMode) {
+			invoke('unwatch_file').catch(console.error);
+		}
 	}
 
 	async function openFileLocation() {
@@ -329,14 +342,39 @@
 		scrollTop = target.scrollTop;
 	}
 
+	async function toggleLiveMode() {
+		liveMode = !liveMode;
+		if (liveMode && currentFile) {
+			await invoke('watch_file', { path: currentFile });
+		} else {
+			await invoke('unwatch_file');
+		}
+	}
+
 	onMount(() => {
 		loadRecentFiles();
 
-		let unlistenFocus: (() => void) | undefined;
+		let unlistenFocus: (() => void) | null = null;
+		let unlistenFileChanged: (() => void) | null = null;
+		let unlistenPath: (() => void) | null = null;
 
 		const init = async () => {
 			unlistenFocus = await appWindow.onFocusChanged(({ payload: focused }) => {
 				isFocused = focused;
+			});
+
+			unlistenFileChanged = await listen('file-changed', () => {
+				if (liveMode && currentFile) {
+					loadMarkdown(currentFile);
+				}
+			});
+
+			unlistenPath = await listen('file-path', (event) => {
+				const filePath = event.payload as string;
+				if (filePath) {
+					currentFile = filePath;
+					loadMarkdown(filePath);
+				}
 			});
 
 			try {
@@ -356,6 +394,8 @@
 
 		return () => {
 			if (unlistenFocus) unlistenFocus();
+			if (unlistenFileChanged) unlistenFileChanged();
+			if (unlistenPath) unlistenPath();
 		};
 	});
 </script>
@@ -382,6 +422,10 @@
 							x2="18"
 							y2="10"></line
 						></svg>
+				</button>
+				<button class="title-action-btn {liveMode ? 'active' : ''}" onclick={toggleLiveMode} aria-label="Toggle Live Mode" title="Live update mode">
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+						><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z" /><circle cx="12" cy="12" r="3" /></svg>
 				</button>
 				<button class="title-action-btn" onclick={openInEditor} aria-label="Edit in Notepad" title="Edit in Notepad">
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -574,6 +618,11 @@
 		border-radius: 4px;
 		cursor: pointer;
 		transition: all 0.1s;
+	}
+
+	.title-action-btn.active {
+		color: var(--color-accent-fg);
+		background: var(--color-canvas-subtle);
 	}
 
 	.title-action-btn:hover {
