@@ -6,15 +6,21 @@ Built with [Tauri](https://tauri.app/) — [Rust](https://www.rust-lang.org) + [
 
 Using GitHub flavored markdown style by [sindresorhus](https://github.com/sindresorhus/generate-github-markdown-css) and rendered with [comrak](https://github.com/kivikakk/comrak).
 
+
+
+
 > [!NOTE]
-> ## Changes in v2.0
+> ## Changes in v2.1.0
+> - Integrated custom installer into main executable
+> - Added .md file association on installation
+> - Added syntax highlighting
+> - Added LaTeX formatting
+> ## Changes in v2.0.0
 > - Fixed relative image embeds
 > - Added YouTube embed support
 > - Added shortcut to edit in Notepad
 > - Added recent files on startup
 > - Added 'watch' mode to watch the markdown file for changes and update the markdown file in real-time
-
-
 
 
 ## Usage
@@ -42,7 +48,7 @@ Alternatively, you can install from source:
 - [X] Fix relative image embeds
 - [X] Add shortcut to edit in default text editor
 - [X] Tweak Windows installer to prevent desktop shortcut by default
+- [X] Add syntax highlighting for code blocks
+- [X] Add file association option for `.md` files in the Windows installer
 - [ ] Add option to toggle markdown rendering
-- [ ] Add syntax highlighting for code blocks
-- [ ] Add file association option for `.md` files in the Windows installer
 - [ ] Add tabs
