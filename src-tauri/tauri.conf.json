@@ -15,11 +15,11 @@
         "title": "Markdown Viewer",
         "width": 800,
         "height": 600,
-        "transparent": true,
-        "visible": false,
+        "transparent": false,
+        "visible": true,
         "resizable": true,
         "center": true,
-        "decorations": true
+        "decorations": false
       }
     ],
     "security": {
@@ -39,6 +39,20 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown"],
+        "name": "Markdown File",
+        "description": "Opens Markdown files with Markdown Viewer v2",
+        "role": "Viewer"
+      }
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "both",
+        "installerHooks": "hooks.nsi"
+      }
+    }
   }
 }

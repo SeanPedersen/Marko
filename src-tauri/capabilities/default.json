@@ -9,6 +9,13 @@
     "opener:allow-open-url",
     "opener:allow-open-path",
     "dialog:default",
-    "dialog:allow-open"
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-show",
+    "core:window:allow-hide"
   ]
 }

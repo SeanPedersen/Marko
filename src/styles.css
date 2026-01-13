@@ -1,52 +1,42 @@
-/*
-https://github.com/sindresorhus/generate-github-markdown-css?tab=MIT-1-ov-file
-MIT License
-Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
-*/
+::selection {
+	background-color: rgba(78, 179, 226, 0.2) !important;
+	color: inherit !important;
+}
+
+:root {
+	--win-font: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+
+	/* Default Light Theme */
+	--color-fg-default: #1f2328;
+	--color-fg-muted: #656d76;
+	--color-fg-subtle: #6e7781;
+	--color-canvas-default: #ffffff;
+	--color-canvas-subtle: #00000011;
+	--color-border-default: #d0d7de;
+	--color-border-muted: hsla(210, 18%, 87%, 1);
+	--color-neutral-muted: rgba(175, 184, 193, 0.2);
+	--color-accent-fg: #0969da;
+	--color-accent-emphasis: #0969da;
+	--color-success-fg: #1a7f37;
+	--color-success-emphasis: #1f883d;
+	--color-attention-fg: #9a6700;
+	--color-attention-emphasis: #9a6700;
+	--color-attention-subtle: #fff8c5;
+	--color-danger-fg: #d1242f;
+	--color-danger-emphasis: #cf222e;
+	--color-done-fg: #8250df;
+	--color-done-emphasis: #8250df;
+}
 
 @media (prefers-color-scheme: dark) {
-
-	.markdown-body,
-	[data-theme="dark"] {
-		/*dark*/
-		color-scheme: dark;
-		--color-prettylights-syntax-comment: #8b949e;
-		--color-prettylights-syntax-constant: #79c0ff;
-		--color-prettylights-syntax-entity: #d2a8ff;
-		--color-prettylights-syntax-storage-modifier-import: #c9d1d9;
-		--color-prettylights-syntax-entity-tag: #7ee787;
-		--color-prettylights-syntax-keyword: #ff7b72;
-		--color-prettylights-syntax-string: #a5d6ff;
-		--color-prettylights-syntax-variable: #ffa657;
-		--color-prettylights-syntax-brackethighlighter-unmatched: #f85149;
-		--color-prettylights-syntax-invalid-illegal-text: #f0f6fc;
-		--color-prettylights-syntax-invalid-illegal-bg: #8e1519;
-		--color-prettylights-syntax-carriage-return-text: #f0f6fc;
-		--color-prettylights-syntax-carriage-return-bg: #b62324;
-		--color-prettylights-syntax-string-regexp: #7ee787;
-		--color-prettylights-syntax-markup-list: #f2cc60;
-		--color-prettylights-syntax-markup-heading: #1f6feb;
-		--color-prettylights-syntax-markup-italic: #c9d1d9;
-		--color-prettylights-syntax-markup-bold: #c9d1d9;
-		--color-prettylights-syntax-markup-deleted-text: #ffdcd7;
-		--color-prettylights-syntax-markup-deleted-bg: #67060c;
-		--color-prettylights-syntax-markup-inserted-text: #aff5b4;
-		--color-prettylights-syntax-markup-inserted-bg: #033a16;
-		--color-prettylights-syntax-markup-changed-text: #ffdfb6;
-		--color-prettylights-syntax-markup-changed-bg: #5a1e02;
-		--color-prettylights-syntax-markup-ignored-text: #c9d1d9;
-		--color-prettylights-syntax-markup-ignored-bg: #1158c7;
-		--color-prettylights-syntax-meta-diff-range: #d2a8ff;
-		--color-prettylights-syntax-brackethighlighter-angle: #8b949e;
-		--color-prettylights-syntax-sublimelinter-gutter-mark: #484f58;
-		--color-prettylights-syntax-constant-other-reference-link: #a5d6ff;
+	:root {
 		--color-fg-default: #e6edf3;
 		--color-fg-muted: #848d97;
 		--color-fg-subtle: #6e7681;
-		--color-canvas-default: #202020;
-		--color-canvas-subtle: #2b2b2b;
-		--color-border-default: #3f3f3f;
-		--color-border-muted: #272727;
+		--color-canvas-default: #181818;
+		--color-canvas-subtle: #ffffff11;
+		--color-border-default: #30363d;
+		--color-border-muted: #21262d;
 		--color-neutral-muted: rgba(124, 124, 124, 0.4);
 		--color-accent-fg: #4390fc;
 		--color-accent-emphasis: #3781f0;
@@ -62,62 +52,28 @@ Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 	}
 }
 
-@media (prefers-color-scheme: light) {
+body {
+	transition: background-color 0.3s ease, color 0.3s ease;
+}
 
-	.markdown-body,
-	[data-theme="light"] {
-		/*light*/
-		color-scheme: light;
-		--color-prettylights-syntax-comment: #57606a;
-		--color-prettylights-syntax-constant: #0550ae;
-		--color-prettylights-syntax-entity: #6639ba;
-		--color-prettylights-syntax-storage-modifier-import: #24292f;
-		--color-prettylights-syntax-entity-tag: #116329;
-		--color-prettylights-syntax-keyword: #cf222e;
-		--color-prettylights-syntax-string: #0a3069;
-		--color-prettylights-syntax-variable: #953800;
-		--color-prettylights-syntax-brackethighlighter-unmatched: #82071e;
-		--color-prettylights-syntax-invalid-illegal-text: #f6f8fa;
-		--color-prettylights-syntax-invalid-illegal-bg: #82071e;
-		--color-prettylights-syntax-carriage-return-text: #f6f8fa;
-		--color-prettylights-syntax-carriage-return-bg: #cf222e;
-		--color-prettylights-syntax-string-regexp: #116329;
-		--color-prettylights-syntax-markup-list: #3b2300;
-		--color-prettylights-syntax-markup-heading: #0550ae;
-		--color-prettylights-syntax-markup-italic: #24292f;
-		--color-prettylights-syntax-markup-bold: #24292f;
-		--color-prettylights-syntax-markup-deleted-text: #82071e;
-		--color-prettylights-syntax-markup-deleted-bg: #ffebe9;
-		--color-prettylights-syntax-markup-inserted-text: #116329;
-		--color-prettylights-syntax-markup-inserted-bg: #dafbe1;
-		--color-prettylights-syntax-markup-changed-text: #953800;
-		--color-prettylights-syntax-markup-changed-bg: #ffd8b5;
-		--color-prettylights-syntax-markup-ignored-text: #eaeef2;
-		--color-prettylights-syntax-markup-ignored-bg: #0550ae;
-		--color-prettylights-syntax-meta-diff-range: #8250df;
-		--color-prettylights-syntax-brackethighlighter-angle: #57606a;
-		--color-prettylights-syntax-sublimelinter-gutter-mark: #8c959f;
-		--color-prettylights-syntax-constant-other-reference-link: #0a3069;
-		--color-fg-default: #1f2328;
-		--color-fg-muted: #656d76;
-		--color-fg-subtle: #6e7781;
-		--color-canvas-default: #ffffff;
-		--color-canvas-subtle: #f6f8fa;
-		--color-border-default: #d0d7de;
-		--color-border-muted: hsla(210, 18%, 87%, 1);
-		--color-neutral-muted: rgba(175, 184, 193, 0.2);
-		--color-accent-fg: #0969da;
-		--color-accent-emphasis: #0969da;
-		--color-success-fg: #1a7f37;
-		--color-success-emphasis: #1f883d;
-		--color-attention-fg: #9a6700;
-		--color-attention-emphasis: #9a6700;
-		--color-attention-subtle: #fff8c5;
-		--color-danger-fg: #d1242f;
-		--color-danger-emphasis: #cf222e;
-		--color-done-fg: #8250df;
-		--color-done-emphasis: #8250df;
-	}
+/* Floating Scrollbar */
+::-webkit-scrollbar {
+	width: 12px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background-color: rgba(120, 120, 120, 0.4);
+	border-radius: 10px;
+	border: 3px solid transparent;
+	background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background-color: rgba(120, 120, 120, 0.6);
 }
 
 .markdown-body {
@@ -125,7 +81,7 @@ Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 	-webkit-text-size-adjust: 100%;
 	margin: 0;
 	color: var(--color-fg-default);
-	background-color: transparent;
+	background-color: var(--color-canvas-default);
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
 		Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
 	font-size: 16px;
@@ -226,13 +182,14 @@ Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 	max-width: 100%;
 	box-sizing: content-box;
 	background-color: var(--color-canvas-default);
+	border-radius: 8px;
 }
 
 .markdown-body code,
 .markdown-body kbd,
 .markdown-body pre,
 .markdown-body samp {
-	font-family: monospace;
+	font-family: monospace, monospace;
 	font-size: 1em;
 }
 
@@ -242,26 +199,42 @@ Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 
 .markdown-body hr {
 	box-sizing: content-box;
-	overflow: hidden;
+	overflow: visible;
 	background: transparent;
+	border: 0;
 	border-bottom: 1px solid var(--color-border-muted);
 	height: 0.25em;
 	padding: 0;
 	margin: 24px 0;
 	background-color: var(--color-border-default);
-	border: 0;
 }
 
 .markdown-body input {
 	font: inherit;
 	margin: 0;
 	overflow: visible;
+	font-family: inherit;
+	font-size: inherit;
+	line-height: inherit;
 }
 
 .markdown-body [type="button"],
 .markdown-body [type="reset"],
 .markdown-body [type="submit"] {
-	appearance: button;
+	-webkit-appearance: button;
+}
+
+.markdown-body [type="button"]::-moz-focus-inner,
+.markdown-body [type="reset"]::-moz-focus-inner,
+.markdown-body [type="submit"]::-moz-focus-inner {
+	border-style: none;
+	padding: 0;
+}
+
+.markdown-body [type="button"]:-moz-focusring,
+.markdown-body [type="reset"]:-moz-focusring,
+.markdown-body [type="submit"]:-moz-focusring {
+	outline: 1px dotted ButtonText;
 }
 
 .markdown-body [type="checkbox"],
@@ -275,14 +248,43 @@ Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 	height: auto;
 }
 
+.markdown-body [type="search"] {
+	-webkit-appearance: textfield;
+	outline-offset: -2px;
+}
+
 .markdown-body [type="search"]::-webkit-search-cancel-button,
 .markdown-body [type="search"]::-webkit-search-decoration {
-	appearance: none;
+	-webkit-appearance: none;
+}
+
+.markdown-body ::-webkit-input-placeholder {
+	color: inherit;
+	opacity: 0.54;
+}
+
+.markdown-body ::-webkit-file-upload-button {
+	-webkit-appearance: button;
+	font: inherit;
+}
+
+.markdown-body a:hover {
+	text-decoration: underline;
 }
 
 .markdown-body ::placeholder {
 	color: var(--color-fg-subtle);
-	opacity: 1;
+}
+
+.markdown-body hr::before {
+	display: table;
+	content: "";
+}
+
+.markdown-body hr::after {
+	display: table;
+	clear: both;
+	content: "";
 }
 
 .markdown-body table {
@@ -292,38 +294,60 @@ Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 	width: max-content;
 	max-width: 100%;
 	overflow: auto;
+	margin-top: 0;
+	margin-bottom: 16px;
 }
 
-.markdown-body td,
-.markdown-body th {
-	padding: 0;
+.markdown-body table th {
+	font-weight: 600;
+}
+
+.markdown-body table td,
+.markdown-body table th {
+	padding: 6px 13px;
+	border: 1px solid var(--color-border-default);
+}
+
+.markdown-body table tr {
+	background-color: var(--color-canvas-default);
+	border-top: 1px solid var(--color-border-muted);
+}
+
+.markdown-body table tr:nth-child(2n) {
+	background-color: var(--color-canvas-subtle);
 }
 
 .markdown-body details summary {
 	cursor: pointer;
 }
 
-.markdown-body details:not([open])>*:not(summary) {
-	display: none !important;
+.markdown-body details summary:marker {
+	display: none;
 }
 
-.markdown-body a:focus,
-.markdown-body [role="button"]:focus {
-	outline: 2px solid var(--color-accent-fg);
-	outline-offset: -2px;
+.markdown-body details summary::-webkit-details-marker {
+	display: none;
 }
 
 .markdown-body kbd {
 	display: inline-block;
 	padding: 3px 5px;
-	font: 11px ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
+	font:
+		11px ui-monospace,
+		SFMono-Regular,
+		SF Mono,
+		Menlo,
+		Consolas,
+		Liberation Mono,
+		monospace;
 	line-height: 10px;
 	color: var(--color-fg-default);
 	vertical-align: middle;
 	background-color: var(--color-canvas-subtle);
-	border: solid 1px var(--color-neutral-muted);
+	border: solid 1px var(--color-border-default);
+	border-bottom-color: var(--color-border-default);
 	border-radius: 6px;
-	box-shadow: inset 0 -1px 0 var(--color-neutral-muted);
+	box-shadow: inset 0 -1px 0 var(--color-border-default);
 }
 
 .markdown-body h1,
@@ -339,24 +363,29 @@ Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 }
 
 .markdown-body h2 {
+	font-weight: 600;
 	padding-bottom: 0.3em;
 	font-size: 1.5em;
 	border-bottom: 1px solid var(--color-border-muted);
 }
 
 .markdown-body h3 {
+	font-weight: 600;
 	font-size: 1.25em;
 }
 
 .markdown-body h4 {
+	font-weight: 600;
 	font-size: 1em;
 }
 
 .markdown-body h5 {
+	font-weight: 600;
 	font-size: 0.875em;
 }
 
 .markdown-body h6 {
+	font-weight: 600;
 	font-size: 0.85em;
 	color: var(--color-fg-muted);
 }
@@ -380,35 +409,32 @@ Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 	padding-left: 2em;
 }
 
-.markdown-body tt,
-.markdown-body code,
-.markdown-body samp {
-	font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
-	font-size: 12px;
+.markdown-body ol ol,
+.markdown-body ul ol {
+	list-style-type: lower-roman;
 }
 
-.markdown-body pre {
-	margin-top: 0;
-	margin-bottom: 0;
-	font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
-	font-size: 12px;
-	word-wrap: normal;
+.markdown-body ul ul ol,
+.markdown-body ul ol ol,
+.markdown-body ol ul ol,
+.markdown-body ol ol ol {
+	list-style-type: lower-alpha;
 }
 
-.markdown-body .mr-2 {
-	margin-right: 8px !important;
+.markdown-body li {
+	word-wrap: break-all;
 }
 
-.markdown-body p,
-.markdown-body blockquote,
-.markdown-body ul,
-.markdown-body ol,
-.markdown-body dl,
-.markdown-body table,
-.markdown-body pre,
-.markdown-body details {
-	margin-top: 0;
-	margin-bottom: 16px;
+.markdown-body li>p {
+	margin-top: 16px;
+}
+
+.markdown-body li+li {
+	margin-top: 0.25em;
+}
+
+.markdown-body dl {
+	padding: 0;
 }
 
 .markdown-body dl dt {
@@ -424,33 +450,7 @@ Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 	margin-bottom: 16px;
 }
 
-.markdown-body table th {
-	font-weight: 600;
-}
-
-.markdown-body table th,
-.markdown-body table td {
-	padding: 6px 13px;
-	border: 1px solid var(--color-border-default);
-}
-
-.markdown-body table tr {
-	background-color: var(--color-canvas-default);
-	border-top: 1px solid var(--color-border-muted);
-}
-
-.markdown-body table tr:nth-child(2n) {
-	background-color: var(--color-canvas-subtle);
-}
-
-.markdown-body .emoji {
-	max-width: none;
-	vertical-align: text-top;
-	background-color: transparent;
-}
-
-.markdown-body code,
-.markdown-body tt {
+.markdown-body code {
 	padding: 0.2em 0.4em;
 	margin: 0;
 	font-size: 85%;
@@ -460,111 +460,212 @@ Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)
 }
 
 .markdown-body pre {
+	margin-top: 0;
+	margin-bottom: 0;
+	font-family:
+		ui-monospace,
+		SFMono-Regular,
+		SF Mono,
+		Menlo,
+		Consolas,
+		Liberation Mono,
+		monospace;
+	font-size: 12px;
+	word-wrap: normal;
+}
+
+.markdown-body pre>code {
+	padding: 0;
+	margin: 0;
+	word-break: normal;
+	white-space: pre;
+	background: transparent;
+	border: 0;
+}
+
+.markdown-body .highlight {
+	margin-bottom: 16px;
+}
+
+.markdown-body .highlight pre {
+	margin-bottom: 0;
+	word-break: normal;
+}
+
+.markdown-body .highlight pre,
+.markdown-body pre {
 	padding: 16px;
 	overflow: auto;
 	font-size: 85%;
 	line-height: 1.45;
-	color: var(--color-fg-default);
 	background-color: var(--color-canvas-subtle);
 	border-radius: 6px;
 }
 
-.markdown-body .task-list-item {
-	list-style-type: none;
+.markdown-body pre code,
+.markdown-body pre tt {
+	display: inline;
+	max-width: auto;
+	padding: 0;
+	margin: 0;
+	overflow: visible;
+	line-height: inherit;
+	word-wrap: normal;
+	background-color: transparent;
+	border: 0;
 }
 
-.markdown-body .task-list-item-checkbox {
-	margin: 0 0.2em 0.25em -1.4em;
-	vertical-align: middle;
+.markdown-body .csv-data td,
+.markdown-body .csv-data th {
+	padding: 5px;
+	overflow: hidden;
+	font-size: 12px;
+	line-height: 1;
+	text-align: left;
+	white-space: nowrap;
 }
 
-.markdown-body .markdown-alert {
-	padding: 12px 16px;
-	margin-bottom: 16px;
-	color: inherit;
-	border-left: 0.25em solid var(--color-border-default);
+.markdown-body .csv-data .blob-num {
+	padding: 10px 8px 9px;
+	text-align: right;
+	background: var(--color-canvas-default);
+	border: 0;
+}
+
+.markdown-body .csv-data tr {
+	border-top: 0;
+}
+
+.markdown-body .csv-data th {
+	font-weight: 600;
 	background: var(--color-canvas-subtle);
+	border-top: 0;
+}
+
+.markdown-body [data-footnoteref] {
+	font-size: 75%;
+	vertical-align: super;
+	line-height: 0;
+}
+
+.markdown-body .footnotes {
+	font-size: 12px;
+	color: var(--color-fg-muted);
+	border-top: 1px solid var(--color-border-default);
+	margin-top: 24px;
+}
+
+.markdown-body .footnotes ol {
+	padding-left: 16px;
+}
+
+.markdown-body .footnotes li {
+	position: relative;
+}
+
+.markdown-body .footnotes li:target::before {
+	position: absolute;
+	top: -8px;
+	right: -8px;
+	bottom: -8px;
+	left: -24px;
+	pointer-events: none;
+	content: "";
+	border: 2px solid var(--color-accent-fg);
 	border-radius: 6px;
 }
 
-.markdown-body .markdown-alert .markdown-alert-title {
-	display: flex;
-	font-weight: 600;
-	align-items: center;
-	line-height: 1;
-	margin-bottom: 8px;
-	font-size: 14px;
-	gap: 8px;
+.markdown-body .footnotes li:target {
+	color: var(--color-fg-default);
 }
 
-.markdown-body .markdown-alert .alert-icon {
+.markdown-body .footnote-backref {
 	display: inline-block;
-	width: 16px;
-	height: 16px;
-	background-color: currentColor;
+	font-family:
+		-apple-system,
+		BlinkMacSystemFont,
+		"Segoe UI",
+		"Noto Sans",
+		Helvetica,
+		Arial,
+		sans-serif,
+		"Apple Color Emoji",
+		"Segoe UI Emoji";
+	vertical-align: text-bottom;
 }
 
-.markdown-body .markdown-alert.markdown-alert-note {
-	border-left-color: var(--color-accent-emphasis);
+.markdown-body .markdown-alert {
+	padding: 0.5rem 1rem;
+	margin-bottom: 1rem;
+	color: inherit;
+	border-left: 0.25rem solid var(--color-border-default);
+	border-radius: 8px;
+	background-color: var(--color-canvas-subtle);
 }
 
-.markdown-body .markdown-alert.markdown-alert-note .markdown-alert-title {
+.markdown-body .markdown-alert-title {
+	display: flex;
+	align-items: center;
+	font-weight: 600;
+	line-height: 1;
+	margin: 0.3rem 0 0.8rem 0;
+}
+
+.markdown-body .markdown-alert-title svg {
+	margin-right: 0.5rem;
+	display: inline-block;
+	flex-shrink: 0;
+	vertical-align: middle;
+}
+
+.markdown-body .markdown-alert-note {
+	border-left-color: var(--color-accent-fg);
+}
+
+.markdown-body .markdown-alert-note .markdown-alert-title {
 	color: var(--color-accent-fg);
 }
 
-.markdown-body .markdown-alert.markdown-alert-important {
-	border-left-color: var(--color-done-emphasis);
+
+
+.markdown-body .markdown-alert-tip {
+	border-left-color: var(--color-success-fg);
 }
 
-.markdown-body .markdown-alert.markdown-alert-important .markdown-alert-title {
-	color: var(--color-done-fg);
-}
-
-.markdown-body .markdown-alert.markdown-alert-warning {
-	border-left-color: var(--color-attention-emphasis);
-}
-
-.markdown-body .markdown-alert.markdown-alert-warning .markdown-alert-title {
-	color: var(--color-attention-fg);
-}
-
-.markdown-body .markdown-alert.markdown-alert-tip {
-	border-left-color: var(--color-success-emphasis);
-}
-
-.markdown-body .markdown-alert.markdown-alert-tip .markdown-alert-title {
+.markdown-body .markdown-alert-tip .markdown-alert-title {
 	color: var(--color-success-fg);
 }
 
-.markdown-body .markdown-alert.markdown-alert-caution {
-	border-left-color: var(--color-danger-emphasis);
+
+
+.markdown-body .markdown-alert-important {
+	border-left-color: var(--color-done-fg);
 }
 
-.markdown-body .markdown-alert.markdown-alert-caution .markdown-alert-title {
+.markdown-body .markdown-alert-important .markdown-alert-title {
+	color: var(--color-done-fg);
+}
+
+
+
+.markdown-body .markdown-alert-warning {
+	border-left-color: var(--color-attention-fg);
+}
+
+.markdown-body .markdown-alert-warning .markdown-alert-title {
+	color: var(--color-attention-fg);
+}
+
+
+
+.markdown-body .markdown-alert-caution {
+	border-left-color: var(--color-danger-fg);
+}
+
+.markdown-body .markdown-alert-caution .markdown-alert-title {
 	color: var(--color-danger-fg);
 }
 
-.markdown-body .markdown-alert-note .alert-icon {
-	-webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path d='M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z'></path></svg>") no-repeat center;
-	mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path d='M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z'></path></svg>") no-repeat center;
-}
-
-.markdown-body .markdown-alert-tip .alert-icon {
-	-webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path d='M8 1.5c-2.363 0-4.5 1.956-4.5 4.75 0 1.256.409 2.33 1.05 3.121.633.782 1.45 1.433 1.45 2.129 0 .23-.058.411-.148.56-.09.148-.22.28-.352.413-.133.132-.27.27-.378.417-.11.149-.172.335-.172.56 0 .584.453 1.05 1.05 1.05h4c.597 0 1.05-.466 1.05-1.05 0-.225-.061-.411-.172-.56-.108-.148-.245-.285-.378-.417-.132-.132-.262-.265-.352-.413-.09-.149-.148-.33-.148-.56 0-.696.817-1.347 1.45-2.129.641-.791 1.05-1.865 1.05-3.121 0-2.794-2.137-4.75-4.5-4.75ZM5 6.25c0-1.642 1.254-3.25 3-3.25.414 0 .75.336.75.75s-.336.75-.75.75c-1.004 0-1.5.792-1.5 1.75 0 .414-.336.75-.75.75s-.75-.336-.75-.75Z'></path><path d='M6.5 14.5a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75Z'></path></svg>") no-repeat center;
-	mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path d='M8 1.5c-2.363 0-4.5 1.956-4.5 4.75 0 1.256.409 2.33 1.05 3.121.633.782 1.45 1.433 1.45 2.129 0 .23-.058.411-.148.56-.09.148-.22.28-.352.413-.133.132-.27.27-.378.417-.11.149-.172.335-.172.56 0 .584.453 1.05 1.05 1.05h4c.597 0 1.05-.466 1.05-1.05 0-.225-.061-.411-.172-.56-.108-.148-.245-.285-.378-.417-.132-.132-.262-.265-.352-.413-.09-.149-.148-.33-.148-.56 0-.696.817-1.347 1.45-2.129.641-.791 1.05-1.865 1.05-3.121 0-2.794-2.137-4.75-4.5-4.75ZM5 6.25c0-1.642 1.254-3.25 3-3.25.414 0 .75.336.75.75s-.336.75-.75.75c-1.004 0-1.5.792-1.5 1.75 0 .414-.336.75-.75.75s-.75-.336-.75-.75Z'></path><path d='M6.5 14.5a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75Z'></path></svg>") no-repeat center;
-}
-
-.markdown-body .markdown-alert-important .alert-icon {
-	-webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path d='M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z'></path></svg>") no-repeat center;
-	mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path d='M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z'></path></svg>") no-repeat center;
-}
-
-.markdown-body .markdown-alert-warning .alert-icon {
-	-webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path d='M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.03 11.315c.621 1.162-.224 2.576-1.543 2.576H2.01c-1.319 0-2.164-1.414-1.543-2.576l6.03-11.315Zm1.543.824L1.97 13.186a.438.438 0 0 0 .383.633h11.294a.438.438 0 0 0 .383-.633L8 1.871ZM7 4.75a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-1.5 0v-3.5Zm1 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z'></path></svg>") no-repeat center;
-	mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path d='M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.03 11.315c.621 1.162-.224 2.576-1.543 2.576H2.01c-1.319 0-2.164-1.414-1.543-2.576l6.03-11.315Zm1.543.824L1.97 13.186a.438.438 0 0 0 .383.633h11.294a.438.438 0 0 0 .383-.633L8 1.871ZM7 4.75a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-1.5 0v-3.5Zm1 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z'></path></svg>") no-repeat center;
-}
-
 .markdown-body .markdown-alert-caution .alert-icon {
-	-webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path d='M4.47.22A.749.749 0 0 1 5 0h6c.199 0 .389.079.53.22l4.25 4.25c.141.14.22.331.22.53v6a.749.749 0 0 1-.22.53l-4.25 4.25A.749.749 0 0 1 11 16H5a.749.749 0 0 1-.53-.22L.22 11.53A.749.749 0 0 1 0 11V5c0-.199.079-.389.22-.53Zm.84 1.28L1.5 5.31v5.38l3.81 3.81h5.38l3.81-3.81V5.31L10.69 1.5ZM8 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z'></path></svg>") no-repeat center;
-	mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' version='1.1' aria-hidden='true'><path d='M4.47.22A.749.749 0 0 1 5 0h6c.199 0 .389.079.53.22l4.25 4.25c.141.14.22.331.22.53v6a.749.749 0 0 1-.22.53l-4.25 4.25A.749.749 0 0 1 11 16H5a.749.749 0 0 1-.53-.22L.22 11.53A.749.749 0 0 1 0 11V5c0-.199.079-.389.22-.53Zm.84 1.28L1.5 5.31v5.38l3.81 3.81h5.38l3.81-3.81V5.31L10.69 1.5ZM8 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z'></path></svg>") no-repeat center;
+	vertical-align: text-bottom;
 }

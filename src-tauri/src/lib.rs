@@ -1,7 +1,6 @@
 use comrak::{markdown_to_html, ComrakExtensionOptions, ComrakOptions};
 use std::fs;
 use tauri::{Emitter, Manager};
-use window_vibrancy::apply_mica;
 
 #[tauri::command]
 fn open_markdown(path: String) -> Result<String, String> {
@@ -27,6 +26,19 @@ fn open_markdown(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn open_in_notepad(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new("notepad.exe")
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn send_markdown_path() -> Result<String, String> {
     let args: Vec<String> = std::env::args().collect();
     if let Some(path) = args.get(1) {
@@ -38,31 +50,39 @@ fn send_markdown_path() -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    {
+        std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--enable-features=SmoothScrolling");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_prevent_default::init())
         .setup(|app| {
             let args: Vec<String> = std::env::args().collect();
             let window = app.get_webview_window("main").unwrap();
+
+            /*
+            #[cfg(target_os = "windows")]
+            {
+                // Set programmatic transparency at the window level
+                let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+                let _ = apply_mica(&window, None);
+            }
+            */
 
             if let Some(path) = args.get(1) {
                 let _ = window.emit("file_path", path.as_str());
             }
 
-            #[cfg(target_os = "windows")]
-            let _ = apply_mica(&window, None);
-
-            // focus jank fix from v1
-            window.minimize().unwrap();
-            window.unminimize().unwrap();
-            window.maximize().unwrap();
-            window.unmaximize().unwrap();
-            window.show().unwrap();
-            window.set_focus().unwrap();
-
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![open_markdown, send_markdown_path])
+        .invoke_handler(tauri::generate_handler![
+            open_markdown,
+            send_markdown_path,
+            open_in_notepad
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
