@@ -7,21 +7,16 @@ Built with [Tauri](https://tauri.app/) — [Rust](https://www.rust-lang.org) + [
 Using GitHub flavored markdown style by [sindresorhus](https://github.com/sindresorhus/generate-github-markdown-css) and rendered with [comrak](https://github.com/kivikakk/comrak).
 
 
-
-
 > [!NOTE]
+## Changes in v2.1.1
+> - Added tabs (alpha)
+> - Updated app and file icon
 > ## Changes in v2.1.0
 > - Integrated custom installer into main executable
 > - Added .md file association on installation
 > - Added syntax highlighting
 > - Added LaTeX formatting
 > ## Changes in v2.0.0
-> ## Changes in v2.1.1
-> - Added tabs (alpha)
-> - Updated app and file icon  
-> - Added file association option in the installer
-> - Added syntax highlighting for code blocks
-> ## Changes in v2.0
 > - Fixed relative image embeds
 > - Added YouTube embed support
 > - Added shortcut to edit in Notepad
