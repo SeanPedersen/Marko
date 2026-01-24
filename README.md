@@ -16,12 +16,17 @@ Using GitHub flavored markdown style by [sindresorhus](https://github.com/sindre
 > - Added syntax highlighting
 > - Added LaTeX formatting
 > ## Changes in v2.0.0
+> ## Changes in v2.1.1
+> - Added tabs (alpha)
+> - Updated app and file icon  
+> - Added file association option in the installer
+> - Added syntax highlighting for code blocks
+> ## Changes in v2.0
 > - Fixed relative image embeds
 > - Added YouTube embed support
 > - Added shortcut to edit in Notepad
 > - Added recent files on startup
 > - Added 'watch' mode to watch the markdown file for changes and update the markdown file in real-time
-
 
 ## Usage
 
@@ -48,7 +53,7 @@ Alternatively, you can install from source:
 - [X] Fix relative image embeds
 - [X] Add shortcut to edit in default text editor
 - [X] Tweak Windows installer to prevent desktop shortcut by default
+- [X] Add tabs (alpha)
+- [X] Add file association option in the installer
 - [X] Add syntax highlighting for code blocks
-- [X] Add file association option for `.md` files in the Windows installer
 - [ ] Add option to toggle markdown rendering
-- [ ] Add tabs

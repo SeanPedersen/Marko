@@ -1,0 +1,260 @@
+<script lang="ts">
+	import { getCurrentWindow } from '@tauri-apps/api/window';
+	import { fly, slide } from 'svelte/transition';
+	import iconUrl from '../../assets/icon.png';
+	import TabList from './TabList.svelte';
+	import { tabManager } from '../stores/tabs.svelte.js';
+
+	let { isFocused, isScrolled, currentFile, liveMode, windowTitle, onselectFile, oncloseFile, ononpenFileLocation, ontoggleLiveMode, onopenInEditor, ondetach } = $props<{
+		isFocused: boolean;
+		isScrolled: boolean;
+		currentFile: string;
+		liveMode: boolean;
+		windowTitle: string;
+		onselectFile: () => void;
+		oncloseFile: () => void;
+		ononpenFileLocation: () => void;
+		ontoggleLiveMode: () => void;
+		onopenInEditor: () => void;
+		ondetach: (tabId: string) => void;
+	}>();
+
+	const appWindow = getCurrentWindow();
+</script>
+
+<div class="custom-title-bar {isScrolled ? 'scrolled' : ''}" data-tauri-drag-region>
+	<div class="window-controls-left">
+		<button class="icon-home-btn" onclick={oncloseFile} aria-label="Go to Home" title="Go to home">
+			<img src={iconUrl} alt="icon" class="window-icon" />
+		</button>
+	</div>
+
+	{#if tabManager.tabs.length > 0}
+		<div class="tab-area">
+			<TabList onnewTab={() => tabManager.addHomeTab()} {ondetach} />
+		</div>
+	{:else}
+		<div class="window-title-container">
+			<div class="window-title {isFocused ? 'focused' : 'unfocused'}">
+				<span class="title-text">
+					{windowTitle}
+				</span>
+			</div>
+		</div>
+	{/if}
+
+	<div class="title-actions">
+		{#if currentFile}
+			<div class="actions-wrapper" transition:slide={{ axis: 'x', duration: 200 }}>
+				<button class="title-action-btn" onclick={ononpenFileLocation} aria-label="Open File Location" title="Open folder" transition:fly={{ x: 10, duration: 100, delay: 0 }}>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+						><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><polyline points="15 13 18 13 18 10"></polyline><line
+							x1="14"
+							y1="14"
+							x2="18"
+							y2="10"></line
+						></svg>
+				</button>
+				<button
+					class="title-action-btn {liveMode ? 'active' : ''}"
+					onclick={ontoggleLiveMode}
+					aria-label="Toggle Live Mode"
+					title="Live update mode"
+					transition:fly={{ x: 20, duration: 100, delay: 50 }}>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+						><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z" /><circle cx="12" cy="12" r="3" /></svg>
+				</button>
+				<button class="title-action-btn" onclick={onopenInEditor} aria-label="Edit in Notepad" title="Edit in Notepad" transition:fly={{ x: 30, duration: 100, delay: 100 }}>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+						><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+				</button>
+			</div>
+		{/if}
+		<button class="title-action-btn" onclick={onselectFile} aria-label="Open File" title="Open file">
+			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+				><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
+		</button>
+	</div>
+
+	<div class="window-controls-right">
+		<button class="control-btn" onclick={() => appWindow.minimize()} aria-label="Minimize">
+			<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="currentColor" width="10" height="1" x="1" y="6" /></svg>
+		</button>
+		<button class="control-btn" onclick={() => appWindow.toggleMaximize()} aria-label="Maximize">
+			<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="none" stroke="currentColor" stroke-width="1" width="9" height="9" x="1.5" y="1.5" /></svg>
+		</button>
+		<button class="control-btn close-btn" onclick={() => appWindow.close()} aria-label="Close">
+			<svg width="12" height="12" viewBox="0 0 12 12"><path fill="currentColor" d="M11 1.7L10.3 1 6 5.3 1.7 1 1 1.7 5.3 6 1 10.3 1.7 11 6 6.7 10.3 11 11 10.3 6.7 6z" /></svg>
+		</button>
+	</div>
+</div>
+
+<style>
+	.custom-title-bar {
+		height: 36px;
+		background-color: var(--color-canvas-default);
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		user-select: none;
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: 9999;
+		font-family: var(--win-font);
+		border-bottom: 1px solid transparent;
+		transition: border-color 0.2s;
+	}
+
+	.custom-title-bar.scrolled {
+		border-bottom-color: var(--color-border-muted);
+	}
+
+	.tab-area {
+		display: flex;
+		flex: 1;
+		height: 100%;
+		overflow: hidden;
+		min-width: 0;
+	}
+
+	.window-controls-left {
+		display: flex;
+		align-items: center;
+		padding-left: 10px;
+		gap: 12px;
+		position: relative;
+		z-index: 10000;
+	}
+
+	.title-actions {
+		display: flex;
+		gap: 4px;
+		margin-right: 8px;
+		margin-left: auto;
+		z-index: 10000;
+	}
+
+	.actions-wrapper {
+		display: flex;
+		gap: 4px;
+		overflow: hidden; /* Essential for slide to work */
+	}
+
+	.title-action-btn {
+		width: 28px;
+		height: 28px;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		background: transparent;
+		border: none;
+		color: var(--color-fg-muted);
+		border-radius: 4px;
+		cursor: pointer;
+		transition: all 0.1s;
+	}
+
+	.title-action-btn.active {
+		color: var(--color-accent-fg);
+		background: var(--color-canvas-subtle);
+	}
+
+	.title-action-btn:hover {
+		background: var(--color-canvas-subtle);
+		color: var(--color-fg-default);
+	}
+
+	.window-icon {
+		width: 16px;
+		height: 16px;
+		opacity: 0.8;
+	}
+
+	@media (prefers-color-scheme: light) {
+		.window-icon {
+			filter: grayscale(1) brightness(0.2);
+			opacity: 0.6;
+		}
+	}
+
+	.icon-home-btn {
+		background: transparent;
+		border: none;
+		padding: 4px;
+		margin: -4px;
+		border-radius: 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: background 0.1s;
+	}
+
+	.icon-home-btn:hover {
+		background: var(--color-canvas-subtle);
+	}
+
+	.window-title-container {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 0;
+		bottom: 0;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		pointer-events: none;
+		z-index: 5;
+	}
+
+	.window-title {
+		font-size: 12px;
+		transition: opacity 0.2s;
+		white-space: nowrap;
+		overflow: hidden;
+		max-width: 50%;
+		display: flex;
+	}
+
+	.window-title.focused {
+		opacity: 0.8;
+		color: var(--color-fg-default);
+	}
+
+	.window-title.unfocused {
+		opacity: 0.4;
+		color: var(--color-fg-default);
+	}
+
+	.window-controls-right {
+		display: flex;
+		height: 100%;
+		position: relative;
+		z-index: 10000;
+	}
+
+	.control-btn {
+		width: 46px;
+		height: 32px;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		background: transparent;
+		border: none;
+		color: var(--color-fg-default);
+		opacity: 0.8;
+		cursor: default;
+		transition: all 0.1s;
+	}
+
+	.control-btn:hover {
+		background: var(--color-canvas-subtle);
+		opacity: 1;
+	}
+
+	.close-btn:hover {
+		background: #e81123 !important;
+	}
+</style>
