@@ -36,16 +36,13 @@ fn open_markdown(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn open_in_notepad(path: String) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::process::Command;
-        Command::new("notepad.exe")
-            .arg(path)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
+fn read_file_content(path: String) -> Result<String, String> {
+    fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_file_content(path: String, content: String) -> Result<(), String> {
+    fs::write(path, content).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -60,6 +57,11 @@ fn open_file_folder(path: String) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[tauri::command]
+fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
+    fs::rename(old_path, new_path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -159,6 +161,9 @@ fn show_context_menu(
             let undo = tauri::menu::MenuItem::with_id(&app, "ctx_tab_undo", "Undo Close Tab", true, Some("Ctrl+Shift+T")).map_err(|e| e.to_string())?;
             menu.append(&undo).map_err(|e| e.to_string())?;
 
+            let rename = tauri::menu::MenuItem::with_id(&app, "ctx_tab_rename", "Rename", true, None::<&str>).map_err(|e| e.to_string())?;
+            menu.append(&rename).map_err(|e| e.to_string())?;
+
             let sep = tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
             menu.append(&sep).map_err(|e| e.to_string())?;
 
@@ -195,7 +200,7 @@ fn show_context_menu(
                 let open_folder = tauri::menu::MenuItem::with_id(&app, "ctx_open_folder", "Open File Location", true, None::<&str>).map_err(|e| e.to_string())?;
                 menu.append(&open_folder).map_err(|e| e.to_string())?;
 
-                let edit = tauri::menu::MenuItem::with_id(&app, "ctx_edit", "Edit in Notepad", true, None::<&str>).map_err(|e| e.to_string())?;
+                let edit = tauri::menu::MenuItem::with_id(&app, "ctx_edit", "Edit", true, None::<&str>).map_err(|e| e.to_string())?;
                 menu.append(&edit).map_err(|e| e.to_string())?;
                 
                 // Add separator before close
@@ -257,7 +262,11 @@ pub fn run() {
                     if let Some(path) = path_lock.as_ref() {
                         match id {
                             "ctx_open_folder" => { let _ = open_file_folder(path.clone()); }
-                            "ctx_edit" => { let _ = open_in_notepad(path.clone()); }
+                            "ctx_edit" => {
+                                if let Some(window) = app.get_webview_window("main") {
+                                    let _ = window.emit("menu-edit-file", ());
+                                }
+                            }
                             "ctx_close" => {
                                 if let Some(window) = app.get_webview_window("main") {
                                     let _ = window.emit("menu-close-file", ());
@@ -265,6 +274,14 @@ pub fn run() {
                             }
                             _ => {}
                         }
+                    }
+                 }
+                 "ctx_tab_rename" => {
+                    let tab_lock = state.active_tab_id.lock().unwrap();
+                    if let Some(tab_id) = tab_lock.as_ref() {
+                       if let Some(window) = app.get_webview_window("main") {
+                           let _ = window.emit("menu-tab-rename", tab_id);
+                       }
                     }
                  }
                  "ctx_tab_new" => {
@@ -329,7 +346,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_markdown,
             send_markdown_path,
-            open_in_notepad,
+            read_file_content,
+            save_file_content,
             watch_file,
             unwatch_file,
             get_app_mode,
@@ -337,6 +355,7 @@ pub fn run() {
             setup::uninstall_app,
             setup::check_install_status,
             open_file_folder,
+            rename_file,
             show_context_menu
         ])
         .run(tauri::generate_context!())

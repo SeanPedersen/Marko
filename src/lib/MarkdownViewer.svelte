@@ -3,10 +3,12 @@
 	import { listen } from '@tauri-apps/api/event';
 	import { onMount, tick } from 'svelte';
 	import { openUrl } from '@tauri-apps/plugin-opener';
-	import { open } from '@tauri-apps/plugin-dialog';
+	import { open, save, ask } from '@tauri-apps/plugin-dialog';
 	import Installer from './Installer.svelte';
 	import Uninstaller from './Uninstaller.svelte';
 	import TitleBar from './components/TitleBar.svelte';
+	import Editor from './components/Editor.svelte';
+	import Modal from './components/Modal.svelte';
 
 	import HomePage from './components/HomePage.svelte';
 	import { tabManager } from './stores/tabs.svelte.js';
@@ -24,6 +26,11 @@
 	let isFocused = $state(true);
 	let markdownBody = $state<HTMLElement | null>(null);
 	let liveMode = $state(false);
+	let isDragging = $state(false);
+
+	// derived from tab manager
+	let isEditing = $derived(tabManager.activeTab?.isEditing ?? false);
+	let rawContent = $derived(tabManager.activeTab?.rawContent ?? '');
 
 	// derived from tab manager
 	let currentFile = $derived(tabManager.activeTab?.path ?? '');
@@ -36,6 +43,49 @@
 
 	// ui state
 	let tooltip = $state({ show: false, text: '', x: 0, y: 0 });
+	let modalState = $state<{
+		show: boolean;
+		title: string;
+		message: string;
+		kind: 'info' | 'warning' | 'error';
+		showSave: boolean;
+		resolve: ((v: 'save' | 'discard' | 'cancel') => void) | null;
+	}>({
+		show: false,
+		title: '',
+		message: '',
+		kind: 'info',
+		showSave: false,
+		resolve: null,
+	});
+
+	function askCustom(message: string, options: { title: string; kind: 'info' | 'warning' | 'error'; showSave?: boolean }): Promise<'save' | 'discard' | 'cancel'> {
+		return new Promise((resolve) => {
+			modalState = {
+				show: true,
+				title: options.title,
+				message,
+				kind: options.kind,
+				showSave: options.showSave ?? false,
+				resolve,
+			};
+		});
+	}
+
+	function handleModalSave() {
+		if (modalState.resolve) modalState.resolve('save');
+		modalState.show = false;
+	}
+
+	function handleModalConfirm() {
+		if (modalState.resolve) modalState.resolve('discard');
+		modalState.show = false;
+	}
+
+	function handleModalCancel() {
+		if (modalState.resolve) modalState.resolve('cancel');
+		modalState.show = false;
+	}
 
 	$effect(() => {
 		// Dismiss home view when switching tabs
@@ -166,7 +216,7 @@
 	}
 
 	$effect(() => {
-		if (htmlContent && markdownBody) renderRichContent();
+		if (htmlContent && markdownBody && !isEditing) renderRichContent();
 	});
 
 	$effect(() => {
@@ -233,8 +283,98 @@
 		element.replaceWith(container);
 	}
 
-	async function openInEditor() {
-		if (currentFile) await invoke('open_in_notepad', { path: currentFile });
+	async function canCloseTab(tabId: string): Promise<boolean> {
+		const tab = tabManager.tabs.find((t) => t.id === tabId);
+		if (!tab || (!tab.isDirty && tab.path !== '')) return true;
+
+		if (!tab.isDirty) return true;
+
+		const response = await askCustom(`You have unsaved changes in "${tab.title}". Do you want to save them before closing?`, {
+			title: 'Unsaved Changes',
+			kind: 'warning',
+			showSave: true,
+		});
+
+		if (response === 'cancel') return false;
+		if (response === 'save') {
+			return await saveContent();
+		}
+
+		return true; // discard
+	}
+
+	async function toggleEdit() {
+		const tab = tabManager.activeTab;
+		if (!tab || !tab.path) return;
+
+		if (isEditing) {
+			// Switch back to view
+			if (tab.isDirty) {
+				const response = await askCustom('You have unsaved changes. Do you want to save them before returning to view mode?', {
+					title: 'Unsaved Changes',
+					kind: 'warning',
+					showSave: true,
+				});
+
+				if (response === 'cancel') return;
+				if (response === 'save') {
+					const success = await saveContent();
+					if (!success) return;
+				}
+			}
+			tab.isEditing = false;
+			tab.isDirty = false;
+			// Refresh content (re-parse)
+			if (tab.path) await loadMarkdown(tab.path);
+		} else {
+			// Switch to edit
+			try {
+				const content = (await invoke('read_file_content', { path: tab.path })) as string;
+				tab.rawContent = content;
+				tab.isEditing = true;
+				tab.isDirty = false;
+			} catch (e) {
+				console.error('Failed to read file for editing', e);
+			}
+		}
+	}
+
+	async function saveContent(): Promise<boolean> {
+		const tab = tabManager.activeTab;
+		if (!tab || !tab.isEditing) return false;
+
+		let targetPath = tab.path;
+
+		if (!targetPath) {
+			// Special handling for new (untitled) files
+			const selected = await save({
+				filters: [{ name: 'Markdown', extensions: ['md'] }],
+			});
+			if (selected) {
+				targetPath = selected;
+			} else {
+				return false; // User cancelled save dialog
+			}
+		}
+
+		try {
+			await invoke('save_file_content', { path: targetPath, content: tab.rawContent });
+			if (tab.path === '') {
+				// We just saved an untitled tab for the first time
+				tabManager.updateTabPath(tab.id, targetPath);
+				saveRecentFile(targetPath);
+			}
+			tab.isDirty = false;
+			return true;
+		} catch (e) {
+			console.error('Failed to save file', e);
+			return false;
+		}
+	}
+
+	function handleNewFile() {
+		tabManager.addNewTab();
+		showHome = false;
 	}
 
 	async function selectFile() {
@@ -250,7 +390,11 @@
 	}
 
 	async function closeFile() {
-		if (tabManager.activeTabId) tabManager.closeTab(tabManager.activeTabId);
+		if (tabManager.activeTabId) {
+			if (await canCloseTab(tabManager.activeTabId)) {
+				tabManager.closeTab(tabManager.activeTabId);
+			}
+		}
 		if (liveMode && tabManager.tabs.length === 0) invoke('unwatch_file').catch(console.error);
 	}
 
@@ -325,7 +469,7 @@
 		if (mode !== 'app') return;
 		if (e.ctrlKey && e.key === 'w') {
 			e.preventDefault();
-			if (tabManager.activeTabId) tabManager.closeTab(tabManager.activeTabId);
+			closeFile();
 		}
 		if (e.ctrlKey && e.key === 't') {
 			e.preventDefault();
@@ -349,6 +493,7 @@
 	}
 
 	async function handleDetach(tabId: string) {
+		if (!(await canCloseTab(tabId))) return;
 		const tab = tabManager.tabs.find((t) => t.id === tabId);
 		if (!tab || !tab.path) return;
 
@@ -406,6 +551,34 @@
 				}),
 			);
 			unlisteners.push(
+				await listen('menu-edit-file', () => {
+					toggleEdit();
+				}),
+			);
+			unlisteners.push(
+				await listen('menu-tab-rename', async (event) => {
+					const tabId = event.payload as string;
+					const tab = tabManager.tabs.find((t) => t.id === tabId);
+					if (!tab || !tab.path) return;
+
+					const newName = window.prompt('Rename file:', tab.title);
+					if (newName && newName !== tab.title) {
+						const oldPath = tab.path;
+						const newPath = oldPath.replace(/[/\\][^/\\]+$/, (m) => m.charAt(0) + newName);
+						try {
+							await invoke('rename_file', { oldPath, newPath });
+							tabManager.renameTab(tabId, newPath);
+							// Update recent files if needed
+							recentFiles = recentFiles.map((f) => (f === oldPath ? newPath : f));
+							localStorage.setItem('recent-files', JSON.stringify(recentFiles));
+						} catch (e) {
+							console.error('Failed to rename file', e);
+							await ask(`Failed to rename file: ${e}`, { title: 'Error', kind: 'error' });
+						}
+					}
+				}),
+			);
+			unlisteners.push(
 				await listen('menu-tab-new', () => {
 					tabManager.addHomeTab();
 				}),
@@ -417,9 +590,11 @@
 				}),
 			);
 			unlisteners.push(
-				await listen('menu-tab-close', (event) => {
+				await listen('menu-tab-close', async (event) => {
 					const tabId = event.payload as string;
-					tabManager.closeTab(tabId);
+					if (await canCloseTab(tabId)) {
+						tabManager.closeTab(tabId);
+					}
 				}),
 			);
 			unlisteners.push(
@@ -440,11 +615,19 @@
 				}),
 			);
 			unlisteners.push(
-				await listen('tauri://file-drop', (event) => {
-					console.log('File drop detected:', event);
-					const paths = event.payload as string[];
-					if (Array.isArray(paths)) {
-						paths.forEach((path) => loadMarkdown(path));
+				await appWindow.onDragDropEvent((event) => {
+					if (isEditing) {
+						isDragging = false;
+						return;
+					}
+
+					if (event.payload.type === 'enter' || event.payload.type === 'over') {
+						isDragging = true;
+					} else if (event.payload.type === 'drop') {
+						isDragging = false;
+						event.payload.paths.forEach((path) => loadMarkdown(path));
+					} else {
+						isDragging = false;
 					}
 				}),
 			);
@@ -485,21 +668,60 @@
 		ontoggleHome={toggleHome}
 		ononpenFileLocation={openFileLocation}
 		ontoggleLiveMode={toggleLiveMode}
-		onopenInEditor={openInEditor}
+		ontoggleEdit={toggleEdit}
+		{isEditing}
 		ondetach={handleDetach}
 		ontabclick={() => (showHome = false)} />
 
-	{#if currentFile && !showHome}
+	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
 		<div class="markdown-container">
-			<article bind:this={markdownBody} contenteditable="false" class="markdown-body" bind:innerHTML={htmlContent} onscroll={handleScroll}></article>
+			{#if isEditing}
+				<div class="editor-wrapper">
+					<Editor bind:value={rawContent} onsave={saveContent} />
+				</div>
+			{:else}
+				<article bind:this={markdownBody} contenteditable="false" class="markdown-body" bind:innerHTML={htmlContent} onscroll={handleScroll}></article>
+			{/if}
 		</div>
 	{:else}
-		<HomePage {recentFiles} onselectFile={selectFile} onloadFile={loadMarkdown} onremoveRecentFile={removeRecentFile} />
+		<HomePage {recentFiles} onselectFile={selectFile} onloadFile={loadMarkdown} onremoveRecentFile={removeRecentFile} onnewFile={handleNewFile} />
 	{/if}
 
 	{#if tooltip.show}
 		<div class="tooltip" style="left: {tooltip.x}px; top: {tooltip.y}px;">
 			{tooltip.text}
+		</div>
+	{/if}
+
+	<Modal
+		show={modalState.show}
+		title={modalState.title}
+		message={modalState.message}
+		kind={modalState.kind}
+		showSave={modalState.showSave}
+		onconfirm={handleModalConfirm}
+		onsave={handleModalSave}
+		oncancel={handleModalCancel} />
+
+	{#if isDragging && !isEditing}
+		<div class="drag-overlay" role="presentation">
+			<div class="drag-message">
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					width="48"
+					height="48"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round">
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+					<polyline points="17 8 12 3 7 8" />
+					<line x1="12" y1="3" x2="12" y2="15" />
+				</svg>
+				<span>Drop to open Markdown files</span>
+			</div>
 		</div>
 	{/if}
 {/if}
@@ -576,5 +798,59 @@
 		border-left: 6px solid transparent;
 		border-right: 6px solid transparent;
 		border-top: 6px solid var(--color-canvas-default);
+	}
+
+	.editor-wrapper {
+		width: 100%;
+		height: 100%;
+		/* Adjust for padding of markdown body if needed, or override */
+		position: absolute;
+		top: 0;
+		left: 0;
+		/* Markdown body has 36px top margin, so we might need to match or reset */
+		padding-top: 36px;
+		box-sizing: border-box;
+		background-color: #1e1e1e; /* Match monaco dark theme background roughly */
+	}
+
+	.drag-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 120, 212, 0.15);
+		backdrop-filter: blur(4px);
+		border: 3px dashed #0078d4;
+		margin: 12px;
+		border-radius: 12px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 40000;
+		pointer-events: none;
+		animation: fadeIn 0.15s ease-out;
+	}
+
+	.drag-message {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 16px;
+		color: #0078d4;
+		font-family: var(--win-font);
+		font-weight: 500;
+		font-size: 18px;
+	}
+
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+			transform: scale(0.98);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
 	}
 </style>

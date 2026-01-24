@@ -1,0 +1,163 @@
+<script lang="ts">
+	import { fade, scale } from 'svelte/transition';
+
+	let {
+		show,
+		title,
+		message,
+		kind = 'info',
+		showSave = false,
+		onconfirm,
+		onsave,
+		oncancel,
+	} = $props<{
+		show: boolean;
+		title: string;
+		message: string;
+		kind?: 'info' | 'warning' | 'error';
+		showSave?: boolean;
+		onconfirm: () => void;
+		onsave?: () => void;
+		oncancel: () => void;
+	}>();
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape') oncancel();
+		if (e.key === 'Enter') onconfirm();
+		if (e.ctrlKey && e.key === 's' && showSave && onsave) {
+			e.preventDefault();
+			onsave();
+		}
+	}
+
+	function handleBackdropClick() {
+		oncancel();
+	}
+</script>
+
+{#if show}
+	<div class="modal-backdrop" transition:fade={{ duration: 150 }} onclick={handleBackdropClick} role="presentation">
+		<div
+			class="modal-content {kind}"
+			transition:scale={{ duration: 200, start: 0.95 }}
+			onclick={(e) => e.stopPropagation()}
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
+			onkeydown={handleKeydown}>
+			<div class="modal-header">
+				<h3>{title}</h3>
+			</div>
+			<div class="modal-body">
+				<p>{message}</p>
+			</div>
+			<div class="modal-footer">
+				<button class="modal-btn secondary" onclick={oncancel}>Cancel</button>
+				<div class="footer-spacer"></div>
+				<button class="modal-btn secondary" onclick={onconfirm}>
+					{kind === 'warning' ? "Don't Save" : 'Confirm'}
+				</button>
+				{#if showSave}
+					<button class="modal-btn primary" onclick={onsave}>Save</button>
+				{/if}
+			</div>
+		</div>
+	</div>
+{/if}
+
+<style>
+	.modal-backdrop {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.4);
+		backdrop-filter: blur(2px);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 30000;
+	}
+
+	.modal-content {
+		background: var(--color-canvas-default);
+		border: 1px solid var(--color-border-default);
+		border-radius: 12px;
+		width: 400px;
+		max-width: 90vw;
+		box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+		overflow: hidden;
+		font-family: var(--win-font);
+	}
+
+	.modal-header {
+		padding: 20px 24px 12px 24px;
+	}
+
+	.modal-header h3 {
+		margin: 0;
+		font-size: 16px;
+		font-weight: 600;
+		color: var(--color-fg-default);
+	}
+
+	.modal-body {
+		padding: 0 24px 24px 24px;
+	}
+
+	.modal-body p {
+		margin: 0;
+		font-size: 14px;
+		line-height: 1.5;
+		color: var(--color-fg-muted);
+	}
+
+	.modal-footer {
+		padding: 16px 24px;
+		background: var(--color-canvas-subtle);
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 8px;
+		border-top: 1px solid var(--color-border-muted);
+	}
+
+	.footer-spacer {
+		flex: 1;
+	}
+
+	.modal-btn {
+		padding: 6px 16px;
+		border-radius: 6px;
+		font-size: 14px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.1s;
+		border: 1px solid transparent;
+		font-family: inherit;
+	}
+
+	.modal-btn.secondary {
+		background: transparent;
+		color: var(--color-fg-default);
+		border-color: var(--color-border-default);
+	}
+
+	.modal-btn.secondary:hover {
+		background: var(--color-neutral-muted);
+	}
+
+	.modal-btn.primary {
+		background: #0078d4;
+		color: white;
+	}
+
+	.modal-btn.primary.warning {
+		background: #d73a49;
+	}
+
+	.modal-btn.primary:hover {
+		filter: brightness(1.1);
+	}
+</style>

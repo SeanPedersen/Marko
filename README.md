@@ -1,6 +1,6 @@
 # Markdown Viewer
 
-A simple standalone markdown viewer-only app for Windows 11.
+A modern, lightweight markdown viewer and editor for Windows 11.
 
 Built with [Tauri](https://tauri.app/) — [Rust](https://www.rust-lang.org) + [SvelteKit](https://kit.svelte.dev/) + [TypeScript](https://www.typescriptlang.org/).
 
@@ -8,6 +8,10 @@ Using GitHub flavored markdown style by [sindresorhus](https://github.com/sindre
 
 
 > [!NOTE]
+> ## Changes in v2.2.0
+> - Added Monaco for embedded text editing
+> - Added tabs
+> - Added native context menus, improved drag-and-drop support
 > ## Changes in v2.1.1
 > - Added tabs (alpha)
 > - Updated app and file icon
@@ -48,7 +52,8 @@ Alternatively, you can install from source:
 - [X] Fix relative image embeds
 - [X] Add shortcut to edit in default text editor
 - [X] Tweak Windows installer to prevent desktop shortcut by default
-- [X] Add tabs (alpha)
+- [X] Add tabs
 - [X] Add file association option in the installer
 - [X] Add syntax highlighting for code blocks
+- [X] Integrate Monaco editor
 - [ ] Add option to toggle markdown rendering

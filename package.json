@@ -17,7 +17,8 @@
     "@tauri-apps/plugin-dialog": "^2.5.0",
     "@tauri-apps/plugin-opener": "^2",
     "highlight.js": "^11.11.1",
-    "katex": "^0.16.27"
+    "katex": "^0.16.27",
+    "monaco-editor": "^0.55.1"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",

@@ -1,9 +1,10 @@
 <script lang="ts">
-	let { recentFiles, onselectFile, onloadFile, onremoveRecentFile } = $props<{
+	let { recentFiles, onselectFile, onloadFile, onremoveRecentFile, onnewFile } = $props<{
 		recentFiles: string[];
 		onselectFile: () => void;
 		onloadFile: (file: string) => void;
 		onremoveRecentFile: (file: string, e: MouseEvent) => void;
+		onnewFile: () => void;
 	}>();
 
 	function getFileName(path: string) {
@@ -13,19 +14,34 @@
 
 <div class="message">
 	<p>Open a Markdown file</p>
-	<button class="fluent-btn primary" onclick={onselectFile}>
-		<svg
-			xmlns="http://www.w3.org/2000/svg"
-			width="16"
-			height="16"
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="2"
-			stroke-linecap="round"
-			stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
-		Open file
-	</button>
+	<div class="actions-row">
+		<button class="fluent-btn primary" onclick={onselectFile}>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="16"
+				height="16"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
+			Open file
+		</button>
+		<button class="fluent-btn secondary" onclick={onnewFile}>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="16"
+				height="16"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+			New file
+		</button>
+	</div>
 
 	<div class="recent-section">
 		<h3>Recent Files</h3>
@@ -118,6 +134,17 @@
 		background: #0078d4;
 		color: white;
 		border: 1px solid rgba(0, 0, 0, 0.1);
+	}
+
+	.fluent-btn.secondary {
+		background: var(--color-canvas-subtle);
+		color: var(--color-fg-default);
+		border: 1px solid var(--color-border-default);
+	}
+
+	.actions-row {
+		display: flex;
+		gap: 12px;
 		margin-top: 20px;
 	}
 

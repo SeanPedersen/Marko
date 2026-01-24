@@ -16,7 +16,8 @@
 		ontoggleHome,
 		ononpenFileLocation,
 		ontoggleLiveMode,
-		onopenInEditor,
+		ontoggleEdit,
+		isEditing,
 		ondetach,
 		ontabclick,
 	} = $props<{
@@ -30,7 +31,8 @@
 		ontoggleHome: () => void;
 		ononpenFileLocation: () => void;
 		ontoggleLiveMode: () => void;
-		onopenInEditor: () => void;
+		ontoggleEdit: () => void;
+		isEditing: boolean;
 		ondetach: (tabId: string) => void;
 		ontabclick?: () => void;
 	}>();
@@ -80,16 +82,17 @@
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
 						><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z" /><circle cx="12" cy="12" r="3" /></svg>
 				</button>
-				<button class="title-action-btn" onclick={onopenInEditor} aria-label="Edit in Notepad" title="Edit in Notepad" transition:fly={{ x: 30, duration: 100, delay: 100 }}>
+				<button
+					class="title-action-btn {isEditing ? 'active' : ''}"
+					onclick={ontoggleEdit}
+					aria-label="Edit File"
+					title="Edit file"
+					transition:fly={{ x: 30, duration: 100, delay: 100 }}>
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
 						><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
 				</button>
 			</div>
 		{/if}
-		<button class="title-action-btn" onclick={onselectFile} aria-label="Open File" title="Open file">
-			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-				><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
-		</button>
 	</div>
 
 	<div class="window-controls-right" data-tauri-drag-region>

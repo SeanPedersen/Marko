@@ -43,24 +43,23 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="tab {isActive ? 'active' : ''}" class:last={isLast} role="group" title={tab.path || 'Recents'} oncontextmenu={handleContextMenu}>
 	<button class="tab-content-btn" {onclick} onmousedown={handleMiddleClick}>
-		{#if isHomeTab}
-			<span class="tab-icon">
-				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-					><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-			</span>
-		{:else}
-			<span class="tab-icon">
-				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-					><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-			</span>
-		{/if}
 		<span class="tab-label">
 			{tab.title}
 		</span>
 	</button>
 	<div class="tab-actions">
-		<button class="tab-close" onclick={handleClose} title="Close (Ctrl+W)">
-			<svg width="12" height="12" viewBox="0 0 12 12"><path fill="currentColor" d="M11 1.7L10.3 1 6 5.3 1.7 1 1 1.7 5.3 6 1 10.3 1.7 11 6 6.7 10.3 11 11 10.3 6.7 6z" /></svg>
+		{#if tab.isEditing && !tab.isDirty}
+			<span class="tab-status-icon editing">
+				<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+					><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+			</span>
+		{/if}
+		<button class="tab-close" class:dirty={tab.isDirty} onclick={handleClose} title="Close (Ctrl+W)">
+			{#if tab.isDirty}
+				<span class="dirty-dot"></span>
+			{/if}
+			<svg class="close-icon" width="12" height="12" viewBox="0 0 12 12"
+				><path fill="currentColor" d="M11 1.7L10.3 1 6 5.3 1.7 1 1 1.7 5.3 6 1 10.3 1.7 11 6 6.7 10.3 11 11 10.3 6.7 6z" /></svg>
 		</button>
 	</div>
 </div>
@@ -125,10 +124,12 @@
 		text-align: left;
 	}
 
-	.tab-icon {
+	.tab-status-icon {
 		display: flex;
-		opacity: 0.6;
+		opacity: 0.8;
 		flex-shrink: 0;
+		color: var(--color-accent-fg);
+		margin-right: 4px;
 	}
 
 	.tab-label {
@@ -145,7 +146,8 @@
 	}
 
 	.tab:hover .tab-actions,
-	.tab.active .tab-actions {
+	.tab.active .tab-actions,
+	.tab-actions:has(.dirty) {
 		opacity: 1;
 	}
 
@@ -163,6 +165,27 @@
 		cursor: pointer;
 		padding: 0;
 		transition: background 0.1s;
+		position: relative;
+	}
+
+	.close-icon {
+		display: none;
+	}
+
+	.tab:hover .close-icon {
+		display: block;
+	}
+
+	.tab:hover .dirty-dot {
+		display: none;
+	}
+
+	.dirty-dot {
+		width: 8px;
+		height: 8px;
+		background-color: var(--color-fg-default);
+		border-radius: 50%;
+		display: block;
 	}
 
 	.tab-close:hover {

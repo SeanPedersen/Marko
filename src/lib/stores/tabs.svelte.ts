@@ -3,8 +3,10 @@ export interface Tab {
 	path: string;
 	title: string;
 	content: string;
+	rawContent: string;
 	scrollTop: number;
 	isDirty: boolean;
+	isEditing: boolean;
 }
 
 class TabManager {
@@ -15,7 +17,7 @@ class TabManager {
 		return this.tabs.find((t) => t.id === this.activeTabId);
 	}
 
-	addTab(path: string, content: string = '') {
+	addTab(path: string, content: string = '', rawContent: string = '') {
 		const existing = this.tabs.find((t) => t.path === path);
 		if (existing) {
 			this.activeTabId = existing.id;
@@ -30,8 +32,25 @@ class TabManager {
 			path,
 			title,
 			content,
+			rawContent,
 			scrollTop: 0,
-			isDirty: false
+			isDirty: false,
+			isEditing: false
+		});
+		this.activeTabId = id;
+	}
+
+	addNewTab() {
+		const id = crypto.randomUUID();
+		this.tabs.push({
+			id,
+			path: '',
+			title: 'Untitled',
+			content: '',
+			rawContent: '',
+			scrollTop: 0,
+			isDirty: false,
+			isEditing: true
 		});
 		this.activeTabId = id;
 	}
@@ -43,8 +62,10 @@ class TabManager {
 			path: '',
 			title: 'Recents',
 			content: '',
+			rawContent: '',
 			scrollTop: 0,
-			isDirty: false
+			isDirty: false,
+			isEditing: false
 		});
 		this.activeTabId = id;
 	}
@@ -81,6 +102,14 @@ class TabManager {
 		}
 	}
 
+	updateTabRawContent(id: string, raw: string) {
+		const tab = this.tabs.find((t) => t.id === id);
+		if (tab) {
+			tab.rawContent = raw;
+			tab.isDirty = true;
+		}
+	}
+
 	updateTabScroll(id: string, scrollTop: number) {
 		const tab = this.tabs.find((t) => t.id === id);
 		if (tab) {
@@ -113,8 +142,15 @@ class TabManager {
 		if (tab) {
 			tab.path = path;
 			tab.title = path.split(/[/\\]/).pop() || 'Untitled';
-			tab.content = '';
-			tab.scrollTop = 0;
+			tab.isDirty = false;
+		}
+	}
+
+	renameTab(id: string, newPath: string) {
+		const tab = this.tabs.find((t) => t.id === id);
+		if (tab) {
+			tab.path = newPath;
+			tab.title = newPath.split(/[/\\]/).pop() || 'Untitled';
 		}
 	}
 
