@@ -4,6 +4,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::menu::ContextMenu;
 
 mod setup;
 
@@ -131,6 +132,91 @@ fn get_app_mode() -> String {
     }
 }
 
+#[tauri::command]
+fn show_context_menu(
+    app: AppHandle,
+    state: State<'_, ContextMenuState>,
+    window: tauri::Window,
+    menu_type: String, // 'document', 'tab', 'tab_bar'
+    path: Option<String>,
+    tab_id: Option<String>,
+    has_selection: bool,
+) -> Result<(), String> {
+    {
+        let mut path_lock = state.active_path.lock().unwrap();
+        *path_lock = path.clone();
+        let mut tab_lock = state.active_tab_id.lock().unwrap();
+        *tab_lock = tab_id.clone();
+    }
+
+    let menu = tauri::menu::Menu::new(&app).map_err(|e| e.to_string())?;
+
+    match menu_type.as_str() {
+        "tab" => {
+            let new_tab = tauri::menu::MenuItem::with_id(&app, "ctx_tab_new", "New Tab", true, Some("Ctrl+T")).map_err(|e| e.to_string())?;
+            menu.append(&new_tab).map_err(|e| e.to_string())?;
+
+            let undo = tauri::menu::MenuItem::with_id(&app, "ctx_tab_undo", "Undo Close Tab", true, Some("Ctrl+Shift+T")).map_err(|e| e.to_string())?;
+            menu.append(&undo).map_err(|e| e.to_string())?;
+
+            let sep = tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+            menu.append(&sep).map_err(|e| e.to_string())?;
+
+            let close = tauri::menu::MenuItem::with_id(&app, "ctx_tab_close", "Close Tab", true, Some("Ctrl+W")).map_err(|e| e.to_string())?;
+            menu.append(&close).map_err(|e| e.to_string())?;
+
+            let close_others = tauri::menu::MenuItem::with_id(&app, "ctx_tab_close_others", "Close Other Tabs", true, None::<&str>).map_err(|e| e.to_string())?;
+            menu.append(&close_others).map_err(|e| e.to_string())?;
+
+            let close_right = tauri::menu::MenuItem::with_id(&app, "ctx_tab_close_right", "Close Tabs to Right", true, None::<&str>).map_err(|e| e.to_string())?;
+            menu.append(&close_right).map_err(|e| e.to_string())?;
+        },
+        "tab_bar" => {
+            let new_tab = tauri::menu::MenuItem::with_id(&app, "ctx_tab_new", "New Tab", true, Some("Ctrl+T")).map_err(|e| e.to_string())?;
+            menu.append(&new_tab).map_err(|e| e.to_string())?;
+
+            let undo = tauri::menu::MenuItem::with_id(&app, "ctx_tab_undo", "Undo Close Tab", true, Some("Ctrl+Shift+T")).map_err(|e| e.to_string())?;
+            menu.append(&undo).map_err(|e| e.to_string())?;
+        },
+        _ => {
+            // Document / Default
+            if has_selection {
+                let copy = tauri::menu::PredefinedMenuItem::copy(&app, Some("Copy")).map_err(|e| e.to_string())?;
+                menu.append(&copy).map_err(|e| e.to_string())?;
+            }
+
+            let select_all = tauri::menu::PredefinedMenuItem::select_all(&app, Some("Select All")).map_err(|e| e.to_string())?;
+            menu.append(&select_all).map_err(|e| e.to_string())?;
+
+            if let Some(_) = path {
+                let sep = tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+                menu.append(&sep).map_err(|e| e.to_string())?;
+
+                let open_folder = tauri::menu::MenuItem::with_id(&app, "ctx_open_folder", "Open File Location", true, None::<&str>).map_err(|e| e.to_string())?;
+                menu.append(&open_folder).map_err(|e| e.to_string())?;
+
+                let edit = tauri::menu::MenuItem::with_id(&app, "ctx_edit", "Edit in Notepad", true, None::<&str>).map_err(|e| e.to_string())?;
+                menu.append(&edit).map_err(|e| e.to_string())?;
+                
+                // Add separator before close
+                let sep2 = tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+                menu.append(&sep2).map_err(|e| e.to_string())?;
+
+                let close = tauri::menu::MenuItem::with_id(&app, "ctx_close", "Close File", true, None::<&str>).map_err(|e| e.to_string())?;
+                menu.append(&close).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+
+    menu.popup(window).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+struct ContextMenuState {
+    active_path: Mutex<Option<String>>,
+    active_tab_id: Mutex<Option<String>>,
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "windows")]
@@ -145,21 +231,14 @@ pub fn run() {
         .manage(WatcherState {
             watcher: Mutex::new(None),
         })
+        .manage(ContextMenuState {
+            active_path: Mutex::new(None),
+            active_tab_id: Mutex::new(None),
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             println!("Single Instance Args: {:?}", args);
-            // In some environments, the first arg might be the executable, in others it might be stripped?
-            // Let's look for the first arg that doesn't start with "-" and likely isn't the executable (if full path)
-            // But safely, for now, let's just log and try to be smarter.
-            
-            let mut file_path = "";
-            if args.len() > 1 {
-                 file_path = args[1].as_str();
-            } else if args.len() == 1 {
-                 // If only 1 arg, check if it looks like a file and not the exe?
-                 // Usually args[0] is exe.
-            }
             
             // Allow for robust finding of the file argument
             let path = args.iter().skip(1).find(|a| !a.starts_with("-")).map(|a| a.as_str()).unwrap_or("");
@@ -168,6 +247,63 @@ pub fn run() {
             let _ = app.get_webview_window("main").expect("no main window").set_focus();
         }))
         .plugin(tauri_plugin_prevent_default::init())
+        .on_menu_event(|app, event| {
+             let id = event.id().as_ref();
+             let state = app.state::<ContextMenuState>();
+
+             match id {
+                 "ctx_open_folder" | "ctx_edit" | "ctx_close" => {
+                    let path_lock = state.active_path.lock().unwrap();
+                    if let Some(path) = path_lock.as_ref() {
+                        match id {
+                            "ctx_open_folder" => { let _ = open_file_folder(path.clone()); }
+                            "ctx_edit" => { let _ = open_in_notepad(path.clone()); }
+                            "ctx_close" => {
+                                if let Some(window) = app.get_webview_window("main") {
+                                    let _ = window.emit("menu-close-file", ());
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                 }
+                 "ctx_tab_new" => {
+                     if let Some(window) = app.get_webview_window("main") {
+                         let _ = window.emit("menu-tab-new", ());
+                     }
+                 }
+                 "ctx_tab_undo" => {
+                     if let Some(window) = app.get_webview_window("main") {
+                         let _ = window.emit("menu-tab-undo", ());
+                     }
+                 }
+                 "ctx_tab_close" => {
+                     let tab_lock = state.active_tab_id.lock().unwrap();
+                     if let Some(tab_id) = tab_lock.as_ref() {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("menu-tab-close", tab_id);
+                        }
+                     }
+                 }
+                 "ctx_tab_close_others" => {
+                    let tab_lock = state.active_tab_id.lock().unwrap();
+                    if let Some(tab_id) = tab_lock.as_ref() {
+                       if let Some(window) = app.get_webview_window("main") {
+                           let _ = window.emit("menu-tab-close-others", tab_id);
+                       }
+                    }
+                 }
+                 "ctx_tab_close_right" => {
+                    let tab_lock = state.active_tab_id.lock().unwrap();
+                    if let Some(tab_id) = tab_lock.as_ref() {
+                       if let Some(window) = app.get_webview_window("main") {
+                           let _ = window.emit("menu-tab-close-right", tab_id);
+                       }
+                    }
+                 }
+                 _ => {}
+             }
+        })
         .setup(|app| {
             let args: Vec<String> = std::env::args().collect();
             println!("Setup Args: {:?}", args);
@@ -200,7 +336,8 @@ pub fn run() {
             setup::install_app,
             setup::uninstall_app,
             setup::check_install_status,
-            open_file_folder
+            open_file_folder,
+            show_context_menu
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -19,7 +19,8 @@
         "visible": true,
         "resizable": true,
         "center": true,
-        "decorations": false
+        "decorations": false,
+        "hiddenTitle": true
       }
     ],
     "security": {
@@ -53,6 +54,13 @@
         "installMode": "both",
         "installerHooks": "hooks.nsi"
       }
+    },
+    "macOS": {
+      "entitlements": null,
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": null
     }
   }
 }

@@ -1,27 +1,51 @@
 <script lang="ts">
-	import { tabManager } from '../stores/tabs.svelte.js';
+	import { type Tab as TabData, tabManager } from '../stores/tabs.svelte.js';
 	import Tab from './Tab.svelte';
 
 	import { flip } from 'svelte/animate';
-	import { scale } from 'svelte/transition';
-	let { onnewTab, ondetach } = $props<{
+	import { slide } from 'svelte/transition';
+	import { tick } from 'svelte';
+
+	let {
+		onnewTab,
+		ondetach,
+		showHome = false,
+		ontabclick,
+	} = $props<{
 		onnewTab: () => void;
 		ondetach?: (tabId: string) => void;
+		showHome?: boolean;
+		ontabclick?: () => void;
 	}>();
+
+	$effect(() => {
+		const activeId = tabManager.activeTabId;
+		if (activeId && scrollContainer && !draggingId) {
+			// Find the active tab element index
+			const index = tabManager.tabs.findIndex((t) => t.id === activeId);
+			if (index !== -1) {
+				// Use tick to wait for DOM update, and setTimeout to account for transition
+				tick().then(() => {
+					setTimeout(() => {
+						if (!scrollContainer) return;
+						const tabElements = scrollContainer.children;
+						if (tabElements[index]) {
+							const el = tabElements[index] as HTMLElement;
+							el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+						}
+					}, 150); // Wait slightly longer than transition (150ms)
+				});
+			}
+		}
+	});
 
 	let draggingId = $state<string | null>(null);
 	let scrollContainer = $state<HTMLElement | null>(null);
 	let showLeftArrow = $state(false);
 	let showRightArrow = $state(false);
 
-	function updateScrollArrows() {
-		if (!scrollContainer) return;
-		const { scrollLeft, scrollWidth, clientWidth } = scrollContainer;
-		showLeftArrow = scrollLeft > 0;
-		showRightArrow = Math.ceil(scrollLeft + clientWidth) < scrollWidth;
-	}
-
 	function handleDragStart(e: DragEvent, id: string) {
+		e.stopPropagation();
 		draggingId = id;
 		if (e.dataTransfer) {
 			e.dataTransfer.effectAllowed = 'move';
@@ -49,31 +73,12 @@
 	}
 
 	function handleDragEnd(e: DragEvent) {
-		if (draggingId && ondetach) {
-			const { screenX, screenY } = e;
-			// check if outside window bounds with some margin
-			const margin = 50;
-			const outX = screenX < window.screenX - margin || screenX > window.screenX + window.outerWidth + margin;
-			const outY = screenY < window.screenY - margin || screenY > window.screenY + window.outerHeight + margin;
-
-			if (outX || outY) {
-				ondetach(draggingId);
-			}
-		}
 		draggingId = null;
-	}
-
-	function scroll(direction: 'left' | 'right') {
-		if (!scrollContainer) return;
-		const amount = 200;
-		scrollContainer.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' });
+		// Detach functionality removed for now
 	}
 
 	$effect(() => {
-		// Watch for tab changes to update arrows
 		const _ = tabManager.tabs;
-		// Re-check after dom update
-		requestAnimationFrame(updateScrollArrows);
 	});
 
 	$effect(() => {
@@ -82,18 +87,40 @@
 			// Find the active tab element index
 			const index = tabManager.tabs.findIndex((t) => t.id === activeId);
 			if (index !== -1) {
-				// We need to wait for the DOM to update if we just added a tab
-				requestAnimationFrame(() => {
-					if (!scrollContainer) return;
-					const tabElements = scrollContainer.children;
-					if (tabElements[index]) {
-						const el = tabElements[index] as HTMLElement;
-						el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-					}
+				// Use tick to wait for DOM update, and setTimeout to account for transition
+				tick().then(() => {
+					setTimeout(() => {
+						if (!scrollContainer) return;
+
+						// If it's the last tab, just scroll to the very end to be safe
+						if (index === tabManager.tabs.length - 1) {
+							scrollContainer.scrollTo({ left: 99999, behavior: 'smooth' });
+							return;
+						}
+
+						const tabElements = scrollContainer.children;
+						if (tabElements[index]) {
+							const el = tabElements[index] as HTMLElement;
+							el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+						}
+					}, 150); // Wait slightly longer than transition (150ms)
 				});
 			}
 		}
 	});
+
+	async function handleContainerContextMenu(e: MouseEvent) {
+		if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains('tab-list-spacer')) return;
+		e.preventDefault();
+
+		const { invoke } = await import('@tauri-apps/api/core');
+		invoke('show_context_menu', {
+			menuType: 'tab_bar',
+			path: null,
+			tabId: null,
+			hasSelection: false,
+		}).catch(console.error);
+	}
 </script>
 
 <div class="tab-list-wrapper">
@@ -103,8 +130,10 @@
 		<div
 			bind:this={scrollContainer}
 			class="tab-list-container"
+			data-tauri-drag-region={tabManager.tabs.length === 0}
 			role="tablist"
-			onscroll={updateScrollArrows}
+			tabindex="-1"
+			oncontextmenu={handleContainerContextMenu}
 			onwheel={(e) => {
 				if (e.deltaY !== 0) {
 					e.preventDefault();
@@ -114,7 +143,7 @@
 			{#each tabManager.tabs as tab, i (tab.id)}
 				<div
 					animate:flip={{ duration: draggingId ? 0 : 200 }}
-					transition:scale={{ duration: 150, start: 0.9 }}
+					transition:slide={{ axis: 'x', duration: 150 }}
 					draggable={true}
 					ondragstart={(e) => handleDragStart(e, tab.id)}
 					ondragenter={(e) => handleDragEnter(e, tab.id)}
@@ -123,9 +152,12 @@
 					role="listitem">
 					<Tab
 						{tab}
-						isActive={tabManager.activeTabId === tab.id}
+						isActive={!showHome && tabManager.activeTabId === tab.id}
 						isLast={i === tabManager.tabs.length - 1}
-						onclick={() => tabManager.setActive(tab.id)}
+						onclick={() => {
+							tabManager.setActive(tab.id);
+							ontabclick?.();
+						}}
 						onclose={() => tabManager.closeTab(tab.id)} />
 				</div>
 			{/each}
@@ -138,9 +170,8 @@
 		<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
 			><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
 	</button>
-</div>
-<div class="tab-list-spacer" data-tauri-drag-region>
-	<!-- Spacer to allow dragging the window from the empty space -->
+
+	<div class="tab-list-spacer" data-tauri-drag-region></div>
 </div>
 
 <style>
@@ -156,10 +187,11 @@
 	.scroll-viewport {
 		position: relative;
 		display: flex;
-		flex: 1;
+		flex: 0 1 auto;
 		height: 100%;
 		overflow: hidden;
 		min-width: 0;
+		max-width: 100%;
 	}
 
 	.scroll-shadow {
@@ -197,7 +229,8 @@
 		height: 100%;
 		padding-left: 10px;
 		scroll-behavior: smooth;
-		width: 100%;
+		/* width: 100%; Removed to allow shrink */
+
 		/* Hide scrollbar */
 		scrollbar-width: none;
 		-ms-overflow-style: none;
@@ -223,7 +256,7 @@
 		transition:
 			background 0.1s,
 			color 0.1s;
-		z-index: 21; /* Ensure above shadow if overlapping? though it is outside viewport */
+		z-index: 21;
 	}
 
 	.new-tab-btn:hover {
@@ -232,8 +265,8 @@
 	}
 
 	.tab-list-spacer {
-		flex: 0 0 30px;
+		flex: 1;
 		height: 100%;
-		min-width: 30px;
+		min-width: 20px;
 	}
 </style>

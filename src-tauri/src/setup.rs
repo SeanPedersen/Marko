@@ -1,14 +1,28 @@
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use mslnk::ShellLink;
-use winreg::enums::*;
-use winreg::RegKey;
+use serde::Serialize;
 use tauri::AppHandle;
 
+#[cfg(target_os = "windows")]
+use mslnk::ShellLink;
+#[cfg(target_os = "windows")]
+use winreg::enums::*;
+#[cfg(target_os = "windows")]
+use winreg::RegKey;
+
 const APP_NAME: &str = "MarkdownViewer";
+#[cfg(target_os = "windows")]
 const EXE_NAME: &str = "MarkdownViewer.exe";
 
+#[derive(Serialize)]
+pub struct InstallStatus {
+    pub is_installed: bool,
+    pub all_users: bool,
+    pub version: String,
+}
+
+#[cfg(target_os = "windows")]
 pub fn get_install_path(all_users: bool) -> PathBuf {
     if all_users {
         // Program Files
@@ -24,6 +38,7 @@ pub fn get_install_path(all_users: bool) -> PathBuf {
     }
 }
 
+#[cfg(target_os = "windows")]
 pub fn is_installed() -> bool {
     let Ok(current_exe) = env::current_exe() else { return false; };
     
@@ -60,16 +75,14 @@ pub fn is_installed() -> bool {
     false
 }
 
-use serde::Serialize;
-
-#[derive(Serialize)]
-pub struct InstallStatus {
-    pub is_installed: bool,
-    pub all_users: bool,
-    pub version: String,
+#[cfg(not(target_os = "windows"))]
+pub fn is_installed() -> bool {
+    // On macOS/Linux, assume installed or running from bundle
+    true
 }
 
 #[tauri::command]
+#[cfg(target_os = "windows")]
 pub fn check_install_status() -> InstallStatus {
     // Check HKCU
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
@@ -103,6 +116,17 @@ pub fn check_install_status() -> InstallStatus {
 }
 
 #[tauri::command]
+#[cfg(not(target_os = "windows"))]
+pub fn check_install_status() -> InstallStatus {
+    InstallStatus {
+        is_installed: true,
+        all_users: false,
+        version: "0.0.0".to_string(),
+    }
+}
+
+#[tauri::command]
+#[cfg(target_os = "windows")]
 pub async fn install_app(
     handle: AppHandle,
     all_users: bool,
@@ -206,6 +230,20 @@ pub async fn install_app(
 }
 
 #[tauri::command]
+#[cfg(not(target_os = "windows"))]
+pub async fn install_app(
+    _handle: AppHandle,
+    _all_users: bool,
+    _register_md: bool,
+    _desktop_shortcut: bool,
+    _start_menu: bool,
+    _launch_after: bool
+) -> Result<(), String> {
+    Ok(())
+}
+
+#[tauri::command]
+#[cfg(target_os = "windows")]
 pub async fn uninstall_app(handle: AppHandle, target_all_users: Option<bool>) -> Result<(), String> {
     let current_exe = env::current_exe().map_err(|e| e.to_string())?;
     
@@ -271,6 +309,13 @@ pub async fn uninstall_app(handle: AppHandle, target_all_users: Option<bool>) ->
     Ok(())
 }
 
+#[tauri::command]
+#[cfg(not(target_os = "windows"))]
+pub async fn uninstall_app(_handle: AppHandle, _target_all_users: Option<bool>) -> Result<(), String> {
+     Ok(())
+}
+
+#[cfg(target_os = "windows")]
 fn register_file_association(exe_path: &Path, all_users: bool) -> Result<(), std::io::Error> {
     let root_h = if all_users { HKEY_LOCAL_MACHINE } else { HKEY_CURRENT_USER };
     let root = RegKey::predef(root_h);

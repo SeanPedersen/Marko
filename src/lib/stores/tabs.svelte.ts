@@ -58,6 +58,10 @@ class TabManager {
 			this.activeTabId = fallback ? fallback.id : null;
 		}
 
+		const tab = this.tabs[index];
+		if (tab.path) {
+			this.recentlyClosed.push(tab.path);
+		}
 		this.tabs.splice(index, 1);
 	}
 
@@ -102,6 +106,22 @@ class TabManager {
 			nextIndex = (currentIndex - 1 + this.tabs.length) % this.tabs.length;
 		}
 		this.activeTabId = this.tabs[nextIndex].id;
+	}
+
+	updateTabPath(id: string, path: string) {
+		const tab = this.tabs.find((t) => t.id === id);
+		if (tab) {
+			tab.path = path;
+			tab.title = path.split(/[/\\]/).pop() || 'Untitled';
+			tab.content = '';
+			tab.scrollTop = 0;
+		}
+	}
+
+	recentlyClosed = $state<string[]>([]);
+
+	popRecentlyClosed() {
+		return this.recentlyClosed.pop();
 	}
 }
 

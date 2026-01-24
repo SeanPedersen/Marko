@@ -22,14 +22,27 @@
 		}
 	}
 
+	async function handleContextMenu(e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		const { invoke } = await import('@tauri-apps/api/core');
+		invoke('show_context_menu', {
+			menuType: 'tab',
+			path: tab.path || null,
+			tabId: tab.id,
+			hasSelection: false,
+		}).catch(console.error);
+	}
+
 	// home tab has empty path
 	let isHomeTab = $derived(tab.path === '');
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="tab {isActive ? 'active' : ''}" class:last={isLast} {onclick} onmousedown={handleMiddleClick} role="tab" tabindex="0" title={tab.path || 'Recents'}>
-	<div class="tab-content">
+<div class="tab {isActive ? 'active' : ''}" class:last={isLast} role="group" title={tab.path || 'Recents'} oncontextmenu={handleContextMenu}>
+	<button class="tab-content-btn" {onclick} onmousedown={handleMiddleClick}>
 		{#if isHomeTab}
 			<span class="tab-icon">
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -44,7 +57,7 @@
 		<span class="tab-label">
 			{tab.title}
 		</span>
-	</div>
+	</button>
 	<div class="tab-actions">
 		<button class="tab-close" onclick={handleClose} title="Close (Ctrl+W)">
 			<svg width="12" height="12" viewBox="0 0 12 12"><path fill="currentColor" d="M11 1.7L10.3 1 6 5.3 1.7 1 1 1.7 5.3 6 1 10.3 1.7 11 6 6.7 10.3 11 11 10.3 6.7 6z" /></svg>
@@ -59,9 +72,8 @@
 		height: 28px;
 		min-width: 100px;
 		max-width: 200px;
-		padding: 0 8px 0 12px;
+		padding: 0;
 		margin: 0;
-		cursor: pointer;
 		background: transparent;
 		color: var(--color-fg-muted);
 		user-select: none;
@@ -72,13 +84,13 @@
 		transition:
 			background-color 0.25s cubic-bezier(0.05, 0.95, 0.05, 0.95),
 			color 0.25s cubic-bezier(0.05, 0.95, 0.05, 0.95);
-		/* border-right: 1px solid var(--color-border-muted); */
 	}
 
 	.tab.last {
 		border-right: none;
 	}
 
+	/* wrapper styles */
 	.tab:hover {
 		background-color: var(--color-neutral-muted);
 	}
@@ -86,7 +98,6 @@
 	.tab.active {
 		background-color: var(--tab-active-bg, #dee1e6);
 		color: var(--color-fg-default);
-		border-right: none;
 	}
 
 	@media (prefers-color-scheme: dark) {
@@ -95,12 +106,23 @@
 		}
 	}
 
-	.tab-content {
+	.tab-content-btn {
+		appearance: none;
+		background: transparent;
+		border: none;
+		color: inherit;
 		display: flex;
 		align-items: center;
 		gap: 6px;
 		flex: 1;
+		width: 100%;
+		height: 100%;
+		padding: 0 4px 0 12px;
 		overflow: hidden;
+		cursor: pointer;
+		font-family: inherit;
+		font-size: inherit;
+		text-align: left;
 	}
 
 	.tab-icon {
@@ -118,7 +140,7 @@
 	.tab-actions {
 		display: flex;
 		align-items: center;
-		margin-left: 4px;
+		padding-right: 4px;
 		opacity: 0;
 	}
 

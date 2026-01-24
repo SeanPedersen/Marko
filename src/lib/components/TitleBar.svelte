@@ -5,45 +5,61 @@
 	import TabList from './TabList.svelte';
 	import { tabManager } from '../stores/tabs.svelte.js';
 
-	let { isFocused, isScrolled, currentFile, liveMode, windowTitle, onselectFile, oncloseFile, ononpenFileLocation, ontoggleLiveMode, onopenInEditor, ondetach } = $props<{
+	let {
+		isFocused,
+		isScrolled,
+		currentFile,
+		liveMode,
+		windowTitle,
+		showHome,
+		onselectFile,
+		ontoggleHome,
+		ononpenFileLocation,
+		ontoggleLiveMode,
+		onopenInEditor,
+		ondetach,
+		ontabclick,
+	} = $props<{
 		isFocused: boolean;
 		isScrolled: boolean;
 		currentFile: string;
 		liveMode: boolean;
 		windowTitle: string;
+		showHome: boolean;
 		onselectFile: () => void;
-		oncloseFile: () => void;
+		ontoggleHome: () => void;
 		ononpenFileLocation: () => void;
 		ontoggleLiveMode: () => void;
 		onopenInEditor: () => void;
 		ondetach: (tabId: string) => void;
+		ontabclick?: () => void;
 	}>();
 
 	const appWindow = getCurrentWindow();
 </script>
 
-<div class="custom-title-bar {isScrolled ? 'scrolled' : ''}" data-tauri-drag-region>
-	<div class="window-controls-left">
-		<button class="icon-home-btn" onclick={oncloseFile} aria-label="Go to Home" title="Go to home">
+<div class="custom-title-bar {isScrolled ? 'scrolled' : ''}">
+	<div class="window-controls-left" data-tauri-drag-region>
+		<button class="icon-home-btn {showHome ? 'active' : ''}" onclick={ontoggleHome} aria-label="Go to Home" title="Go to home">
 			<img src={iconUrl} alt="icon" class="window-icon" />
 		</button>
 	</div>
 
 	{#if tabManager.tabs.length > 0}
 		<div class="tab-area">
-			<TabList onnewTab={() => tabManager.addHomeTab()} {ondetach} />
+			<TabList onnewTab={() => tabManager.addHomeTab()} {ondetach} {showHome} {ontabclick} />
 		</div>
 	{:else}
-		<div class="window-title-container">
-			<div class="window-title {isFocused ? 'focused' : 'unfocused'}">
-				<span class="title-text">
+		<div class="window-title-container" data-tauri-drag-region>
+			<div class="window-title {isFocused ? 'focused' : 'unfocused'}" data-tauri-drag-region>
+				<span class="title-text" data-tauri-drag-region>
 					{windowTitle}
 				</span>
 			</div>
 		</div>
 	{/if}
 
-	<div class="title-actions">
+	<div class="title-actions" data-tauri-drag-region>
 		{#if currentFile}
 			<div class="actions-wrapper" transition:slide={{ axis: 'x', duration: 200 }}>
 				<button class="title-action-btn" onclick={ononpenFileLocation} aria-label="Open File Location" title="Open folder" transition:fly={{ x: 10, duration: 100, delay: 0 }}>
@@ -76,7 +92,7 @@
 		</button>
 	</div>
 
-	<div class="window-controls-right">
+	<div class="window-controls-right" data-tauri-drag-region>
 		<button class="control-btn" onclick={() => appWindow.minimize()} aria-label="Minimize">
 			<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="currentColor" width="10" height="1" x="1" y="6" /></svg>
 		</button>
@@ -192,7 +208,8 @@
 		transition: background 0.1s;
 	}
 
-	.icon-home-btn:hover {
+	.icon-home-btn:hover,
+	.icon-home-btn.active {
 		background: var(--color-canvas-subtle);
 	}
 

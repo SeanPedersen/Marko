@@ -84,14 +84,14 @@
 		display: flex;
 		flex-direction: column;
 		justify-content: center;
+		margin-top: 32px;
 		align-items: center;
 		user-select: none;
 		font-family: var(--win-font);
 		height: 90vh;
 		width: 100%;
-		padding-top: 32px;
+		padding-top: 32px 20px 0px 20px;
 		box-sizing: border-box;
-		padding: 0 20px;
 		color: var(--color-fg-default);
 		opacity: 0.8;
 	}
@@ -225,6 +225,8 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		margin-top: 2px;
+		direction: rtl;
+		text-align: left;
 	}
 
 	.clear-btn {

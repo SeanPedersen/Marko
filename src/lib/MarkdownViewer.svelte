@@ -7,7 +7,7 @@
 	import Installer from './Installer.svelte';
 	import Uninstaller from './Uninstaller.svelte';
 	import TitleBar from './components/TitleBar.svelte';
-	import ContextMenu from './components/ContextMenu.svelte';
+
 	import HomePage from './components/HomePage.svelte';
 	import { tabManager } from './stores/tabs.svelte.js';
 
@@ -32,13 +32,30 @@
 	let isScrolled = $derived(scrollTop > 0);
 	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Markdown Viewer');
 
+	let showHome = $state(false);
+
 	// ui state
-	let contextMenu = $state({ show: false, x: 0, y: 0 });
 	let tooltip = $state({ show: false, text: '', x: 0, y: 0 });
 
+	$effect(() => {
+		// Dismiss home view when switching tabs
+		const _ = tabManager.activeTabId;
+		showHome = false;
+	});
+
 	async function loadMarkdown(filePath: string) {
+		showHome = false;
 		try {
-			tabManager.addTab(filePath);
+			// Check if file is already open
+			const existing = tabManager.tabs.find((t) => t.path === filePath);
+			if (existing) {
+				tabManager.setActive(existing.id);
+			} else if (tabManager.activeTab && tabManager.activeTab.path === '') {
+				// Reuse the current empty tab (e.g. New Tab page)
+				tabManager.updateTabPath(tabManager.activeTab.id, filePath);
+			} else {
+				tabManager.addTab(filePath);
+			}
 			const activeId = tabManager.activeTabId;
 			if (!activeId) return;
 
@@ -160,7 +177,7 @@
 	function saveRecentFile(path: string) {
 		let files = [...recentFiles].filter((f) => f !== path);
 		files.unshift(path);
-		recentFiles = files.slice(0, 4);
+		recentFiles = files.slice(0, 9);
 		localStorage.setItem('recent-files', JSON.stringify(recentFiles));
 	}
 
@@ -218,7 +235,6 @@
 
 	async function openInEditor() {
 		if (currentFile) await invoke('open_in_notepad', { path: currentFile });
-		contextMenu.show = false;
 	}
 
 	async function selectFile() {
@@ -227,42 +243,34 @@
 			filters: [{ name: 'Markdown', extensions: ['md'] }],
 		});
 		if (selected && typeof selected === 'string') loadMarkdown(selected);
-		contextMenu.show = false;
+	}
+
+	function toggleHome() {
+		showHome = !showHome;
 	}
 
 	async function closeFile() {
 		if (tabManager.activeTabId) tabManager.closeTab(tabManager.activeTabId);
-		contextMenu.show = false;
 		if (liveMode && tabManager.tabs.length === 0) invoke('unwatch_file').catch(console.error);
 	}
 
 	async function openFileLocation() {
 		if (currentFile) await invoke('open_file_folder', { path: currentFile });
-		contextMenu.show = false;
-	}
-
-	async function copySelection() {
-		document.execCommand('copy');
-		contextMenu.show = false;
-	}
-
-	async function selectAll() {
-		if (markdownBody) {
-			const range = document.createRange();
-			range.selectNodeContents(markdownBody);
-			const selection = window.getSelection();
-			if (selection) {
-				selection.removeAllRanges();
-				selection.addRange(range);
-			}
-		}
-		contextMenu.show = false;
 	}
 
 	function handleContextMenu(e: MouseEvent) {
 		if (mode !== 'app') return;
 		e.preventDefault();
-		contextMenu = { show: true, x: e.clientX, y: e.clientY };
+
+		const selection = window.getSelection();
+		const hasSelection = selection ? selection.toString().length > 0 : false;
+
+		invoke('show_context_menu', {
+			menuType: 'document',
+			path: currentFile || null,
+			tabId: null,
+			hasSelection,
+		}).catch(console.error);
 	}
 
 	function handleMouseOver(event: MouseEvent) {
@@ -286,7 +294,6 @@
 
 	async function handleDocumentClick(event: MouseEvent) {
 		if (mode !== 'app') return;
-		contextMenu.show = false;
 		let target = event.target as HTMLElement;
 		while (target && target.tagName !== 'A' && target !== document.body) target = target.parentElement as HTMLElement;
 		if (target?.tagName === 'A') {
@@ -324,9 +331,20 @@
 			e.preventDefault();
 			tabManager.addHomeTab();
 		}
+		if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+			e.preventDefault();
+			handleUndoCloseTab();
+		}
 		if (e.ctrlKey && e.key === 'Tab') {
 			e.preventDefault();
 			tabManager.cycleTab(e.shiftKey ? 'prev' : 'next');
+		}
+	}
+
+	async function handleUndoCloseTab() {
+		const path = tabManager.popRecentlyClosed();
+		if (path) {
+			await loadMarkdown(path);
 		}
 	}
 
@@ -349,9 +367,8 @@
 
 	onMount(() => {
 		loadRecentFiles();
-		let unlistenFocus: (() => void) | null = null;
-		let unlistenFileChanged: (() => void) | null = null;
-		let unlistenPath: (() => void) | null = null;
+		loadRecentFiles();
+		let unlisteners: (() => void)[] = [];
 
 		const init = async () => {
 			const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -367,16 +384,70 @@
 				setTimeout(() => loadMarkdown(decodedPath), 100);
 			}
 
-			unlistenFocus = await appWindow.onFocusChanged(({ payload: focused }) => {
-				isFocused = focused;
-			});
-			unlistenFileChanged = await listen('file-changed', () => {
-				if (liveMode && currentFile) loadMarkdown(currentFile);
-			});
-			unlistenPath = await listen('file-path', (event) => {
-				const filePath = event.payload as string;
-				if (filePath) loadMarkdown(filePath);
-			});
+			unlisteners.push(
+				await appWindow.onFocusChanged(({ payload: focused }) => {
+					isFocused = focused;
+				}),
+			);
+			unlisteners.push(
+				await listen('file-changed', () => {
+					if (liveMode && currentFile) loadMarkdown(currentFile);
+				}),
+			);
+			unlisteners.push(
+				await listen('file-path', (event) => {
+					const filePath = event.payload as string;
+					if (filePath) loadMarkdown(filePath);
+				}),
+			);
+			unlisteners.push(
+				await listen('menu-close-file', () => {
+					closeFile();
+				}),
+			);
+			unlisteners.push(
+				await listen('menu-tab-new', () => {
+					tabManager.addHomeTab();
+				}),
+			);
+			unlisteners.push(
+				await listen('menu-tab-undo', () => {
+					console.log('Received menu-tab-undo event');
+					handleUndoCloseTab();
+				}),
+			);
+			unlisteners.push(
+				await listen('menu-tab-close', (event) => {
+					const tabId = event.payload as string;
+					tabManager.closeTab(tabId);
+				}),
+			);
+			unlisteners.push(
+				await listen('menu-tab-close-others', (event) => {
+					const tabId = event.payload as string;
+					const tabsToClose = tabManager.tabs.filter((t) => t.id !== tabId).map((t) => t.id);
+					tabsToClose.forEach((id) => tabManager.closeTab(id));
+				}),
+			);
+			unlisteners.push(
+				await listen('menu-tab-close-right', (event) => {
+					const tabId = event.payload as string;
+					const index = tabManager.tabs.findIndex((t) => t.id === tabId);
+					if (index !== -1) {
+						const tabsToClose = tabManager.tabs.slice(index + 1).map((t) => t.id);
+						tabsToClose.forEach((id) => tabManager.closeTab(id));
+					}
+				}),
+			);
+			unlisteners.push(
+				await listen('tauri://file-drop', (event) => {
+					console.log('File drop detected:', event);
+					const paths = event.payload as string[];
+					if (Array.isArray(paths)) {
+						paths.forEach((path) => loadMarkdown(path));
+					}
+				}),
+			);
 
 			try {
 				const args: string[] = await invoke('send_markdown_path');
@@ -389,9 +460,7 @@
 		init();
 
 		return () => {
-			if (unlistenFocus) unlistenFocus();
-			if (unlistenFileChanged) unlistenFileChanged();
-			if (unlistenPath) unlistenPath();
+			unlisteners.forEach((u) => u());
 		};
 	});
 </script>
@@ -411,29 +480,19 @@
 		{currentFile}
 		{liveMode}
 		{windowTitle}
+		{showHome}
 		onselectFile={selectFile}
-		oncloseFile={closeFile}
+		ontoggleHome={toggleHome}
 		ononpenFileLocation={openFileLocation}
 		ontoggleLiveMode={toggleLiveMode}
 		onopenInEditor={openInEditor}
-		ondetach={handleDetach} />
+		ondetach={handleDetach}
+		ontabclick={() => (showHome = false)} />
 
-	<ContextMenu
-		show={contextMenu.show}
-		x={contextMenu.x}
-		y={contextMenu.y}
-		{currentFile}
-		oncopy={copySelection}
-		onselectAll={selectAll}
-		onopenFileLocation={openFileLocation}
-		onopenInEditor={openInEditor}
-		oncloseFile={closeFile}
-		onhide={() => (contextMenu.show = false)} />
-
-	{#if currentFile}
-	<div class="markdown-container">
-		<article bind:this={markdownBody} contenteditable="false" class="markdown-body" bind:innerHTML={htmlContent} onscroll={handleScroll}></article>
-	</div>
+	{#if currentFile && !showHome}
+		<div class="markdown-container">
+			<article bind:this={markdownBody} contenteditable="false" class="markdown-body" bind:innerHTML={htmlContent} onscroll={handleScroll}></article>
+		</div>
 	{:else}
 		<HomePage {recentFiles} onselectFile={selectFile} onloadFile={loadMarkdown} onremoveRecentFile={removeRecentFile} />
 	{/if}
@@ -464,7 +523,7 @@
 		box-sizing: border-box;
 		min-width: 200px;
 		margin: 36px 0px 0px 0px;
-		padding:50px clamp(calc(calc(50% - 390px)), 5vw, 50px);
+		padding: 50px clamp(calc(calc(50% - 390px)), 5vw, 50px);
 		height: calc(100vh - 36px);
 		overflow-y: auto;
 	}
