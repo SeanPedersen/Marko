@@ -7,6 +7,9 @@ Built with [Tauri](https://tauri.app/) — [Rust](https://www.rust-lang.org) + [
 Using GitHub flavored markdown style by [sindresorhus](https://github.com/sindresorhus/generate-github-markdown-css) and rendered with [comrak](https://github.com/kivikakk/comrak).
 
 > [!NOTE]
+> ## Changes in v2.1.1
+> - Updated icons
+> - Installer handling for updating
 > ## Changes in v2.0
 > - Fixed relative image embeds
 > - Added YouTube embed support

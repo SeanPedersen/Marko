@@ -1,10 +1,17 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
+	import { onMount } from 'svelte';
 	import iconUrl from '../assets/icon.png';
 
 	let installing = $state(false);
 	let error = $state('');
+
+	// Maintenance Mode State
+	let checking = $state(true);
+	let isInstalled = $state(false);
+	let installedVersion = $state('');
+	let installedAllUsers = $state(false);
 
 	let allUsers = $state(false);
 	let registerMd = $state(true);
@@ -14,12 +21,38 @@
 
 	const appWindow = getCurrentWindow();
 
+	interface InstallStatus {
+		is_installed: boolean;
+		all_users: boolean;
+		version: string;
+	}
+
+	async function checkStatus() {
+		try {
+			const status = (await invoke('check_install_status')) as InstallStatus;
+			isInstalled = status.is_installed;
+			if (isInstalled) {
+				installedAllUsers = status.all_users;
+				installedVersion = status.version;
+				// Pre-select the correct scope for update
+				allUsers = status.all_users;
+			}
+		} catch (e) {
+			console.error('Failed to check install status:', e);
+		} finally {
+			checking = false;
+		}
+	}
+
 	async function handleInstall() {
 		installing = true;
 		error = '';
 		try {
+			// If updating, force the correct scope
+			const targetAllUsers = isInstalled ? installedAllUsers : allUsers;
+
 			await invoke('install_app', {
-				allUsers,
+				allUsers: targetAllUsers,
 				registerMd,
 				desktopShortcut,
 				startMenu,
@@ -29,15 +62,30 @@
 		} catch (e: any) {
 			error = e.toString();
 			installing = false;
-			if (error.includes('Access is denied') && allUsers) {
-				error = "Access denied. Please run as Administrator for 'All Users' installation.";
+			if (error.includes('Access is denied') && (isInstalled ? installedAllUsers : allUsers)) {
+				error = 'Access denied. Please run as Administrator.';
 			}
+		}
+	}
+
+	async function handleUninstall() {
+		installing = true; // Use same loading state
+		error = '';
+		try {
+			await invoke('uninstall_app', { targetAllUsers: installedAllUsers });
+		} catch (e: any) {
+			error = e.toString();
+			installing = false;
 		}
 	}
 
 	async function closeApp() {
 		await appWindow.close();
 	}
+
+	onMount(() => {
+		checkStatus();
+	});
 </script>
 
 <div class="installer-container" data-tauri-drag-region>
@@ -50,40 +98,69 @@
 	<div class="content">
 		<div class="header">
 			<img src={iconUrl} alt="App Icon" class="app-icon" />
-			<h1>Markdown Viewer</h1>
-			<p class="subtitle">A simple markdown viewer</p>
+			{#if isInstalled}
+				<h1>Markdown Viewer</h1>
+				<p class="subtitle">Version {installedVersion} is installed</p>
+			{:else}
+				<h1>Markdown Viewer</h1>
+				<p class="subtitle">A simple markdown viewer</p>
+			{/if}
 		</div>
 
-		{#if !installing}
+		{#if checking}
+			<div class="spinner"></div>
+		{:else if !installing}
 			<div class="setup-box">
-				<div class="scope-toggle">
-					<button class:active={!allUsers} onclick={() => (allUsers = false)}>Just Me</button>
-					<button class:active={allUsers} onclick={() => (allUsers = true)}>All Users</button>
-				</div>
+				{#if !isInstalled}
+					<div class="scope-toggle">
+						<button class:active={!allUsers} onclick={() => (allUsers = false)}>Just Me</button>
+						<button class:active={allUsers} onclick={() => (allUsers = true)}>All Users</button>
+					</div>
+				{/if}
 
 				<div class="options-container">
-					<div class="options">
-						<label class="checkbox-container">
-							<input type="checkbox" bind:checked={registerMd} />
-							<span class="checkmark"></span>
-							Register as default for .md files
-						</label>
-						<label class="checkbox-container">
-							<input type="checkbox" bind:checked={desktopShortcut} />
-							<span class="checkmark"></span>
-							Create desktop shortcut
-						</label>
-						<label class="checkbox-container">
-							<input type="checkbox" bind:checked={startMenu} />
-							<span class="checkmark"></span>
-							Add to Start Menu
-						</label>
-						<label class="checkbox-container">
-							<input type="checkbox" bind:checked={launchAfter} />
-							<span class="checkmark"></span>
-							Launch after installation
-						</label>
-					</div>
+					{#if !isInstalled}
+						<div class="options">
+							<label class="checkbox-container">
+								<input type="checkbox" bind:checked={registerMd} />
+								<span class="checkmark"></span>
+								Register as default for .md files
+							</label>
+							<label class="checkbox-container">
+								<input type="checkbox" bind:checked={desktopShortcut} />
+								<span class="checkmark"></span>
+								Create desktop shortcut
+							</label>
+							<label class="checkbox-container">
+								<input type="checkbox" bind:checked={startMenu} />
+								<span class="checkmark"></span>
+								Add to Start Menu
+							</label>
+							<label class="checkbox-container">
+								<input type="checkbox" bind:checked={launchAfter} />
+								<span class="checkmark"></span>
+								Launch after installation
+							</label>
+						</div>
+					{:else}
+						<div class="maintenance-options">
+							<p class="status-msg">
+								Installed for: <strong>{installedAllUsers ? 'All Users' : 'Current User'}</strong>
+							</p>
+							<div class="options">
+								<label class="checkbox-container">
+									<input type="checkbox" bind:checked={registerMd} />
+									<span class="checkmark"></span>
+									Repair file associations
+								</label>
+								<label class="checkbox-container">
+									<input type="checkbox" bind:checked={launchAfter} />
+									<span class="checkmark"></span>
+									Launch after update
+								</label>
+							</div>
+						</div>
+					{/if}
 				</div>
 
 				<div class="error-container">
@@ -93,13 +170,18 @@
 				</div>
 
 				<div class="actions">
-					<button class="install-btn" onclick={handleInstall}>
-						Install {allUsers ? 'for All Users' : 'Now'}
-					</button>
+					{#if isInstalled}
+						<button class="uninstall-btn" onclick={handleUninstall}>Uninstall</button>
+						<button class="install-btn" onclick={handleInstall}>Update / Repair</button>
+					{:else}
+						<button class="install-btn" onclick={handleInstall}>
+							Install {allUsers ? 'for All Users' : 'Now'}
+						</button>
+					{/if}
 				</div>
 
 				<div class="notice-container">
-					{#if allUsers}
+					{#if allUsers || (isInstalled && installedAllUsers)}
 						<p class="admin-notice">Requires Administrator privileges</p>
 					{/if}
 				</div>
@@ -107,7 +189,7 @@
 		{:else}
 			<div class="installing-state">
 				<div class="spinner"></div>
-				<p>Installing Markdown Viewer...</p>
+				<p>{isInstalled ? 'Updating' : 'Installing'} Markdown Viewer...</p>
 			</div>
 		{/if}
 	</div>
@@ -301,27 +383,58 @@
 	.actions {
 		display: flex;
 		justify-content: center;
+		gap: 16px;
+		width: 100%;
 	}
 
 	.install-btn {
 		background: var(--color-accent-fg);
-		color: white;
-		border: none;
-		padding: 10px 40px;
+		color: var(--color-fg-default);
+		border: 1px solid var(--color-border-default);
+		padding: 10px 24px;
 		border-radius: 20px;
 		font-weight: 600;
 		font-size: 14px;
 		cursor: pointer;
-		transition:
-			transform 0.2s,
-			background 0.2s;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		width: 100%;
+		transition: all 0.2s;
+		width: 100px;
 	}
 
 	.install-btn:hover {
-		background: var(--color-accent-emphasis);
-		transform: translateY(-1px);
+		background: var(--color-accent-fg-hover);
+	}
+
+	.uninstall-btn {
+		background: var(--color-canvas-subtle);
+		color: var(--color-fg-default);
+		border: 1px solid var(--color-border-default);
+		padding: 10px 24px;
+		border-radius: 20px;
+		font-weight: 600;
+		font-size: 14px;
+		cursor: pointer;
+		transition: all 0.2s;
+		width: 100px;
+	}
+
+	.uninstall-btn:hover {
+		background: var(--color-neutral-muted);
+	}
+
+	.maintenance-options {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.status-msg {
+		font-size: 13px;
+		opacity: 0.8;
+		margin: 0;
+		text-align: center;
+		background: var(--color-canvas-subtle);
+		padding: 8px;
+		border-radius: 6px;
 	}
 
 	.notice-container {
