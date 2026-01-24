@@ -5,6 +5,8 @@ use std::path::Path;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+mod setup;
+
 struct WatcherState {
     watcher: Mutex<Option<RecommendedWatcher>>,
 }
@@ -19,7 +21,7 @@ fn open_markdown(path: String) -> Result<String, String> {
             table: true,
             autolink: true,
             tasklist: true,
-            superscript: true,
+            superscript: false,
             footnotes: true,
             description_lists: true,
             ..ComrakExtensionOptions::default()
@@ -38,6 +40,20 @@ fn open_in_notepad(path: String) -> Result<(), String> {
     {
         use std::process::Command;
         Command::new("notepad.exe")
+            .arg(path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn open_file_folder(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new("explorer")
+            .arg("/select,")
             .arg(path)
             .spawn()
             .map_err(|e| e.to_string())?;
@@ -91,6 +107,30 @@ fn send_markdown_path() -> Vec<String> {
     }
 }
 
+#[tauri::command]
+fn get_app_mode() -> String {
+    // In debug mode (tauri dev), always run in "app" mode to bypass installer
+    if cfg!(debug_assertions) {
+        return "app".to_string();
+    }
+
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|arg| arg == "--uninstall") {
+        return "uninstall".to_string();
+    }
+    
+    if setup::is_installed() {
+        "app".to_string()
+    } else {
+        // If we are not installed, but we are opening a file, just run in "app" mode (portable)
+        if args.len() > 1 && !args[1].starts_with('-') {
+            "app".to_string()
+        } else {
+            "installer".to_string()
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "windows")]
@@ -116,6 +156,17 @@ pub fn run() {
                 let _ = window.emit("file-path", path.as_str());
             }
 
+            // Resize if installer
+            let args: Vec<String> = std::env::args().collect();
+            let is_uninstall = args.iter().any(|arg| arg == "--uninstall");
+            if !setup::is_installed() || is_uninstall {
+                // If it's not opening a file, resize to a nice installer size
+                if args.len() <= 1 || args[1].starts_with('-') {
+                   let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: 450.0, height: 550.0 }));
+                   let _ = window.center();
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -123,7 +174,11 @@ pub fn run() {
             send_markdown_path,
             open_in_notepad,
             watch_file,
-            unwatch_file
+            unwatch_file,
+            get_app_mode,
+            setup::install_app,
+            setup::uninstall_app,
+            open_file_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
