@@ -147,9 +147,30 @@ pub fn run() {
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            println!("Single Instance Args: {:?}", args);
+            // In some environments, the first arg might be the executable, in others it might be stripped?
+            // Let's look for the first arg that doesn't start with "-" and likely isn't the executable (if full path)
+            // But safely, for now, let's just log and try to be smarter.
+            
+            let mut file_path = "";
+            if args.len() > 1 {
+                 file_path = args[1].as_str();
+            } else if args.len() == 1 {
+                 // If only 1 arg, check if it looks like a file and not the exe?
+                 // Usually args[0] is exe.
+            }
+            
+            // Allow for robust finding of the file argument
+            let path = args.iter().skip(1).find(|a| !a.starts_with("-")).map(|a| a.as_str()).unwrap_or("");
+            
+            let _ = app.get_webview_window("main").expect("no main window").emit("file-path", path);
+            let _ = app.get_webview_window("main").expect("no main window").set_focus();
+        }))
         .plugin(tauri_plugin_prevent_default::init())
         .setup(|app| {
             let args: Vec<String> = std::env::args().collect();
+            println!("Setup Args: {:?}", args);
             let window = app.get_webview_window("main").unwrap();
 
             if let Some(path) = args.get(1) {
@@ -178,6 +199,7 @@ pub fn run() {
             get_app_mode,
             setup::install_app,
             setup::uninstall_app,
+            setup::check_install_status,
             open_file_folder
         ])
         .run(tauri::generate_context!())

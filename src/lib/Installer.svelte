@@ -271,7 +271,7 @@
 
 	.setup-box {
 		width: 100%;
-		max-width: 300px;
+		max-width: 400px;
 		animation: slideUp 0.4s cubic-bezier(0.1, 0.9, 0.2, 1);
 	}
 
@@ -397,7 +397,7 @@
 		font-size: 14px;
 		cursor: pointer;
 		transition: all 0.2s;
-		width: 100px;
+		width: 180px;
 	}
 
 	.install-btn:hover {
@@ -414,7 +414,7 @@
 		font-size: 14px;
 		cursor: pointer;
 		transition: all 0.2s;
-		width: 100px;
+		width: 180px;
 	}
 
 	.uninstall-btn:hover {

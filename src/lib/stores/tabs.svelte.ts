@@ -41,7 +41,7 @@ class TabManager {
 		this.tabs.push({
 			id,
 			path: '',
-			title: 'New Tab',
+			title: 'Recents',
 			content: '',
 			scrollTop: 0,
 			isDirty: false

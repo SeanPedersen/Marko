@@ -1,15 +1,12 @@
 <script lang="ts">
 	import type { Tab } from '../stores/tabs.svelte.js';
 
-	let { tab, isActive, isLast, onclick, onclose, ondragstart, ondragenter, ondragend } = $props<{
+	let { tab, isActive, isLast, onclick, onclose } = $props<{
 		tab: Tab;
 		isActive: boolean;
 		isLast?: boolean;
 		onclick: () => void;
 		onclose: (e: MouseEvent) => void;
-		ondragstart?: (e: DragEvent) => void;
-		ondragenter?: (e: DragEvent) => void;
-		ondragend?: (e: DragEvent) => void;
 	}>();
 
 	function handleClose(e: MouseEvent) {
@@ -31,18 +28,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-	class="tab {isActive ? 'active' : ''}"
-	class:last={isLast}
-	draggable="true"
-	{onclick}
-	onmousedown={handleMiddleClick}
-	{ondragstart}
-	{ondragenter}
-	{ondragend}
-	role="tab"
-	tabindex="0"
-	title={tab.path || 'New Tab'}>
+<div class="tab {isActive ? 'active' : ''}" class:last={isLast} {onclick} onmousedown={handleMiddleClick} role="tab" tabindex="0" title={tab.path || 'Recents'}>
 	<div class="tab-content">
 		{#if isHomeTab}
 			<span class="tab-icon">
@@ -74,7 +60,7 @@
 		min-width: 100px;
 		max-width: 200px;
 		padding: 0 8px 0 12px;
-		margin: 4px 0 0 0;
+		margin: 0;
 		cursor: pointer;
 		background: transparent;
 		color: var(--color-fg-muted);
@@ -82,9 +68,10 @@
 		position: relative;
 		font-size: 12px;
 		font-family: var(--win-font, 'Segoe UI', sans-serif);
+		border-radius: 8px;
 		transition:
-			background 0.15s cubic-bezier(0.05, 0.95, 0.05, 0.95),
-			color 0.15s cubic-bezier(0.05, 0.95, 0.05, 0.95);
+			background-color 0.25s cubic-bezier(0.05, 0.95, 0.05, 0.95),
+			color 0.25s cubic-bezier(0.05, 0.95, 0.05, 0.95);
 		/* border-right: 1px solid var(--color-border-muted); */
 	}
 
@@ -93,20 +80,18 @@
 	}
 
 	.tab:hover {
-		background: var(--color-neutral-muted);
-		border-radius: 8px ;
+		background-color: var(--color-neutral-muted);
 	}
 
 	.tab.active {
-		background: var(--tab-active-bg, #dee1e6);
+		background-color: var(--tab-active-bg, #dee1e6);
 		color: var(--color-fg-default);
-		border-radius: 8px ;
 		border-right: none;
 	}
 
 	@media (prefers-color-scheme: dark) {
 		.tab.active {
-			--tab-active-bg: #3c3f44;
+			--tab-active-bg: #2d2e30;
 		}
 	}
 
@@ -147,6 +132,7 @@
 		height: 18px;
 		border-radius: 4px;
 		display: flex;
+		scale: 0.8;
 		justify-content: center;
 		align-items: center;
 		background: transparent;

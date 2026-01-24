@@ -27,39 +27,6 @@
 		<button class="icon-home-btn" onclick={oncloseFile} aria-label="Go to Home" title="Go to home">
 			<img src={iconUrl} alt="icon" class="window-icon" />
 		</button>
-
-		<div class="title-actions">
-			<button class="title-action-btn" onclick={onselectFile} aria-label="Open File" title="Open file">
-				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-					><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
-			</button>
-			{#if currentFile}
-				<div class="actions-wrapper" transition:slide={{ axis: 'x', duration: 200 }}>
-					<button class="title-action-btn" onclick={ononpenFileLocation} aria-label="Open File Location" title="Open folder" transition:fly={{ x: -10, duration: 100, delay: 0 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><polyline points="15 13 18 13 18 10"></polyline><line
-								x1="14"
-								y1="14"
-								x2="18"
-								y2="10"></line
-							></svg>
-					</button>
-					<button
-						class="title-action-btn {liveMode ? 'active' : ''}"
-						onclick={ontoggleLiveMode}
-						aria-label="Toggle Live Mode"
-						title="Live update mode"
-						transition:fly={{ x: -20, duration: 100, delay: 50 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z" /><circle cx="12" cy="12" r="3" /></svg>
-					</button>
-					<button class="title-action-btn" onclick={onopenInEditor} aria-label="Edit in Notepad" title="Edit in Notepad" transition:fly={{ x: -30, duration: 100, delay: 100 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
-					</button>
-				</div>
-			{/if}
-		</div>
 	</div>
 
 	{#if tabManager.tabs.length > 0}
@@ -76,6 +43,39 @@
 		</div>
 	{/if}
 
+	<div class="title-actions">
+		{#if currentFile}
+			<div class="actions-wrapper" transition:slide={{ axis: 'x', duration: 200 }}>
+				<button class="title-action-btn" onclick={ononpenFileLocation} aria-label="Open File Location" title="Open folder" transition:fly={{ x: 10, duration: 100, delay: 0 }}>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+						><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><polyline points="15 13 18 13 18 10"></polyline><line
+							x1="14"
+							y1="14"
+							x2="18"
+							y2="10"></line
+						></svg>
+				</button>
+				<button
+					class="title-action-btn {liveMode ? 'active' : ''}"
+					onclick={ontoggleLiveMode}
+					aria-label="Toggle Live Mode"
+					title="Live update mode"
+					transition:fly={{ x: 20, duration: 100, delay: 50 }}>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+						><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z" /><circle cx="12" cy="12" r="3" /></svg>
+				</button>
+				<button class="title-action-btn" onclick={onopenInEditor} aria-label="Edit in Notepad" title="Edit in Notepad" transition:fly={{ x: 30, duration: 100, delay: 100 }}>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+						><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+				</button>
+			</div>
+		{/if}
+		<button class="title-action-btn" onclick={onselectFile} aria-label="Open File" title="Open file">
+			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+				><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
+		</button>
+	</div>
+
 	<div class="window-controls-right">
 		<button class="control-btn" onclick={() => appWindow.minimize()} aria-label="Minimize">
 			<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="currentColor" width="10" height="1" x="1" y="6" /></svg>
@@ -91,7 +91,7 @@
 
 <style>
 	.custom-title-bar {
-		height: 32px;
+		height: 36px;
 		background-color: var(--color-canvas-default);
 		display: flex;
 		justify-content: space-between;
@@ -131,6 +131,9 @@
 	.title-actions {
 		display: flex;
 		gap: 4px;
+		margin-right: 8px;
+		margin-left: auto;
+		z-index: 10000;
 	}
 
 	.actions-wrapper {

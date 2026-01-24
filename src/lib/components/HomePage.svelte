@@ -89,6 +89,7 @@
 		font-family: var(--win-font);
 		height: 90vh;
 		width: 100%;
+		padding-top: 32px;
 		box-sizing: border-box;
 		padding: 0 20px;
 		color: var(--color-fg-default);

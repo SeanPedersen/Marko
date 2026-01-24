@@ -60,6 +60,48 @@ pub fn is_installed() -> bool {
     false
 }
 
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub struct InstallStatus {
+    pub is_installed: bool,
+    pub all_users: bool,
+    pub version: String,
+}
+
+#[tauri::command]
+pub fn check_install_status() -> InstallStatus {
+    // Check HKCU
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    if let Ok(key) = hkcu.open_subkey(format!("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{}", APP_NAME)) {
+        if let Ok(version) = key.get_value::<String, _>("DisplayVersion") {
+            return InstallStatus {
+                is_installed: true,
+                all_users: false,
+                version,
+            };
+        }
+    }
+
+    // Check HKLM
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    if let Ok(key) = hklm.open_subkey(format!("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{}", APP_NAME)) {
+        if let Ok(version) = key.get_value::<String, _>("DisplayVersion") {
+            return InstallStatus {
+                is_installed: true,
+                all_users: true,
+                version,
+            };
+        }
+    }
+
+    InstallStatus {
+        is_installed: false,
+        all_users: false,
+        version: String::new(),
+    }
+}
+
 #[tauri::command]
 pub async fn install_app(
     handle: AppHandle,
@@ -79,7 +121,20 @@ pub async fn install_app(
     }
 
     // 2. Copy executable
-    fs::copy(&current_exe, &target_exe).map_err(|e| e.to_string())?;
+    // Retry loop in case the app is closing slowly during update
+    let mut retries = 0;
+    while retries < 5 {
+        match fs::copy(&current_exe, &target_exe) {
+            Ok(_) => break,
+            Err(e) => {
+                if retries == 4 {
+                    return Err(format!("Failed to copy executable: {}", e));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                retries += 1;
+            }
+        }
+    }
 
     // 3. Shortcuts
     if desktop_shortcut {
@@ -151,16 +206,23 @@ pub async fn install_app(
 }
 
 #[tauri::command]
-pub async fn uninstall_app(handle: AppHandle) -> Result<(), String> {
+pub async fn uninstall_app(handle: AppHandle, target_all_users: Option<bool>) -> Result<(), String> {
     let current_exe = env::current_exe().map_err(|e| e.to_string())?;
     
-    // Detect if we are in machine or user folder
-    let machine_path = get_install_path(true);
-    let current_str = current_exe.to_string_lossy().to_lowercase();
-    let machine_str = machine_path.to_string_lossy().to_lowercase();
-    
-    let is_machine = current_str.starts_with(&machine_str);
-    let install_dir = if is_machine { machine_path } else { get_install_path(false) };
+    let install_dir = if let Some(all_users) = target_all_users {
+        get_install_path(all_users)
+    } else {
+        // Auto-detect based on running location
+        let machine_path = get_install_path(true);
+        let current_str = current_exe.to_string_lossy().to_lowercase();
+        let machine_str = machine_path.to_string_lossy().to_lowercase();
+        
+        if current_str.starts_with(&machine_str) {
+            machine_path
+        } else {
+            get_install_path(false)
+        }
+    };
     
     // 1. Delete shortcuts
     let desktop_user = env::var("USERPROFILE").unwrap() + "\\Desktop";
@@ -193,8 +255,8 @@ pub async fn uninstall_app(handle: AppHandle) -> Result<(), String> {
         rmdir /s /q \"{}\" > nul 2>&1\r\n\
         (goto) 2>nul & del \"%~f0\"",
         EXE_NAME,
-        current_exe.display(),
-        current_exe.display(),
+        install_dir.join(EXE_NAME).display(), // Target the installed exe
+        install_dir.join(EXE_NAME).display(),
         install_dir.display()
     );
     let batch_path = env::temp_dir().join("uninstall_markdown_viewer.bat");

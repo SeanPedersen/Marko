@@ -431,7 +431,9 @@
 		onhide={() => (contextMenu.show = false)} />
 
 	{#if currentFile}
+	<div class="markdown-container">
 		<article bind:this={markdownBody} contenteditable="false" class="markdown-body" bind:innerHTML={htmlContent} onscroll={handleScroll}></article>
+	</div>
 	{:else}
 		<HomePage {recentFiles} onselectFile={selectFile} onloadFile={loadMarkdown} onremoveRecentFile={removeRecentFile} />
 	{/if}
@@ -461,10 +463,9 @@
 	.markdown-body {
 		box-sizing: border-box;
 		min-width: 200px;
-		margin: 0 25px;
-		padding: 45px calc(50% - 390px);
-		margin-top: 32px;
-		height: calc(100vh - 32px);
+		margin: 36px 0px 0px 0px;
+		padding:50px clamp(calc(calc(50% - 390px)), 5vw, 50px);
+		height: calc(100vh - 36px);
 		overflow-y: auto;
 	}
 

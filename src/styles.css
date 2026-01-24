@@ -5,9 +5,19 @@
 
 html,
 body {
-	background-color: var(--color-canvas-default);
+	/* background-color: var(--color-canvas-default); */
+	background-color: transparent;
 	margin: 0;
 	padding: 0;
+	height: 100%;
+	width: 100%;
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+#app {
+	overflow: hidden;
+	border-radius: 80px !important;
 }
 
 :root {
@@ -21,7 +31,7 @@ body {
 	--color-canvas-subtle: #00000011;
 	--color-border-default: #d0d7de;
 	--color-border-muted: hsla(210, 18%, 87%, 1);
-	--color-neutral-muted: rgba(175, 184, 193, 0.2);
+	--color-neutral-muted: rgba(51, 54, 56, 0.01);
 	--color-accent-fg: #0969da;
 	--color-accent-emphasis: #0969da;
 	--color-success-fg: #1a7f37;
@@ -53,7 +63,7 @@ body {
 		--color-canvas-subtle: #ffffff11;
 		--color-border-default: #30363d;
 		--color-border-muted: #21262d;
-		--color-neutral-muted: rgba(124, 124, 124, 0.4);
+		--color-neutral-muted: rgba(255, 255, 255, 0.05);
 		--color-accent-fg: #4390fc;
 		--color-accent-emphasis: #3781f0;
 		--color-success-fg: #3fb950;

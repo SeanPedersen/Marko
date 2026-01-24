@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "MarkdownViewer",
-  "version": "2.0.0",
+  "version": "2.1.1",
   "identifier": "com.alecdotdev.markdownviewer",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -15,12 +15,11 @@
         "title": "Markdown Viewer",
         "width": 800,
         "height": 600,
-        "transparent": false,
+        "transparent": true,
         "visible": true,
         "resizable": true,
         "center": true,
-        "decorations": false,
-        "backgroundColor": "#181818"
+        "decorations": false
       }
     ],
     "security": {
