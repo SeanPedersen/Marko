@@ -1,6 +1,8 @@
 # Markdown Viewer
 
-A modern, lightweight markdown viewer and editor for Windows 11.
+A simple, lightweight markdown viewer and editor for Windows. 
+
+MacOS and Linux support coming soon.
 
 Built with [Tauri](https://tauri.app/) — [Rust](https://www.rust-lang.org) + [SvelteKit](https://kit.svelte.dev/) + [TypeScript](https://www.typescriptlang.org/).
 
@@ -9,7 +11,7 @@ Using GitHub flavored markdown style by [sindresorhus](https://github.com/sindre
 
 > [!NOTE]
 > ## Changes in v2.2.0
-> - Added Monaco for embedded text editing
+> - Added [Monaco](https://github.com/microsoft/monaco-editor) for embedded text editing
 > - Added tabs
 > - Added native context menus, improved drag-and-drop support
 > ## Changes in v2.1.1
@@ -20,20 +22,14 @@ Using GitHub flavored markdown style by [sindresorhus](https://github.com/sindre
 > - Added .md file association on installation
 > - Added syntax highlighting
 > - Added LaTeX formatting
-> ## Changes in v2.0.0
-> - Fixed relative image embeds
-> - Added YouTube embed support
-> - Added shortcut to edit in Notepad
-> - Added recent files on startup
-> - Added 'watch' mode to watch the markdown file for changes and update the markdown file in real-time
 
-## Usage
+## Installer
 
 - Download the latest installer from the [releases page](https://github.com/alecames/MarkdownViewer/releases/latest)
 - Right click on a markdown file and select "Open with" and select the downloaded or installed executable
 - [Optional] Set the executable as the default program to open `.md` files
 
-Alternatively, you can install from source:
+## Installation from source
 
 - Clone the repository
 - Run `npm install` to install dependencies
@@ -42,11 +38,9 @@ Alternatively, you can install from source:
 
 ## Screenshots
 
-![alt text](pics/image.png)
+![alt text](pics/image1.png)
 ![alt text](pics/image2.png)
 ![alt text](pics/image3.png)
-![alt text](pics/image4.png)
-
 ## Todo
 
 - [X] Fix relative image embeds
