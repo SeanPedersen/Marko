@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    markdown_viewer_v2_lib::run()
+    markpad_lib::run()
 }

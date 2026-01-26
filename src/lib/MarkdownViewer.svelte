@@ -37,7 +37,7 @@
 	let htmlContent = $derived(tabManager.activeTab?.content ?? '');
 	let scrollTop = $derived(tabManager.activeTab?.scrollTop ?? 0);
 	let isScrolled = $derived(scrollTop > 0);
-	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Markdown Viewer');
+	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Markpad');
 
 	let showHome = $state(false);
 
@@ -303,23 +303,28 @@
 		return true; // discard
 	}
 
-	async function toggleEdit() {
+	async function toggleEdit(autoSave = false) {
 		const tab = tabManager.activeTab;
 		if (!tab || !tab.path) return;
 
 		if (isEditing) {
 			// Switch back to view
 			if (tab.isDirty) {
-				const response = await askCustom('You have unsaved changes. Do you want to save them before returning to view mode?', {
-					title: 'Unsaved Changes',
-					kind: 'warning',
-					showSave: true,
-				});
-
-				if (response === 'cancel') return;
-				if (response === 'save') {
+				if (autoSave) {
 					const success = await saveContent();
-					if (!success) return;
+					if (!success) return; // If save fails, stay in edit mode?
+				} else {
+					const response = await askCustom('You have unsaved changes. Do you want to save them before returning to view mode?', {
+						title: 'Unsaved Changes',
+						kind: 'warning',
+						showSave: true,
+					});
+
+					if (response === 'cancel') return;
+					if (response === 'save') {
+						const success = await saveContent();
+						if (!success) return;
+					}
 				}
 			}
 			tab.isEditing = false;
@@ -487,6 +492,21 @@
 			e.preventDefault();
 			tabManager.addHomeTab();
 		}
+		// Edit toggle
+		if (e.ctrlKey && e.key === 'e') {
+			e.preventDefault();
+			toggleEdit(true);
+		}
+		// Save
+		if (e.ctrlKey && e.key === 's') {
+			// e.preventDefault(); // Don't prevent default blindly?
+			// If we are in edit mode, Editor.svelte handles it usually, but if focus is not in editor...
+			if (isEditing) {
+				e.preventDefault();
+				saveContent();
+			}
+		}
+
 		if (e.ctrlKey && e.shiftKey && e.key === 'T') {
 			e.preventDefault();
 			handleUndoCloseTab();
@@ -641,8 +661,11 @@
 			);
 			unlisteners.push(
 				await appWindow.onCloseRequested(async (event) => {
+					console.log('onCloseRequested triggered');
 					const dirtyTabs = tabManager.tabs.filter((t) => t.isDirty);
+					console.log('Dirty tabs:', dirtyTabs.length);
 					if (dirtyTabs.length > 0) {
+						console.log('Preventing default close');
 						event.preventDefault();
 						const response = await askCustom(`You have ${dirtyTabs.length} unsaved file(s). Do you want to save your changes?`, {
 							title: 'Unsaved Changes',

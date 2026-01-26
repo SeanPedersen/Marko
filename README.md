@@ -1,4 +1,4 @@
-# Markdown Viewer
+# Markpad
 
 A simple, lightweight markdown viewer and editor for Windows. 
 
@@ -11,9 +11,11 @@ Using GitHub flavored markdown style by [sindresorhus](https://github.com/sindre
 
 > [!NOTE]
 > ## Changes in v2.2.1
-> - Added zoom (ctrl + mouse wheel/ctrl + +/ctrl + -/ctrl + 0) in viewer and editor
+> - Renamed to **Markpad**
+> - Added zoom (`ctrl + mouse wheel`/`ctrl + +`/`ctrl + -`/`ctrl + 0`) in viewer and editor
 > - Fixed titlebar dragging
 > - Shadow fix on W10
+> - Added `ctrl+e` for toggling between viewer and editor
 > ## Changes in v2.2.0
 > - Added [Monaco](https://github.com/microsoft/monaco-editor) for embedded text editing
 > - Added tabs

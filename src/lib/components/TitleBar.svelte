@@ -111,7 +111,13 @@
 		<button class="control-btn" onclick={() => appWindow.toggleMaximize()} aria-label="Maximize">
 			<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="none" stroke="currentColor" stroke-width="1" width="9" height="9" x="1.5" y="1.5" /></svg>
 		</button>
-		<button class="control-btn close-btn" onclick={() => appWindow.close()} aria-label="Close">
+		<button
+			class="control-btn close-btn"
+			onclick={() => {
+				console.log('Close button clicked');
+				appWindow.close();
+			}}
+			aria-label="Close">
 			<svg width="12" height="12" viewBox="0 0 12 12"><path fill="currentColor" d="M11 1.7L10.3 1 6 5.3 1.7 1 1 1.7 5.3 6 1 10.3 1.7 11 6 6.7 10.3 11 11 10.3 6.7 6z" /></svg>
 		</button>
 	</div>
