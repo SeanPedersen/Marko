@@ -565,13 +565,11 @@
 			const appWindow = getCurrentWindow();
 			mode = (await invoke('get_app_mode')) as any;
 
-			// Handle query param for detached windows
 			const urlParams = new URLSearchParams(window.location.search);
 			const fileParam = urlParams.get('file');
 			if (fileParam) {
 				const decodedPath = decodeURIComponent(fileParam);
-				// Small delay to ensure everything is ready?
-				setTimeout(() => loadMarkdown(decodedPath), 100);
+				await loadMarkdown(decodedPath);
 			}
 
 			unlisteners.push(
@@ -718,10 +716,12 @@
 
 			try {
 				const args: string[] = await invoke('send_markdown_path');
-				if (args?.length > 0) loadMarkdown(args[0]);
+				if (args?.length > 0) await loadMarkdown(args[0]);
 			} catch (error) {
 				console.error('Error receiving Markdown file path:', error);
 			}
+
+			await invoke('show_window');
 		};
 
 		init();
@@ -735,7 +735,11 @@
 <svelte:document onclick={handleDocumentClick} oncontextmenu={handleContextMenu} onmouseover={handleMouseOver} onmouseout={handleMouseOut} onkeydown={handleKeyDown} />
 
 {#if mode === 'loading'}
-	<div class="loading-screen"></div>
+	<div class="loading-screen">
+		<svg class="spinner" viewBox="0 0 50 50">
+			<circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
+		</svg>
+	</div>
 {:else if mode === 'installer'}
 	<Installer />
 {:else if mode === 'uninstall'}
@@ -760,15 +764,17 @@
 		onresetZoom={() => (zoomLevel = 100)} />
 
 	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
-		<div class="markdown-container" style="zoom: {zoomLevel}%" onwheel={handleWheel} role="presentation">
-			{#if isEditing}
-				<div class="editor-wrapper">
-					<Editor bind:value={rawContent} onsave={saveContent} />
-				</div>
-			{:else}
-				<article bind:this={markdownBody} contenteditable="false" class="markdown-body" bind:innerHTML={htmlContent} onscroll={handleScroll}></article>
-			{/if}
-		</div>
+		{#key currentFile}
+			<div class="markdown-container" style="zoom: {zoomLevel}%" onwheel={handleWheel} role="presentation">
+				{#if isEditing}
+					<div class="editor-wrapper">
+						<Editor bind:value={rawContent} onsave={saveContent} />
+					</div>
+				{:else}
+					<article bind:this={markdownBody} contenteditable="false" class="markdown-body" bind:innerHTML={htmlContent} onscroll={handleScroll}></article>
+				{/if}
+			</div>
+		{/key}
 	{:else}
 		<HomePage {recentFiles} onselectFile={selectFile} onloadFile={loadMarkdown} onremoveRecentFile={removeRecentFile} onnewFile={handleNewFile} />
 	{/if}
@@ -834,6 +840,18 @@
 		padding: 50px clamp(calc(calc(50% - 390px)), 5vw, 50px);
 		height: calc(100vh - 36px);
 		overflow-y: auto;
+		animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	@keyframes slideIn {
+		from {
+			opacity: 0;
+			margin-top: 48px;
+		}
+		to {
+			opacity: 1;
+			margin-top: 36px;
+		}
 	}
 
 	:global(.video-container) {
@@ -937,6 +955,53 @@
 		to {
 			opacity: 1;
 			transform: scale(1);
+		}
+	}
+
+	.loading-screen {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--color-canvas-default);
+		z-index: 50000;
+	}
+
+	.spinner {
+		animation: rotate 2s linear infinite;
+		z-index: 2;
+		width: 50px;
+		height: 50px;
+	}
+
+	.spinner .path {
+		stroke: var(--color-accent-fg);
+		stroke-linecap: round;
+		animation: dash 1.5s ease-in-out infinite;
+	}
+
+	@keyframes rotate {
+		100% {
+			transform: rotate(360deg);
+		}
+	}
+
+	@keyframes dash {
+		0% {
+			stroke-dasharray: 1, 150;
+			stroke-dashoffset: 0;
+		}
+		50% {
+			stroke-dasharray: 90, 150;
+			stroke-dashoffset: -35;
+		}
+		100% {
+			stroke-dasharray: 90, 150;
+			stroke-dashoffset: -124;
 		}
 	}
 </style>

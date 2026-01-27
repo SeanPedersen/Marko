@@ -13,6 +13,11 @@ struct WatcherState {
 }
 
 #[tauri::command]
+async fn show_window(window: tauri::Window) {
+    window.show().unwrap();
+}
+
+#[tauri::command]
 fn open_markdown(path: String) -> Result<String, String> {
     let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
 
@@ -349,7 +354,9 @@ pub fn run() {
             setup::check_install_status,
             open_file_folder,
             rename_file,
-            show_context_menu
+
+            show_context_menu,
+            show_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
