@@ -15,11 +15,12 @@
         "title": "Markpad",
         "width": 800,
         "height": 600,
-        "transparent": true,
-        "visible": true,
+        "visible": false,
         "resizable": true,
         "center": true,
+        "backgroundColor": "#181818",
         "decorations": false,
+        "shadow": true,
         "hiddenTitle": true
       }
     ],
