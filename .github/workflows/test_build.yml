@@ -1,0 +1,65 @@
+name: Test Build (No Release)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+            os-name: 'macos-aarch64'
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin'
+            os-name: 'macos-x64'
+          - platform: 'ubuntu-22.04'
+            args: ''
+            os-name: 'linux'
+          - platform: 'windows-latest'
+            args: ''
+            os-name: 'windows'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: install rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+            sudo apt-get update
+            sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: install frontend dependencies
+        run: npm install
+
+      - name: Build app
+        env:
+          NODE_OPTIONS: "--max_old_space_size=4096"
+        run: npm run tauri build -- ${{ matrix.args }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-bundle-${{ matrix.os-name }}
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/*/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.app
+            src-tauri/target/*/release/bundle/macos/*.app
+            src-tauri/target/release/*.exe
+          if-no-files-found: warn
