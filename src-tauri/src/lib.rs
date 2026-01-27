@@ -47,16 +47,7 @@ fn save_file_content(path: String, content: String) -> Result<(), String> {
 
 #[tauri::command]
 fn open_file_folder(path: String) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::process::Command;
-        Command::new("explorer")
-            .arg("/select,")
-            .arg(path)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    opener::reveal(path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -329,6 +320,8 @@ pub fn run() {
             if let Some(path) = args.get(1) {
                 let _ = window.emit("file-path", path.as_str());
             }
+
+
 
             // Resize if installer
             let args: Vec<String> = std::env::args().collect();

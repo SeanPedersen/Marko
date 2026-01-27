@@ -17,7 +17,7 @@ body {
 
 #app {
 	overflow: hidden;
-	border-radius: 80px !important;
+	border-radius: 8px !important;
 }
 
 :root {
