@@ -2,6 +2,9 @@ name: Test Build (No Release)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - workflow/test-and-build-actions
 
 jobs:
   build-test:
