@@ -34,6 +34,7 @@
 
 	// derived from tab manager
 	let currentFile = $derived(tabManager.activeTab?.path ?? '');
+	let editorLanguage = $derived(getLanguage(currentFile));
 	let htmlContent = $derived(tabManager.activeTab?.content ?? '');
 	let scrollTop = $derived(tabManager.activeTab?.scrollTop ?? 0);
 	let isScrolled = $derived(scrollTop > 0);
@@ -87,6 +88,32 @@
 		modalState.show = false;
 	}
 
+	function getLanguage(path: string) {
+		if (!path) return 'markdown';
+		const ext = path.split('.').pop()?.toLowerCase();
+		switch (ext) {
+			case 'js':
+			case 'jsx':
+				return 'javascript';
+			case 'ts':
+			case 'tsx':
+				return 'typescript';
+			case 'html':
+				return 'html';
+			case 'css':
+				return 'css';
+			case 'json':
+				return 'json';
+			case 'md':
+			case 'markdown':
+			case 'mdown':
+			case 'mkd':
+				return 'markdown';
+			default:
+				return 'plaintext';
+		}
+	}
+
 	$effect(() => {
 		// Dismiss home view when switching tabs
 		const _ = tabManager.activeTabId;
@@ -109,79 +136,90 @@
 			const activeId = tabManager.activeTabId;
 			if (!activeId) return;
 
-			const html = (await invoke('open_markdown', { path: filePath })) as string;
+			const ext = filePath.split('.').pop()?.toLowerCase();
+			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd'].includes(ext || '');
+			const tab = tabManager.tabs.find((t) => t.id === activeId);
 
-			const parser = new DOMParser();
-			const doc = parser.parseFromString(html, 'text/html');
+			if (isMarkdown) {
+				if (tab) tab.isEditing = false;
+				const html = (await invoke('open_markdown', { path: filePath })) as string;
 
-			// resolve relative image paths
-			for (const img of doc.querySelectorAll('img')) {
-				const src = img.getAttribute('src');
-				if (src && !src.startsWith('http') && !src.startsWith('data:')) {
-					img.setAttribute('src', convertFileSrc(resolvePath(filePath, src)));
-				} else if (src && isYoutubeLink(src)) {
-					const videoId = getYoutubeId(src);
-					if (videoId) replaceWithYoutubeEmbed(img, videoId);
-				}
-			}
+				const parser = new DOMParser();
+				const doc = parser.parseFromString(html, 'text/html');
 
-			// convert youtube links to embeds
-			for (const a of doc.querySelectorAll('a')) {
-				const href = a.getAttribute('href');
-				if (href && isYoutubeLink(href)) {
-					const parent = a.parentElement;
-					if (parent && (parent.tagName === 'P' || parent.tagName === 'DIV') && parent.childNodes.length === 1) {
-						const videoId = getYoutubeId(href);
-						if (videoId) replaceWithYoutubeEmbed(a, videoId);
+				// resolve relative image paths
+				for (const img of doc.querySelectorAll('img')) {
+					const src = img.getAttribute('src');
+					if (src && !src.startsWith('http') && !src.startsWith('data:')) {
+						img.setAttribute('src', convertFileSrc(resolvePath(filePath, src)));
+					} else if (src && isYoutubeLink(src)) {
+						const videoId = getYoutubeId(src);
+						if (videoId) replaceWithYoutubeEmbed(img, videoId);
 					}
 				}
-			}
 
-			// parse gfm alerts
-			for (const bq of doc.querySelectorAll('blockquote')) {
-				const firstP = bq.querySelector('p');
-				if (firstP) {
-					const text = firstP.textContent || '';
-					const match = text.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
-					if (match) {
-						const alertIcons: Record<string, string> = {
-							note: '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>',
-							tip: '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.21c-.044-.312-.18-.692-.41-1.025-.23-.333-.524-.681-.797-1.004l-.213-.252C2.962 7.325 2.5 6.395 2.5 5.25c0-2.978 2.304-5.25 5.5-5.25S13.5 2.272 13.5 5.25c0 1.145-.462 2.075-1.087 2.819l-.213.252c-.273.323-.567.671-.797 1.004-.23.333-.366.713-.41 1.025a.75.75 0 0 1-1.484-.21c.084-.594.337-1.079.621-1.49.203-.292.45-.584.673-.848l.214-.253c.56-.679.984-1.32.984-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6.25 14.5h3.5a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1 0-1.5Z"></path></svg>',
-							important:
-								'<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>',
-							warning:
-								'<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.03 11.315a1.75 1.75 0 0 1-1.543 2.573H1.97a1.75 1.75 0 0 1-1.543-2.573ZM9 4.25a.75.75 0 0 0-1.5 0V9a.75.75 0 0 0 1.5 0ZM9 11a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"></path></svg>',
-							caution:
-								'<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M4.47.22A.749.749 0 0 1 5 0h6c.199 0 .39.079.53.22l4.25 4.25c.141.14.22.331.22.53v6a.749.749 0 0 1-.22.53l-4.25 4.25A.749.749 0 0 1 11 16H5a.749.749 0 0 1-.53-.22L.22 11.53A.749.749 0 0 1 0 11V5c0-.199.079-.39.22-.53Zm.84 1.28L1.5 5.31v5.38l3.81 3.81h5.38l3.81-3.81V5.31L10.69 1.5ZM8 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>',
-						};
-
-						const type = match[1].toLowerCase();
-						const alertDiv = doc.createElement('div');
-						alertDiv.className = `markdown-alert markdown-alert-${type}`;
-
-						const titleP = doc.createElement('p');
-						titleP.className = 'markdown-alert-title';
-						titleP.innerHTML = `${alertIcons[type] || ''} <span>${type.charAt(0).toUpperCase() + type.slice(1)}</span>`;
-
-						alertDiv.appendChild(titleP);
-
-						firstP.textContent = text.replace(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i, '').trim() || '';
-						if (firstP.textContent === '' && firstP.nextSibling) firstP.remove();
-
-						while (bq.firstChild) alertDiv.appendChild(bq.firstChild);
-						bq.replaceWith(alertDiv);
+				// convert youtube links to embeds
+				for (const a of doc.querySelectorAll('a')) {
+					const href = a.getAttribute('href');
+					if (href && isYoutubeLink(href)) {
+						const parent = a.parentElement;
+						if (parent && (parent.tagName === 'P' || parent.tagName === 'DIV') && parent.childNodes.length === 1) {
+							const videoId = getYoutubeId(href);
+							if (videoId) replaceWithYoutubeEmbed(a, videoId);
+						}
 					}
 				}
-			}
 
-			tabManager.updateTabContent(activeId, doc.body.innerHTML);
+				// parse gfm alerts
+				for (const bq of doc.querySelectorAll('blockquote')) {
+					const firstP = bq.querySelector('p');
+					if (firstP) {
+						const text = firstP.textContent || '';
+						const match = text.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
+						if (match) {
+							const alertIcons: Record<string, string> = {
+								note: '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>',
+								tip: '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.21c-.044-.312-.18-.692-.41-1.025-.23-.333-.524-.681-.797-1.004l-.213-.252C2.962 7.325 2.5 6.395 2.5 5.25c0-2.978 2.304-5.25 5.5-5.25S13.5 2.272 13.5 5.25c0 1.145-.462 2.075-1.087 2.819l-.213.252c-.273.323-.567.671-.797 1.004-.23.333-.366.713-.41 1.025a.75.75 0 0 1-1.484-.21c.084-.594.337-1.079.621-1.49.203-.292.45-.584.673-.848l.214-.253c.56-.679.984-1.32.984-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6.25 14.5h3.5a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1 0-1.5Z"></path></svg>',
+								important:
+									'<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>',
+								warning:
+									'<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.03 11.315a1.75 1.75 0 0 1-1.543 2.573H1.97a1.75 1.75 0 0 1-1.543-2.573ZM9 4.25a.75.75 0 0 0-1.5 0V9a.75.75 0 0 0 1.5 0ZM9 11a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"></path></svg>',
+								caution:
+									'<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M4.47.22A.749.749 0 0 1 5 0h6c.199 0 .39.079.53.22l4.25 4.25c.141.14.22.331.22.53v6a.749.749 0 0 1-.22.53l-4.25 4.25A.749.749 0 0 1 11 16H5a.749.749 0 0 1-.53-.22L.22 11.53A.749.749 0 0 1 0 11V5c0-.199.079-.39.22-.53Zm.84 1.28L1.5 5.31v5.38l3.81 3.81h5.38l3.81-3.81V5.31L10.69 1.5ZM8 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>',
+							};
+
+							const type = match[1].toLowerCase();
+							const alertDiv = doc.createElement('div');
+							alertDiv.className = `markdown-alert markdown-alert-${type}`;
+
+							const titleP = doc.createElement('p');
+							titleP.className = 'markdown-alert-title';
+							titleP.innerHTML = `${alertIcons[type] || ''} <span>${type.charAt(0).toUpperCase() + type.slice(1)}</span>`;
+
+							alertDiv.appendChild(titleP);
+
+							firstP.textContent = text.replace(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i, '').trim() || '';
+							if (firstP.textContent === '' && firstP.nextSibling) firstP.remove();
+
+							while (bq.firstChild) alertDiv.appendChild(bq.firstChild);
+							bq.replaceWith(alertDiv);
+						}
+					}
+				}
+
+				tabManager.updateTabContent(activeId, doc.body.innerHTML);
+			} else {
+				if (tab) tab.isEditing = true;
+				const content = (await invoke('read_file_content', { path: filePath })) as string;
+				tabManager.setTabRawContent(activeId, content);
+			}
 
 			if (liveMode) invoke('watch_file', { path: filePath }).catch(console.error);
 
 			await tick();
 			if (filePath) saveRecentFile(filePath);
 		} catch (error) {
-			console.error('Error loading Markdown file:', error);
+			console.error('Error loading file:', error);
 		}
 	}
 
@@ -353,7 +391,10 @@
 		if (!targetPath) {
 			// Special handling for new (untitled) files
 			const selected = await save({
-				filters: [{ name: 'Markdown', extensions: ['md'] }],
+				filters: [
+					{ name: 'Markdown', extensions: ['md'] },
+					{ name: 'All Files', extensions: ['*'] },
+				],
 			});
 			if (selected) {
 				targetPath = selected;
@@ -385,7 +426,10 @@
 	async function selectFile() {
 		const selected = await open({
 			multiple: false,
-			filters: [{ name: 'Markdown', extensions: ['md'] }],
+			filters: [
+				{ name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd'] },
+				{ name: 'All Files', extensions: ['*'] },
+			],
 		});
 		if (selected && typeof selected === 'string') loadMarkdown(selected);
 	}
@@ -776,7 +820,7 @@
 			<div class="markdown-container" style="zoom: {zoomLevel}%" onwheel={handleWheel} role="presentation">
 				{#if isEditing}
 					<div class="editor-wrapper">
-						<Editor bind:value={rawContent} onsave={saveContent} />
+						<Editor bind:value={rawContent} language={editorLanguage} onsave={saveContent} />
 					</div>
 				{:else}
 					<article bind:this={markdownBody} contenteditable="false" class="markdown-body" bind:innerHTML={htmlContent} onscroll={handleScroll}></article>
