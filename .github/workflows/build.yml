@@ -1,4 +1,4 @@
-name: Build
+name: Build and Release
 
 on:
   push:
@@ -6,62 +6,101 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  publish-tauri:
-    permissions:
-      contents: write
+  release:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin'
-          - platform: 'macos-latest'
-            args: '--target x86_64-apple-darwin'
-          - platform: 'ubuntu-22.04'
-            args: ''
-          - platform: 'windows-latest'
-            args: ''
+          - platform: windows-latest
+            os: windows
+          - platform: ubuntu-22.04
+            os: linux
+          - platform: macos-latest
+            os: macos
 
     runs-on: ${{ matrix.platform }}
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: setup node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 'lts/*'
 
-      - name: install bindgen dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-            sudo apt-get update
-            sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm
-
-      - name: install rust stable
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: install frontend dependencies
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf rpm
+
+      - name: Install Frontend Dependencies
         run: npm install
 
-      - name: Build and bundle
-        id: tauri
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_OPTIONS: "--max_old_space_size=4096"
-        with:
-          tagName: v__VERSION__
-          releaseName: 'Markpad v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+      - name: Get Version
+        shell: bash
+        run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
 
-      - name: Upload Windows EXE
-        if: matrix.platform == 'windows-latest'
+      - name: Create Release
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload v${{ steps.tauri.outputs.appVersion }} "src-tauri/target/release/Markpad.exe"
+        run: |
+          gh release create v${{ env.APP_VERSION }} --title "Markpad v${{ env.APP_VERSION }}" --draft --generate-notes || echo "Release likely exists"
+
+      # --- Windows Build ---
+      - name: Build Windows
+        if: matrix.platform == 'windows-latest'
+        run: npm run tauri build
+
+      - name: Upload Windows Artifacts
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The build outputs the raw executable at src-tauri/target/release/Markpad.exe
+          # We upload it as Markpad.exe (Portable) and MarkpadInstaller.exe (Installer Trigger)
+          
+          cp src-tauri/target/release/Markpad.exe Markpad.exe
+          cp Markpad.exe MarkpadInstaller.exe
+          
+          gh release upload v${{ env.APP_VERSION }} Markpad.exe MarkpadInstaller.exe
+
+      # --- Linux Build ---
+      - name: Build Linux
+        if: matrix.platform == 'ubuntu-22.04'
+        run: npm run tauri build
+
+      - name: Upload Linux Artifacts
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Upload all generated bundles
+          find src-tauri/target/release/bundle/deb -name "*.deb" -exec gh release upload v${{ env.APP_VERSION }} {} \;
+          find src-tauri/target/release/bundle/rpm -name "*.rpm" -exec gh release upload v${{ env.APP_VERSION }} {} \;
+          find src-tauri/target/release/bundle/appimage -name "*.AppImage" -exec gh release upload v${{ env.APP_VERSION }} {} \;
+
+      # --- MacOS Build ---
+      - name: Build MacOS
+        if: matrix.platform == 'macos-latest'
+        run: npm run tauri build
+
+      - name: Upload MacOS Artifacts
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          find src-tauri/target/release/bundle/dmg -name "*.dmg" -exec gh release upload v${{ env.APP_VERSION }} {} \;
