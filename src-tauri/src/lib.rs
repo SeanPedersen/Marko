@@ -1,7 +1,6 @@
 use comrak::{markdown_to_html, ComrakExtensionOptions, ComrakOptions};
 
 use std::fs;
-use std::path::Path;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri::menu::ContextMenu;
@@ -341,8 +340,9 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, event| {
-            if let tauri::RunEvent::Opened { urls } = event {
+        .run(|app_handle, _event| {
+#[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = _event {
                 if let Some(url) = urls.first() {
                     if let Ok(path_buf) = url.to_file_path() {
                          let path_str = path_buf.to_string_lossy().to_string();
@@ -359,4 +359,5 @@ pub fn run() {
                     }
                 }
             }
-        });}
+        });
+}
