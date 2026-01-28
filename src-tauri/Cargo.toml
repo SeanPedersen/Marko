@@ -1,9 +1,9 @@
 [package]
-name = "markpad"
-version = "0.1.0"
-description = "A Tauri App"
+name = "Markpad"
+version = "2.3.0"
+description = "Simple Markdown viewer and text editor"
 authors = ["you"]
-edition = "2021"
+edition = "2026"
 
 [[bin]]
 name = "Markpad"
