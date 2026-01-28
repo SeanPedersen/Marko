@@ -21,6 +21,7 @@
         "center": true,
         "backgroundColor": "#181818",
         "decorations": false,
+        "transparent": true,
         "shadow": true,
         "hiddenTitle": true
       }
