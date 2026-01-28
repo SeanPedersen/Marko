@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.3.1
+- Fixed tab rearranging on all platforms
+- Added portable mode
+
 ## v2.3.0
 - Added macOS and Linux support
 - Added support for common text files
