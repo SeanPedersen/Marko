@@ -48,7 +48,7 @@
 		</span>
 	</button>
 	<div class="tab-actions">
-		<button class="tab-close" class:dirty={tab.isDirty} onclick={handleClose} title="Close (Ctrl+W)">
+		<button class="tab-close" class:dirty={tab.isDirty} onclick={handleClose} onmousedown={(e) => e.stopPropagation()} title="Close (Ctrl+W)">
 			{#if tab.isDirty}
 				<span class="dirty-dot"></span>
 			{/if}

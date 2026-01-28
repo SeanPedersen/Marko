@@ -3,7 +3,6 @@
 	import Tab from './Tab.svelte';
 
 	import { flip } from 'svelte/animate';
-	import { slide } from 'svelte/transition';
 	import { tick } from 'svelte';
 
 	let {
@@ -20,76 +19,117 @@
 		oncloseTab?: (id: string) => void;
 	}>();
 
-	$effect(() => {
-		const activeId = tabManager.activeTabId;
-		if (activeId && scrollContainer && !draggingId) {
-			// Find the active tab element index
-			const index = tabManager.tabs.findIndex((t) => t.id === activeId);
-			if (index !== -1) {
-				// Use tick to wait for DOM update, and setTimeout to account for transition
-				tick().then(() => {
-					setTimeout(() => {
-						if (!scrollContainer) return;
-						const tabElements = scrollContainer.children;
-						if (tabElements[index]) {
-							const el = tabElements[index] as HTMLElement;
-							el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-						}
-					}, 150); // Wait slightly longer than transition (150ms)
-				});
-			}
-		}
-	});
-
-	let draggingId = $state<string | null>(null);
 	let scrollContainer = $state<HTMLElement | null>(null);
 	let showLeftArrow = $state(false);
 	let showRightArrow = $state(false);
 
-	function handleDragStart(e: DragEvent, id: string) {
-		e.stopPropagation();
-		draggingId = id;
-		if (e.dataTransfer) {
-			e.dataTransfer.effectAllowed = 'move';
-			// Must set data to be valid drag
-			e.dataTransfer.setData('text/plain', id);
+	// Drag state
+	let draggingId = $state<string | null>(null);
+	let justDragged = false;
+	let dragState = $state<{
+		startX: number;
+		currentX: number;
+		currentY: number;
+		initialRect: DOMRect;
+		tab: TabData;
+		isDragging: boolean;
+	} | null>(null);
+
+	function handleMouseDown(e: MouseEvent, tab: TabData, element: HTMLElement) {
+		if (e.button !== 0) return; // Only left click
+		// e.preventDefault(); // allow click to propagate
+		e.stopPropagation(); // Stop window drag from triggering
+
+		const rect = element.getBoundingClientRect();
+		// Don't set draggingId yet
+		dragState = {
+			startX: e.clientX,
+			currentX: e.clientX,
+			currentY: e.clientY,
+			initialRect: rect,
+			tab: tab,
+			isDragging: false,
+		};
+
+		window.addEventListener('mousemove', handleWindowMouseMove);
+		window.addEventListener('mouseup', handleWindowMouseUp);
+	}
+
+	function handleWindowMouseMove(e: MouseEvent) {
+		if (!dragState || !scrollContainer) return;
+
+		// Check threshold
+		if (!dragState.isDragging) {
+			if (Math.abs(e.clientX - dragState.startX) > 5) {
+				dragState.isDragging = true;
+				draggingId = dragState.tab.id;
+			} else {
+				return;
+			}
+		}
+
+		dragState.currentX = e.clientX;
+		dragState.currentY = e.clientY;
+
+		// Auto scroll logic
+		const containerRect = scrollContainer.getBoundingClientRect();
+		const scrollZone = 50;
+		if (e.clientX < containerRect.left + scrollZone) {
+			scrollContainer.scrollLeft -= 10;
+		} else if (e.clientX > containerRect.right - scrollZone) {
+			scrollContainer.scrollLeft += 10;
+		}
+
+		// Reorder logic
+		// We iterate through tabs to find the best fit position
+		const children = Array.from(scrollContainer.children) as HTMLElement[];
+		let closestIndex = -1;
+		let minDist = Infinity;
+
+		children.forEach((child, index) => {
+			// Check if child corresponds to a tab (it should)
+			if (!child.classList.contains('tab-item-wrapper')) return;
+
+			const rect = child.getBoundingClientRect();
+			const center = rect.left + rect.width / 2;
+			const dist = Math.abs(e.clientX - center);
+
+			if (dist < minDist) {
+				minDist = dist;
+				closestIndex = index;
+			}
+		});
+
+		if (closestIndex !== -1) {
+			const currentIndex = tabManager.tabs.findIndex((t) => t.id === draggingId);
+			// We only reorder if the index actually changed
+			if (currentIndex !== -1 && currentIndex !== closestIndex) {
+				tabManager.reorderTabs(currentIndex, closestIndex);
+			}
 		}
 	}
 
-	function handleDragEnter(e: DragEvent, targetId: string) {
-		if (!draggingId || draggingId === targetId) return;
-		e.preventDefault();
-
-		const fromIndex = tabManager.tabs.findIndex((t) => t.id === draggingId);
-		const toIndex = tabManager.tabs.findIndex((t) => t.id === targetId);
-
-		if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
-			tabManager.reorderTabs(fromIndex, toIndex);
+	function handleWindowMouseUp() {
+		if (dragState?.isDragging) {
+			justDragged = true;
+			setTimeout(() => {
+				justDragged = false;
+			}, 50);
 		}
-	}
 
-	function handleDragOver(e: DragEvent) {
-		// Crucial for allowing drop events and drag functionality
-		e.preventDefault();
-		e.dataTransfer!.dropEffect = 'move';
-	}
-
-	function handleDragEnd(e: DragEvent) {
 		draggingId = null;
-		// Detach functionality removed for now
+		dragState = null;
+		window.removeEventListener('mousemove', handleWindowMouseMove);
+		window.removeEventListener('mouseup', handleWindowMouseUp);
 	}
 
-	$effect(() => {
-		const _ = tabManager.tabs;
-	});
-
+	// Scroll active tab into view logic
 	$effect(() => {
 		const activeId = tabManager.activeTabId;
+		// Don't scroll while dragging to avoid fighting the user
 		if (activeId && scrollContainer && !draggingId) {
-			// Find the active tab element index
 			const index = tabManager.tabs.findIndex((t) => t.id === activeId);
 			if (index !== -1) {
-				// Use tick to wait for DOM update, and setTimeout to account for transition
 				tick().then(() => {
 					setTimeout(() => {
 						if (!scrollContainer) return;
@@ -105,7 +145,7 @@
 							const el = tabElements[index] as HTMLElement;
 							el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
 						}
-					}, 150); // Wait slightly longer than transition (150ms)
+					}, 150);
 				});
 			}
 		}
@@ -129,10 +169,15 @@
 	<div class="scroll-viewport">
 		<div class="scroll-shadow left" class:visible={showLeftArrow}></div>
 
+		<!-- 
+			data-tauri-drag-region allows dragging the window.
+			Because we stopPropagation in handleMouseDown, dragging tabs won't drag the window.
+			But clicking in the empty space between tabs will drag the window.
+		-->
 		<div
 			bind:this={scrollContainer}
 			class="tab-list-container"
-			data-tauri-drag-region={tabManager.tabs.length === 0}
+			data-tauri-drag-region
 			role="tablist"
 			tabindex="-1"
 			oncontextmenu={handleContainerContextMenu}
@@ -144,19 +189,17 @@
 			}}>
 			{#each tabManager.tabs as tab, i (tab.id)}
 				<div
-					animate:flip={{ duration: draggingId ? 0 : 200 }}
-					transition:slide={{ axis: 'x', duration: 150 }}
-					draggable={true}
-					ondragstart={(e) => handleDragStart(e, tab.id)}
-					ondragenter={(e) => handleDragEnter(e, tab.id)}
-					ondragover={handleDragOver}
-					ondragend={(e) => handleDragEnd(e)}
-					role="listitem">
+					class="tab-item-wrapper"
+					animate:flip={{ duration: 200 }}
+					role="listitem"
+					class:drag-opacity={draggingId === tab.id}
+					onmousedown={(e) => handleMouseDown(e, tab, e.currentTarget as HTMLElement)}>
 					<Tab
 						{tab}
 						isActive={!showHome && tabManager.activeTabId === tab.id}
 						isLast={i === tabManager.tabs.length - 1}
 						onclick={() => {
+							if (justDragged) return;
 							tabManager.setActive(tab.id);
 							ontabclick?.();
 						}}
@@ -164,6 +207,12 @@
 				</div>
 			{/each}
 		</div>
+
+		{#if draggingId && dragState}
+			<div class="drag-proxy" style:left="{dragState.initialRect.left + (dragState.currentX - dragState.startX)}px" style:top="{dragState.initialRect.top}px">
+				<Tab tab={dragState.tab} isActive={!showHome && tabManager.activeTabId === dragState.tab.id} onclick={() => {}} onclose={() => {}} />
+			</div>
+		{/if}
 
 		<div class="scroll-shadow right" class:visible={showRightArrow}></div>
 	</div>
@@ -270,5 +319,24 @@
 		flex: 1;
 		height: 100%;
 		min-width: 20px;
+	}
+
+	/* Drag styles */
+	.tab-item-wrapper {
+		transition: opacity 0.1s;
+	}
+
+	.tab-item-wrapper.drag-opacity {
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.drag-proxy {
+		position: fixed;
+		z-index: 10000;
+		pointer-events: none;
+		opacity: 0.9;
+		/* Ensure smooth movement */
+		will-change: left, top;
 	}
 </style>
