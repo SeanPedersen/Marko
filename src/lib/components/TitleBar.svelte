@@ -42,10 +42,29 @@
 	}>();
 
 	const appWindow = getCurrentWindow();
+
+	// DEBUG: Set this to true to simulate macOS traffic lights on Windows
+	const DEBUG_MACOS = false;
+
+	const isMac = typeof navigator !== 'undefined' && (navigator.userAgent.includes('Macintosh') || DEBUG_MACOS);
 </script>
 
 <div class="custom-title-bar {isScrolled ? 'scrolled' : ''}">
 	<div class="window-controls-left" data-tauri-drag-region>
+		{#if isMac}
+			<div class="macos-traffic-lights" class:visible={isMac}>
+				<button class="mac-btn mac-close" onclick={() => appWindow.close()} aria-label="Close">
+					<svg width="6" height="6" viewBox="0 0 6 6" class="mac-icon"
+						><path d="M0.5 0.5L5.5 5.5M5.5 0.5L0.5 5.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></svg>
+				</button>
+				<button class="mac-btn mac-minimize" onclick={() => appWindow.minimize()} aria-label="Minimize">
+					<svg width="6" height="6" viewBox="0 0 6 6" class="mac-icon"><path d="M0.5 3H5.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></svg>
+				</button>
+				<button class="mac-btn mac-maximize" onclick={() => appWindow.toggleMaximize()} aria-label="Maximize">
+					<svg width="6" height="6" viewBox="0 0 6 6" class="mac-icon"><path d="M0.5 3H5.5M3 0.5V5.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></svg>
+				</button>
+			</div>
+		{/if}
 		<button class="icon-home-btn {showHome ? 'active' : ''}" onclick={ontoggleHome} aria-label="Go to Home" title="Go to home">
 			<img src={iconUrl} alt="icon" class="window-icon" />
 		</button>
@@ -105,21 +124,23 @@
 	</div>
 
 	<div class="window-controls-right" data-tauri-drag-region>
-		<button class="control-btn" onclick={() => appWindow.minimize()} aria-label="Minimize">
-			<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="currentColor" width="10" height="1" x="1" y="6" /></svg>
-		</button>
-		<button class="control-btn" onclick={() => appWindow.toggleMaximize()} aria-label="Maximize">
-			<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="none" stroke="currentColor" stroke-width="1" width="9" height="9" x="1.5" y="1.5" /></svg>
-		</button>
-		<button
-			class="control-btn close-btn"
-			onclick={() => {
-				console.log('Close button clicked');
-				appWindow.close();
-			}}
-			aria-label="Close">
-			<svg width="12" height="12" viewBox="0 0 12 12"><path fill="currentColor" d="M11 1.7L10.3 1 6 5.3 1.7 1 1 1.7 5.3 6 1 10.3 1.7 11 6 6.7 10.3 11 11 10.3 6.7 6z" /></svg>
-		</button>
+		{#if !isMac}
+			<button class="control-btn" onclick={() => appWindow.minimize()} aria-label="Minimize">
+				<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="currentColor" width="10" height="1" x="1" y="6" /></svg>
+			</button>
+			<button class="control-btn" onclick={() => appWindow.toggleMaximize()} aria-label="Maximize">
+				<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="none" stroke="currentColor" stroke-width="1" width="9" height="9" x="1.5" y="1.5" /></svg>
+			</button>
+			<button
+				class="control-btn close-btn"
+				onclick={() => {
+					console.log('Close button clicked');
+					appWindow.close();
+				}}
+				aria-label="Close">
+				<svg width="12" height="12" viewBox="0 0 12 12"><path fill="currentColor" d="M11 1.7L10.3 1 6 5.3 1.7 1 1 1.7 5.3 6 1 10.3 1.7 11 6 6.7 10.3 11 11 10.3 6.7 6z" /></svg>
+			</button>
+		{/if}
 	</div>
 </div>
 
@@ -312,5 +333,66 @@
 		background: var(--color-btn-hover-bg);
 		color: var(--color-fg-default);
 		border-color: var(--color-border-muted);
+	}
+
+	/* macOS Traffic Lights */
+	.macos-traffic-lights {
+		display: flex;
+		gap: 8px;
+		margin-right: 12px;
+		align-items: center;
+		padding-left: 2px;
+	}
+
+	.mac-btn {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		border: 1px solid rgba(0, 0, 0, 0.1);
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		padding: 0;
+		cursor: default;
+		outline: none;
+		position: relative;
+		overflow: hidden;
+	}
+
+	.mac-close {
+		background-color: #ff5f57;
+		border-color: #e0443e;
+	}
+
+	.mac-minimize {
+		background-color: #febc2e;
+		border-color: #d3a125;
+	}
+
+	.mac-maximize {
+		background-color: #28c840;
+		border-color: #1ca431;
+	}
+
+	.mac-icon {
+		opacity: 0;
+		color: #4d0000;
+		transition: opacity 0.1s;
+	}
+
+	.mac-minimize .mac-icon {
+		color: #995700;
+	}
+
+	.mac-maximize .mac-icon {
+		color: #006500;
+	}
+
+	.macos-traffic-lights:hover .mac-icon {
+		opacity: 0.6;
+	}
+
+	.mac-btn:active {
+		filter: brightness(0.9);
 	}
 </style>

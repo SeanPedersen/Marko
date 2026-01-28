@@ -473,7 +473,7 @@
 	let zoomLevel = $state(100);
 
 	function handleWheel(e: WheelEvent) {
-		if (e.ctrlKey) {
+		if (e.ctrlKey || e.metaKey) {
 			if (e.deltaY < 0) {
 				zoomLevel = Math.min(zoomLevel + 10, 500);
 			} else {
@@ -484,21 +484,24 @@
 
 	function handleKeyDown(e: KeyboardEvent) {
 		if (mode !== 'app') return;
-		if (e.ctrlKey && e.key === 'w') {
+
+		const cmdOrCtrl = e.ctrlKey || e.metaKey;
+
+		if (cmdOrCtrl && e.key === 'w') {
 			e.preventDefault();
 			closeFile();
 		}
-		if (e.ctrlKey && e.key === 't') {
+		if (cmdOrCtrl && e.key === 't') {
 			e.preventDefault();
 			tabManager.addHomeTab();
 		}
 		// Edit toggle
-		if (e.ctrlKey && e.key === 'e') {
+		if (cmdOrCtrl && e.key === 'e') {
 			e.preventDefault();
 			toggleEdit(true);
 		}
 		// Save
-		if (e.ctrlKey && e.key === 's') {
+		if (cmdOrCtrl && e.key === 's') {
 			// e.preventDefault(); // Don't prevent default blindly?
 			// If we are in edit mode, Editor.svelte handles it usually, but if focus is not in editor...
 			if (isEditing) {
@@ -507,24 +510,24 @@
 			}
 		}
 
-		if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+		if (cmdOrCtrl && e.shiftKey && e.key === 'T') {
 			e.preventDefault();
 			handleUndoCloseTab();
 		}
-		if (e.ctrlKey && e.key === 'Tab') {
+		if (cmdOrCtrl && e.key === 'Tab') {
 			e.preventDefault();
 			tabManager.cycleTab(e.shiftKey ? 'prev' : 'next');
 		}
 		// Zoom shortcuts
-		if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
+		if (cmdOrCtrl && (e.key === '=' || e.key === '+')) {
 			e.preventDefault();
 			zoomLevel = Math.min(zoomLevel + 10, 500);
 		}
-		if (e.ctrlKey && e.key === '-') {
+		if (cmdOrCtrl && e.key === '-') {
 			e.preventDefault();
 			zoomLevel = Math.max(zoomLevel - 10, 25);
 		}
-		if (e.ctrlKey && e.key === '0') {
+		if (cmdOrCtrl && e.key === '0') {
 			e.preventDefault();
 			zoomLevel = 100;
 		}
@@ -907,14 +910,11 @@
 	.editor-wrapper {
 		width: 100%;
 		height: 100%;
-		/* Adjust for padding of markdown body if needed, or override */
 		position: absolute;
 		top: 0;
 		left: 0;
-		/* Markdown body has 36px top margin, so we might need to match or reset */
 		padding-top: 36px;
 		box-sizing: border-box;
-		background-color: #1e1e1e; /* Match monaco dark theme background roughly */
 	}
 
 	.drag-overlay {
