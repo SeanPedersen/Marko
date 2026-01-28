@@ -10,17 +10,52 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  create-release:
+    runs-on: ubuntu-22.04
+    outputs:
+      release_id: ${{ steps.create_release.outputs.id }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get Version
+        id: get_version
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: Markpad v${{ steps.get_version.outputs.version }}
+          draft: true
+          prerelease: false
+          generate_release_notes: true
+
+  build:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: windows-latest
             os: windows
+            target: '' 
           - platform: ubuntu-22.04
             os: linux
+            target: ''
           - platform: macos-latest
             os: macos
+            target: 'universal-apple-darwin'
 
     runs-on: ${{ matrix.platform }}
 
@@ -30,11 +65,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version: '20'
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          # macos: install targets for universal build
+          # windows/linux: standard
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Install Linux dependencies
@@ -45,17 +82,6 @@ jobs:
 
       - name: Install Frontend Dependencies
         run: npm install
-
-      - name: Get Version
-        shell: bash
-        run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
-
-      - name: Create Release
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create v${{ env.APP_VERSION }} --title "Markpad v${{ env.APP_VERSION }}" --draft --generate-notes || echo "Release likely exists"
 
       # --- Windows Build ---
       - name: Build Windows
@@ -68,13 +94,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # The build outputs the raw executable at src-tauri/target/release/Markpad.exe
-          # We upload it as Markpad.exe (Portable) and MarkpadInstaller.exe (Installer Trigger)
-          
           cp src-tauri/target/release/Markpad.exe Markpad.exe
           cp Markpad.exe MarkpadInstaller.exe
-          
-          gh release upload v${{ env.APP_VERSION }} Markpad.exe MarkpadInstaller.exe
+          gh release upload v${{ needs.create-release.outputs.version }} Markpad.exe MarkpadInstaller.exe --clobber
 
       # --- Linux Build ---
       - name: Build Linux
@@ -87,15 +109,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Upload all generated bundles
-          find src-tauri/target/release/bundle/deb -name "*.deb" -exec gh release upload v${{ env.APP_VERSION }} {} \;
-          find src-tauri/target/release/bundle/rpm -name "*.rpm" -exec gh release upload v${{ env.APP_VERSION }} {} \;
-          find src-tauri/target/release/bundle/appimage -name "*.AppImage" -exec gh release upload v${{ env.APP_VERSION }} {} \;
+          find src-tauri/target/release/bundle/deb -name "*.deb" -exec gh release upload v${{ needs.create-release.outputs.version }} {} --clobber \;
+          find src-tauri/target/release/bundle/rpm -name "*.rpm" -exec gh release upload v${{ needs.create-release.outputs.version }} {} --clobber \;
+          find src-tauri/target/release/bundle/appimage -name "*.AppImage" -exec gh release upload v${{ needs.create-release.outputs.version }} {} --clobber \;
 
       # --- MacOS Build ---
-      - name: Build MacOS
+      - name: Build MacOS (Universal)
         if: matrix.platform == 'macos-latest'
-        run: npm run tauri build
+        env:
+          # Fix OOM issue
+          NODE_OPTIONS: "--max-old-space-size=8192"
+        run: npm run tauri build -- --target universal-apple-darwin
 
       - name: Upload MacOS Artifacts
         if: matrix.platform == 'macos-latest'
@@ -103,4 +127,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          find src-tauri/target/release/bundle/dmg -name "*.dmg" -exec gh release upload v${{ env.APP_VERSION }} {} \;
+          find src-tauri/target/universal-apple-darwin/release/bundle/dmg -name "*.dmg" -exec gh release upload v${{ needs.create-release.outputs.version }} {} --clobber \;
