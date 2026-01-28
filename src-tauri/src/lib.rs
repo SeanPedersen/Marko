@@ -99,11 +99,10 @@ fn unwatch_file(state: State<'_, WatcherState>) -> Result<(), String> {
 #[tauri::command]
 fn send_markdown_path() -> Vec<String> {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 {
-        args[1..].to_vec()
-    } else {
-        Vec::new()
-    }
+    args.into_iter()
+        .skip(1)
+        .filter(|arg| !arg.starts_with("-"))
+        .collect()
 }
 
 #[tauri::command]
@@ -322,7 +321,11 @@ pub fn run() {
             println!("Setup Args: {:?}", args);
             let window = app.get_webview_window("main").unwrap();
 
-            if let Some(path) = args.get(1) {
+            // Find the first argument that doesn't start with '-'
+            // This handles macOS adding -psn_... args and other flags
+            let file_path = args.iter().skip(1).find(|arg| !arg.starts_with("-"));
+
+            if let Some(path) = file_path {
                 let _ = window.emit("file-path", path.as_str());
             }
 

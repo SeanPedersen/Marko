@@ -70,10 +70,15 @@
 			}
 		});
 
-		// Add Ctrl+S command
 		editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
 			if (onsave) onsave();
 		});
+
+		editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyP, () => {
+			editor.trigger('keyboard', 'editor.action.quickCommand', {});
+		});
+
+
 
 		return () => {
 			editor.dispose();
