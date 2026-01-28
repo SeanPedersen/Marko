@@ -1,9 +1,16 @@
 use comrak::{markdown_to_html, ComrakExtensionOptions, ComrakOptions};
-
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use std::fs;
+use std::path::Path;
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{menu::MenuBuilder, AppHandle, Emitter, Manager, State};
 use tauri::menu::ContextMenu;
+
+
+struct WatcherState {
+    watcher: Mutex<Option<RecommendedWatcher>>,
+}
+
 
 mod setup;
 
@@ -55,6 +62,42 @@ fn open_file_folder(path: String) -> Result<(), String> {
 #[tauri::command]
 fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
     fs::rename(old_path, new_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn watch_file(handle: AppHandle, state: State<'_, WatcherState>, path: String) -> Result<(), String> {
+    let mut watcher_lock = state.watcher.lock().unwrap();
+
+    // Stop existing watcher if any
+    *watcher_lock = None;
+
+    let path_to_watch = path.clone();
+    let app_handle = handle.clone();
+
+    let mut watcher = RecommendedWatcher::new(
+        move |res: Result<notify::Event, notify::Error>| {
+            if let Ok(_) = res {
+                let _ = app_handle.emit("file-changed", ());
+            }
+        },
+        Config::default(),
+    )
+    .map_err(|e| e.to_string())?;
+
+    watcher
+        .watch(Path::new(&path_to_watch), RecursiveMode::NonRecursive)
+        .map_err(|e| e.to_string())?;
+
+    *watcher_lock = Some(watcher);
+
+    Ok(())
+}
+
+#[tauri::command]
+fn unwatch_file(state: State<'_, WatcherState>) -> Result<(), String> {
+    let mut watcher_lock = state.watcher.lock().unwrap();
+    *watcher_lock = None;
+    Ok(())
 }
 
 
@@ -209,6 +252,9 @@ pub fn run() {
         .manage(AppState {
             startup_file: Mutex::new(None),
         })
+        .manage(WatcherState {
+            watcher: Mutex::new(None),
+        })
         .manage(ContextMenuState {
             active_path: Mutex::new(None),
             active_tab_id: Mutex::new(None),
@@ -333,7 +379,10 @@ pub fn run() {
             setup::uninstall_app,
             setup::check_install_status,
             open_file_folder,
+            open_file_folder,
             rename_file,
+            watch_file,
+            unwatch_file,
 
             show_context_menu,
             show_window

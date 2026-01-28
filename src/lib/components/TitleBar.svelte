@@ -9,12 +9,14 @@
 		isFocused,
 		isScrolled,
 		currentFile,
+		liveMode,
 
 		windowTitle,
 		showHome,
 		onselectFile,
 		ontoggleHome,
 		ononpenFileLocation,
+		ontoggleLiveMode,
 
 		ontoggleEdit,
 		isEditing,
@@ -27,12 +29,14 @@
 		isFocused: boolean;
 		isScrolled: boolean;
 		currentFile: string;
+		liveMode: boolean;
 
 		windowTitle: string;
 		showHome: boolean;
 		onselectFile: () => void;
 		ontoggleHome: () => void;
 		ononpenFileLocation: () => void;
+		ontoggleLiveMode: () => void;
 
 		ontoggleEdit: () => void;
 		isEditing: boolean;
@@ -106,6 +110,15 @@
 						></svg>
 				</button>
 				{#if isMarkdown}
+					<button
+						class="title-action-btn {liveMode ? 'active' : ''}"
+						onclick={ontoggleLiveMode}
+						aria-label="Toggle Live Mode"
+						title="Live update mode"
+						transition:fly={{ x: 20, duration: 100, delay: 50 }}>
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+							><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z" /><circle cx="12" cy="12" r="3" /></svg>
+					</button>
 					<button
 						class="title-action-btn {isEditing ? 'active' : ''}"
 						onclick={ontoggleEdit}
