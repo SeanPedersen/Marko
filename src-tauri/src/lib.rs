@@ -68,7 +68,6 @@ fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
 fn watch_file(handle: AppHandle, state: State<'_, WatcherState>, path: String) -> Result<(), String> {
     let mut watcher_lock = state.watcher.lock().unwrap();
 
-    // Stop existing watcher if any
     *watcher_lock = None;
 
     let path_to_watch = path.clone();
@@ -100,11 +99,6 @@ fn unwatch_file(state: State<'_, WatcherState>) -> Result<(), String> {
     Ok(())
 }
 
-
-
-
-
-
 struct AppState {
     startup_file: Mutex<Option<String>>,
 }
@@ -127,7 +121,6 @@ fn send_markdown_path(state: State<'_, AppState>) -> Vec<String> {
 
 #[tauri::command]
 fn get_app_mode() -> String {
-    // In debug mode (tauri dev), always run in "app" mode to bypass installer
     if cfg!(debug_assertions) {
         return "app".to_string();
     }
@@ -136,15 +129,19 @@ fn get_app_mode() -> String {
     if args.iter().any(|arg| arg == "--uninstall") {
         return "uninstall".to_string();
     }
+
+    let current_exe = std::env::current_exe().unwrap_or_default();
+    let exe_name = current_exe.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+    
+    let is_installer_mode = args.iter().any(|arg| arg == "--install") || exe_name.contains("installer");
     
     if setup::is_installed() {
         "app".to_string()
     } else {
-        // If we are not installed, but we are opening a file, just run in "app" mode (portable)
-        if args.len() > 1 && !args[1].starts_with('-') {
-            "app".to_string()
-        } else {
+        if is_installer_mode {
             "installer".to_string()
+        } else {
+            "app".to_string()
         }
     }
 }
@@ -341,12 +338,24 @@ pub fn run() {
              }
         })
         .setup(|app| {
+            let _window = tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
+                .title("Markpad")
+                .inner_size(800.0, 600.0)
+                .min_inner_size(400.0, 300.0)
+                .visible(false)
+                .resizable(true)
+                .decorations(false)
+                .transparent(true)
+                .shadow(false)
+                .build()?;
+
+            let _ = _window.set_shadow(true);
+
             let args: Vec<String> = std::env::args().collect();
             println!("Setup Args: {:?}", args);
+
             let window = app.get_webview_window("main").unwrap();
 
-            // Find the first argument that doesn't start with '-'
-            // This handles macOS adding -psn_... args and other flags
             let file_path = args.iter().skip(1).find(|arg| !arg.starts_with("-"));
 
             if let Some(path) = file_path {
@@ -354,12 +363,9 @@ pub fn run() {
             }
 
 
-
-            // Resize if installer
             let args: Vec<String> = std::env::args().collect();
             let is_uninstall = args.iter().any(|arg| arg == "--uninstall");
             if !setup::is_installed() || is_uninstall {
-                // If it's not opening a file, resize to a nice installer size
                 if args.len() <= 1 || args[1].starts_with('-') {
                    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: 450.0, height: 550.0 }));
                    let _ = window.center();
@@ -396,11 +402,9 @@ pub fn run() {
                     if let Ok(path_buf) = url.to_file_path() {
                          let path_str = path_buf.to_string_lossy().to_string();
                          
-                         // Store in state
                          let state = app_handle.state::<AppState>();
                          *state.startup_file.lock().unwrap() = Some(path_str.clone());
                          
-                         // Emit to window if it exists
                          if let Some(window) = app_handle.get_webview_window("main") {
                              let _ = window.emit("file-path", path_str);
                              let _ = window.set_focus();

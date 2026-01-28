@@ -10,21 +10,7 @@
     "frontendDist": "../build"
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "Markpad",
-        "width": 800,
-        "height": 600,
-        "visible": false,
-        "resizable": true,
-        "backgroundColor": "#181818",
-        "decorations": false,
-        "transparent": true,
-        "shadow": true,
-        "hiddenTitle": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null,
       "assetProtocol": {
