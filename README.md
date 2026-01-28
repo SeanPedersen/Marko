@@ -1,12 +1,23 @@
-# Markpad
 
-A simple, lightweight cross-platform Markdown viewer and editor. 
+![demo](pics/demo.gif)
 
-Built with [Tauri](https://tauri.app/) — [Rust](https://www.rust-lang.org) + [SvelteKit](https://kit.svelte.dev/) + [TypeScript](https://www.typescriptlang.org/).
+# [Markpad](https://markpad.sftwr.dev)
 
-Using GitHub flavored markdown style by [sindresorhus](https://github.com/sindresorhus/generate-github-markdown-css) and rendered with [comrak](https://github.com/kivikakk/comrak).
+A simple, lightweight Markdown viewer and text editor for Windows, macOS, and Linux.
 
-## Changes
+## Features
+
+- Tabbed interface
+- Monaco editor (VS Code)
+- Syntax highlighting both in editor and code blocks
+- Image and YouTube embeds
+- Familiar GitHub styled markdown rendering
+- Tiny memory usage (~10MB)
+- No telemetry or bloat
+- Free and open-source
+- Lightweight native UI
+
+## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md)
 
@@ -28,13 +39,3 @@ See [CHANGELOG.md](CHANGELOG.md)
 ![alt text](pics/image1.png)
 ![alt text](pics/image2.png)
 ![alt text](pics/image3.png)
-## Todo
-
-- [X] Fix relative image embeds
-- [X] Add shortcut to edit in default text editor
-- [X] Tweak Windows installer to prevent desktop shortcut by default
-- [X] Add tabs
-- [X] Add file association option in the installer
-- [X] Add syntax highlighting for code blocks
-- [X] Integrate Monaco editor
-- [ ] Add option to toggle markdown rendering

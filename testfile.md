@@ -1,4 +1,4 @@
-# Markdown Viewer
+# Markpad
 
 Everything you'd want from a simple markdown viewer.
 
@@ -102,8 +102,6 @@ $$\frac{1}{2} < \left\lfloor \text{mod} \left( \left\lfloor \frac{y}{17} \right\
 ### Links
 Check out [Tauri.app](https://tauri.app).
 
-### Images
-![Example Image](pics/image4.png)
 
 ### Youtube Embeds
 Just paste a Youtube link on its own line:
