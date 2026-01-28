@@ -1,8 +1,6 @@
 # Markpad
 
-A simple, lightweight markdown viewer and editor for Windows. 
-
-MacOS and Linux support coming soon.
+A simple, lightweight cross-platform Markdown viewer and editor. 
 
 Built with [Tauri](https://tauri.app/) — [Rust](https://www.rust-lang.org) + [SvelteKit](https://kit.svelte.dev/) + [TypeScript](https://www.typescriptlang.org/).
 
