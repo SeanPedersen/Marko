@@ -1,5 +1,8 @@
+#[cfg(target_os = "windows")]
 use std::env;
+#[cfg(target_os = "windows")]
 use std::fs;
+#[cfg(target_os = "windows")]
 use std::path::{Path, PathBuf};
 use serde::Serialize;
 use tauri::AppHandle;
@@ -123,8 +126,6 @@ pub async fn check_install_status() -> InstallStatus {
     }
 }
 
-#[tauri::command]
-#[cfg(not(target_os = "windows"))]
 #[tauri::command]
 #[cfg(not(target_os = "windows"))]
 pub async fn check_install_status() -> InstallStatus {

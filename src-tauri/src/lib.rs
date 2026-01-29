@@ -25,7 +25,7 @@ async fn show_window(window: tauri::Window) {
 fn open_markdown(path: String) -> Result<String, String> {
     let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
 
-    let options = ComrakOptions {
+    let mut options = ComrakOptions {
         extension: ComrakExtensionOptions {
             strikethrough: true,
             table: true,
@@ -38,6 +38,7 @@ fn open_markdown(path: String) -> Result<String, String> {
         },
         ..ComrakOptions::default()
     };
+    options.render.unsafe_ = true;
 
     let html_output = markdown_to_html(&content, &options);
 
@@ -403,17 +404,17 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, _event| {
+        .run(|_app_handle, _event| {
 #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Opened { urls } = _event {
                 if let Some(url) = urls.first() {
                     if let Ok(path_buf) = url.to_file_path() {
                          let path_str = path_buf.to_string_lossy().to_string();
                          
-                         let state = app_handle.state::<AppState>();
+                         let state = _app_handle.state::<AppState>();
                          *state.startup_file.lock().unwrap() = Some(path_str.clone());
                          
-                         if let Some(window) = app_handle.get_webview_window("main") {
+                         if let Some(window) = _app_handle.get_webview_window("main") {
                              let _ = window.emit("file-path", path_str);
                              let _ = window.set_focus();
                          }
