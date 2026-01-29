@@ -78,7 +78,7 @@
 
 	{#if tabManager.tabs.length > 0}
 		<div class="tab-area">
-			<TabList onnewTab={() => tabManager.addHomeTab()} {ondetach} {showHome} {ontabclick} {oncloseTab} />
+			<TabList onnewTab={() => tabManager.addNewTab()} {ondetach} {showHome} {ontabclick} {oncloseTab} />
 		</div>
 	{:else}
 		<div class="window-title-container" data-tauri-drag-region>

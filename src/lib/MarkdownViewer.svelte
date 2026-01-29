@@ -718,7 +718,7 @@
 			);
 			unlisteners.push(
 				await listen('menu-tab-new', () => {
-					tabManager.addHomeTab();
+					tabManager.addNewTab();
 				}),
 			);
 			unlisteners.push(
