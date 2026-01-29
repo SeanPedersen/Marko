@@ -27,7 +27,7 @@ body {
 	--color-fg-default: #1f2328;
 	--color-fg-muted: #656d76;
 	--color-fg-subtle: #6e7781;
-	--color-canvas-default: #ffffff;
+	--color-canvas-default: #FDFDFD;
 	--color-canvas-subtle: #00000011;
 	--color-border-default: #d0d7de;
 	--color-border-muted: hsla(210, 18%, 87%, 1);
