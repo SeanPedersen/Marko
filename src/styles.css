@@ -452,7 +452,7 @@ body {
 .markdown-body ul,
 .markdown-body ol {
 	margin-top: 0;
-	margin-bottom: 0;
+	margin-bottom: 16px;
 	padding-left: 2em;
 }
 

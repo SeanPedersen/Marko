@@ -39,6 +39,7 @@ fn open_markdown(path: String) -> Result<String, String> {
         ..ComrakOptions::default()
     };
     options.render.unsafe_ = true;
+    options.render.hardbreaks = true;
 
     let html_output = markdown_to_html(&content, &options);
 
