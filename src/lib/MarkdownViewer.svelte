@@ -896,13 +896,14 @@
 
 	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
 		{#key currentFile}
-			<div class="markdown-container" style="zoom: {zoomLevel}%" onwheel={handleWheel} role="presentation">
+			<div class="markdown-container" style="zoom: {isEditing ? 1 : zoomLevel / 100}" onwheel={handleWheel} role="presentation">
 				{#if isEditing}
 					<div class="editor-wrapper">
 						<Editor
 							bind:value={rawContent}
 							language={editorLanguage}
 							onsave={saveContent}
+							bind:zoomLevel
 							onnew={handleNewFile}
 							onopen={selectFile}
 							onclose={closeFile}

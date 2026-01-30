@@ -24,6 +24,7 @@
 		onnextTab,
 		onprevTab,
 		onundoClose,
+		zoomLevel = $bindable(100),
 	} = $props<{
 		value: string;
 		language?: string;
@@ -38,6 +39,7 @@
 		onnextTab?: () => void;
 		onprevTab?: () => void; // Using 'prev' to match common naming
 		onundoClose?: () => void;
+		zoomLevel?: number;
 	}>();
 
 	let container: HTMLDivElement;
@@ -338,8 +340,23 @@
 			},
 		});
 
+		const wheelListener = (e: WheelEvent) => {
+			if (e.ctrlKey || e.metaKey) {
+				e.preventDefault();
+				e.stopPropagation();
+				if (e.deltaY < 0) {
+					zoomLevel = Math.min(zoomLevel + 10, 500);
+				} else {
+					zoomLevel = Math.max(zoomLevel - 10, 25);
+				}
+			}
+		};
+
+		container.addEventListener('wheel', wheelListener, { capture: true });
+
 		return () => {
 			mediaQuery.removeEventListener('change', updateTheme);
+			container.removeEventListener('wheel', wheelListener, { capture: true });
 
 			editor.dispose();
 		};
@@ -357,6 +374,7 @@
 				minimap: { enabled: settings.minimap },
 				wordWrap: settings.wordWrap as 'on' | 'off' | 'wordWrapColumn' | 'bounded',
 				lineNumbers: settings.lineNumbers as 'on' | 'off' | 'relative' | 'interval',
+				fontSize: 14 * (zoomLevel / 100),
 			});
 		}
 	});
