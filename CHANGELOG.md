@@ -1,4 +1,9 @@
 # Changelog
+
+## v2.3.6
+- Fixed zoom handling in editor
+- Added ARM64 support
+
 ## v2.3.5
 - Fixed window positioning and sizing
 - Fixed light mode startup and editor theme
