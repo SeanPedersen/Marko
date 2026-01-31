@@ -10,6 +10,9 @@ export interface Tab {
 	isEditing: boolean;
 	history: string[];
 	historyIndex: number;
+	editorViewState: any; // monaco.editor.ICodeEditorViewState | null
+	scrollPercentage: number;
+	anchorLine: number;
 }
 
 class TabManager {
@@ -20,65 +23,80 @@ class TabManager {
 		return this.tabs.find((t) => t.id === this.activeTabId);
 	}
 
-	addTab(path: string, content: string = '', rawContent: string = '') {
-		const existing = this.tabs.find((t) => t.path === path);
-		if (existing) {
-			this.activeTabId = existing.id;
-			return;
-		}
-
+	addTab(path: string, content: string = '') {
 		const id = crypto.randomUUID();
-		const title = path.split(/[/\\]/).pop() || 'Untitled';
+		const filename = path.split('\\').pop()?.split('/').pop() || 'Untitled';
 
 		this.tabs.push({
 			id,
 			path,
-			title,
+			title: filename,
 			content,
-			rawContent,
-			originalContent: rawContent,
+			rawContent: content,
+			originalContent: content,
 			scrollTop: 0,
 			isDirty: false,
 			isEditing: false,
-			history: [path],
-			historyIndex: 0
+			history: [content],
+			historyIndex: 0,
+			editorViewState: null,
+			scrollPercentage: 0,
+			anchorLine: 0
 		});
+
 		this.activeTabId = id;
 	}
 
 	addNewTab() {
 		const id = crypto.randomUUID();
+		const content = '';
+
 		this.tabs.push({
 			id,
 			path: '',
 			title: 'Untitled',
-			content: '',
-			rawContent: '',
-			originalContent: '',
+			content,
+			rawContent: content,
+			originalContent: content,
 			scrollTop: 0,
 			isDirty: false,
-			isEditing: true,
-			history: [''],
-			historyIndex: 0
+			isEditing: true, // Start in edit mode
+			history: [content],
+			historyIndex: 0,
+			editorViewState: null,
+			scrollPercentage: 0,
+			anchorLine: 0
 		});
+
 		this.activeTabId = id;
 	}
 
 	addHomeTab() {
+		// Check if home tab exists
+		const homeTab = this.tabs.find(t => t.path === 'HOME');
+		if (homeTab) {
+			this.activeTabId = homeTab.id;
+			return;
+		}
+
 		const id = crypto.randomUUID();
 		this.tabs.push({
 			id,
-			path: '',
-			title: 'Recents',
+			path: 'HOME',
+			title: 'Home',
 			content: '',
 			rawContent: '',
 			originalContent: '',
 			scrollTop: 0,
 			isDirty: false,
 			isEditing: false,
-			history: [''],
-			historyIndex: 0
+			history: [],
+			historyIndex: 0,
+			editorViewState: null,
+			scrollPercentage: 0,
+			anchorLine: 0
 		});
+
 		this.activeTabId = id;
 	}
 
@@ -137,6 +155,29 @@ class TabManager {
 			tab.scrollTop = scrollTop;
 		}
 	}
+
+	updateTabEditorState(id: string, viewState: any) {
+		const tab = this.tabs.find((t) => t.id === id);
+		if (tab) {
+			tab.editorViewState = viewState;
+		}
+	}
+
+	updateTabScrollPercentage(id: string, percentage: number) {
+		const tab = this.tabs.find((t) => t.id === id);
+		if (tab) {
+			tab.scrollPercentage = percentage;
+		}
+	}
+
+	updateTabAnchorLine(id: string, line: number) {
+		const tab = this.tabs.find((t) => t.id === id);
+		if (tab) {
+			tab.anchorLine = line;
+		}
+	}
+
+
 
 	reorderTabs(fromIndex: number, toIndex: number) {
 		if (fromIndex === toIndex) return;

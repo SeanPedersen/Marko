@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 	import { listen } from '@tauri-apps/api/event';
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { open, save, ask } from '@tauri-apps/plugin-dialog';
 	import Installer from './Installer.svelte';
@@ -263,9 +263,103 @@
 	});
 
 	$effect(() => {
-		const tab = tabManager.activeTab;
-		if (tab && markdownBody) markdownBody.scrollTop = tab.scrollTop;
+		// Depend on the ID and body existence to trigger restore
+		const id = tabManager.activeTabId;
+		if (id && markdownBody) {
+			untrack(() => {
+				const tab = tabManager.tabs.find((t) => t.id === id);
+				if (tab) {
+					let scrolled = false;
+
+					if (tab.anchorLine > 0) {
+						// Interpolated Restore
+						// Find element containing the anchor line
+						const children = Array.from(markdownBody.children) as HTMLElement[];
+						for (const el of children) {
+							const sourcepos = el.dataset.sourcepos;
+							if (sourcepos) {
+								const [start, end] = sourcepos.split('-');
+								const startLine = parseInt(start.split(':')[0]);
+								const endLine = parseInt(end.split(':')[0]);
+
+								if (!isNaN(startLine) && !isNaN(endLine)) {
+									if (tab.anchorLine >= startLine && tab.anchorLine <= endLine) {
+										// Found the container
+										const totalLines = endLine - startLine; // Can be 0 for single line
+										let ratio = 0;
+										if (totalLines > 0) {
+											ratio = (tab.anchorLine - startLine) / totalLines;
+										}
+
+										// Calculate target pixel position
+										// We want the anchor line to be roughly at offset 60
+										const targetOffset = el.offsetTop + el.offsetHeight * ratio - 60;
+										markdownBody.scrollTop = Math.max(0, targetOffset);
+										scrolled = true;
+										break;
+									}
+								}
+							}
+						}
+					}
+
+					if (!scrolled) {
+						if (markdownBody.scrollHeight > markdownBody.clientHeight && tab.scrollPercentage > 0) {
+							const targetScroll = tab.scrollPercentage * (markdownBody.scrollHeight - markdownBody.clientHeight);
+							markdownBody.scrollTop = targetScroll;
+						} else {
+							markdownBody.scrollTop = tab.scrollTop;
+						}
+					}
+				}
+			});
+		}
 	});
+
+	// ... (helper functions if needed) ...
+
+	function handleScroll(e: Event) {
+		const target = e.target as HTMLElement;
+		if (tabManager.activeTabId) {
+			// Update raw scroll pos
+			tabManager.updateTabScroll(tabManager.activeTabId, target.scrollTop);
+
+			// Percentage fallback
+			if (target.scrollHeight > target.clientHeight) {
+				const percentage = target.scrollTop / (target.scrollHeight - target.clientHeight);
+				tabManager.updateTabScrollPercentage(tabManager.activeTabId, percentage);
+			}
+
+			// Interpolated Anchor Calculation
+			const anchorOffset = target.scrollTop + 60;
+			const children = Array.from(markdownBody?.children || []);
+
+			for (const child of children) {
+				const el = child as HTMLElement;
+				// Check intersection
+				if (el.offsetTop <= anchorOffset && el.offsetTop + el.offsetHeight > anchorOffset) {
+					const sourcepos = el.dataset.sourcepos;
+					if (sourcepos) {
+						const [start, end] = sourcepos.split('-');
+						const startLine = parseInt(start.split(':')[0]);
+						const endLine = parseInt(end.split(':')[0]);
+
+						if (!isNaN(startLine) && !isNaN(endLine)) {
+							// Calculate relative position within element
+							const relativeOffset = anchorOffset - el.offsetTop;
+							const ratio = relativeOffset / el.offsetHeight;
+
+							const totalLines = endLine - startLine;
+							const estimatedLine = startLine + Math.round(totalLines * ratio);
+
+							tabManager.updateTabAnchorLine(tabManager.activeTabId, estimatedLine);
+						}
+					}
+					break;
+				}
+			}
+		}
+	}
 
 	function saveRecentFile(path: string) {
 		let files = [...recentFiles].filter((f) => f !== path);
@@ -527,12 +621,6 @@
 				event.preventDefault();
 				await openUrl(anchor.href);
 			}
-		}
-	}
-
-	function handleScroll(e: Event) {
-		if (tabManager.activeTabId) {
-			tabManager.updateTabScroll(tabManager.activeTabId, (e.target as HTMLElement).scrollTop);
 		}
 	}
 
@@ -895,12 +983,12 @@
 		}} />
 
 	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
-		{#key currentFile}
+		{#key tabManager.activeTabId}
 			<div class="markdown-container" style="zoom: {isEditing ? 1 : zoomLevel / 100}" onwheel={handleWheel} role="presentation">
 				{#if isEditing}
 					<div class="editor-wrapper">
 						<Editor
-							bind:value={rawContent}
+							bind:value={tabManager.activeTab.rawContent}
 							language={editorLanguage}
 							onsave={saveContent}
 							bind:zoomLevel
