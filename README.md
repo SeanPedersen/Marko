@@ -11,6 +11,7 @@ Download from [markpad.sftwr.dev](https://markpad.sftwr.dev)
 
 - Tabbed interface
 - Monaco editor (VS Code)
+- Split view
 - Syntax highlighting both in editor and code blocks
 - Image and YouTube embeds
 - Familiar GitHub styled markdown rendering
