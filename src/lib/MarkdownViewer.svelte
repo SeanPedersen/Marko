@@ -275,16 +275,18 @@
 	$effect(() => {
 		// Depend on the ID and body existence to trigger restore
 		const id = tabManager.activeTabId;
-		if (id && markdownBody) {
+		const body = markdownBody;
+
+		if (id && body) {
 			untrack(() => {
 				const tab = tabManager.tabs.find((t) => t.id === id);
 				if (tab) {
 					let scrolled = false;
 
-					if (markdownBody && tab.anchorLine > 0) {
+					if (tab.anchorLine > 0) {
 						// Interpolated Restore
 						// Find element containing the anchor line
-						const children = Array.from(markdownBody.children) as HTMLElement[];
+						const children = Array.from(body.children) as HTMLElement[];
 						for (const el of children) {
 							const sourcepos = el.dataset.sourcepos;
 							if (sourcepos) {
@@ -304,7 +306,7 @@
 										// Calculate target pixel position
 										// We want the anchor line to be roughly at offset 60
 										const targetOffset = el.offsetTop + el.offsetHeight * ratio - 60;
-										markdownBody.scrollTop = Math.max(0, targetOffset);
+										body.scrollTop = Math.max(0, targetOffset);
 										scrolled = true;
 										break;
 									}
@@ -313,12 +315,12 @@
 						}
 					}
 
-					if (!scrolled && markdownBody) {
-						if (markdownBody.scrollHeight > markdownBody.clientHeight && tab.scrollPercentage > 0) {
-							const targetScroll = tab.scrollPercentage * (markdownBody.scrollHeight - markdownBody.clientHeight);
-							markdownBody.scrollTop = targetScroll;
+					if (!scrolled) {
+						if (body.scrollHeight > body.clientHeight && tab.scrollPercentage > 0) {
+							const targetScroll = tab.scrollPercentage * (body.scrollHeight - body.clientHeight);
+							body.scrollTop = targetScroll;
 						} else {
-							markdownBody.scrollTop = tab.scrollTop;
+							body.scrollTop = tab.scrollTop;
 						}
 					}
 				}

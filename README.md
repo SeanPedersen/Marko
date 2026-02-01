@@ -43,6 +43,6 @@ Right click on a markdown file and select "Open with" and select the downloaded 
 ## Screenshots
 
 ![readme splitview demo](pics/image.png)
-![alt text](pics/image1.png)
-![alt text](pics/image2.png)
-![alt text](pics/image3.png)
+![codeblock demonstration](pics/image1.png)
+![editor view](pics/image2.png)
+![home page](pics/image3.png)
