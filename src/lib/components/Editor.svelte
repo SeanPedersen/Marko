@@ -37,13 +37,14 @@
 		ontoggleLive?: () => void;
 		onhome?: () => void;
 		onnextTab?: () => void;
-		onprevTab?: () => void; // Using 'prev' to match common naming
+		onprevTab?: () => void;
 		onundoClose?: () => void;
 		zoomLevel?: number;
 	}>();
 
 	let container: HTMLDivElement;
 	let editor: monaco.editor.IStandaloneCodeEditor;
+	const currentTabId = tabManager.activeTabId;
 
 	self.MonacoEnvironment = {
 		getWorker: function (_moduleId: any, label: string) {
@@ -101,6 +102,27 @@
 			wordWrap: settings.wordWrap as 'on' | 'off' | 'wordWrapColumn' | 'bounded',
 			lineNumbers: settings.lineNumbers as 'on' | 'off' | 'relative' | 'interval',
 		});
+
+		if (tabManager.activeTab?.editorViewState) {
+			editor.restoreViewState(tabManager.activeTab.editorViewState);
+		}
+
+		let scrolled = false;
+		if (tabManager.activeTab) {
+			if (tabManager.activeTab.anchorLine > 0) {
+				editor.revealLineNearTop(Math.max(1, tabManager.activeTab.anchorLine - 2), monaco.editor.ScrollType.Smooth);
+				scrolled = true;
+			}
+
+			if (!scrolled) {
+				const scrollHeight = editor.getScrollHeight();
+				const clientHeight = editor.getLayoutInfo().height;
+				if (scrollHeight > clientHeight) {
+					const targetScroll = tabManager.activeTab.scrollPercentage * (scrollHeight - clientHeight);
+					editor.setScrollTop(targetScroll);
+				}
+			}
+		}
 
 		editor.addAction({
 			id: 'toggle-minimap',
@@ -357,6 +379,26 @@
 		return () => {
 			mediaQuery.removeEventListener('change', updateTheme);
 			container.removeEventListener('wheel', wheelListener, { capture: true });
+
+			if (editor && currentTabId) {
+				const state = editor.saveViewState();
+				tabManager.updateTabEditorState(currentTabId, state);
+
+				const scrollHeight = editor.getScrollHeight();
+				const clientHeight = editor.getLayoutInfo().height;
+				if (scrollHeight > clientHeight) {
+					const percentage = editor.getScrollTop() / (scrollHeight - clientHeight);
+					tabManager.updateTabScrollPercentage(currentTabId, percentage);
+				}
+
+				const ranges = editor.getVisibleRanges();
+				if (ranges.length > 0) {
+					const startLine = ranges[0].startLineNumber;
+					// Anchor to 3rd line
+					const anchorLine = startLine + 2;
+					tabManager.updateTabAnchorLine(currentTabId, anchorLine);
+				}
+			}
 
 			editor.dispose();
 		};

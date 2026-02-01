@@ -40,6 +40,7 @@ fn open_markdown(path: String) -> Result<String, String> {
     };
     options.render.unsafe_ = true;
     options.render.hardbreaks = true;
+    options.render.sourcepos = true;
 
     let html_output = markdown_to_html(&content, &options);
 
