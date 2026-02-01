@@ -36,6 +36,7 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 ## Screenshots
 
+![readme splitview demo](pics/image.png)
 ![alt text](pics/image1.png)
 ![alt text](pics/image2.png)
 ![alt text](pics/image3.png)
