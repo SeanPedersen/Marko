@@ -5,6 +5,8 @@
 
 A simple, lightweight Markdown viewer and text editor for Windows, macOS, and Linux.
 
+Download from [markpad.sftwr.dev](https://markpad.sftwr.dev)
+
 ## Features
 
 - Tabbed interface
@@ -23,9 +25,13 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 ## Installation
 
-- Download the latest installer from the [releases page](https://github.com/alecames/Markpad/releases/latest)
-- Right click on a markdown file and select "Open with" and select the downloaded or installed executable
-- [Optional] Set the executable as the default program to open `.md` files
+Download the latest executable or installer from the [releases page](https://github.com/alecdotdev/Markpad/releases/latest) or from [markpad.sftwr.dev](https://markpad.sftwr.dev)
+
+#### Windows Installer
+Automatically configures `.md` file association 
+
+#### Other Platforms & Windows Portable
+Right click on a markdown file and select "Open with" and select the downloaded or installed executable
 
 ## Installation from source
 
