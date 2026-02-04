@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.4.1
+- Added Mermaid diagram support
+- Security fixes
+
 ## v2.4.0
 - Added split view
 - Added scroll sync between editor and viewer
