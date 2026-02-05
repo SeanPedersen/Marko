@@ -1,14 +1,17 @@
 # Changelog
 
-### Unreleased
+<!-- ### Unreleased -->
+
+
+### Releases
+
+## v2.4.3
 - Added Vim mode
 - Added theme toggle
 - Fixed titlebar icon color
 - Added togglable status bar
 - Added optional word count in status bar
 - Added Obsidian `![[]]` embed support
-
-### Released
 
 ## v2.4.2
 - Added full width toggle
