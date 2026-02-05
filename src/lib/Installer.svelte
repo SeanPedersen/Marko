@@ -255,6 +255,12 @@
 		filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
 	}
 
+	@media (prefers-color-scheme: dark) {
+		.app-icon {
+			filter: invert(1) drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
+		}
+	}
+
 	h1 {
 		margin: 0;
 		font-size: 22px;

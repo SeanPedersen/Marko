@@ -26,6 +26,7 @@
 		onundoClose,
 		onscrollsync,
 		zoomLevel = $bindable(100),
+		theme = 'system',
 	} = $props<{
 		value: string;
 		language?: string;
@@ -42,6 +43,7 @@
 		onundoClose?: () => void;
 		onscrollsync?: (line: number, ratio?: number) => void;
 		zoomLevel?: number;
+		theme?: 'system' | 'light' | 'dark';
 	}>();
 
 	let container: HTMLDivElement;
@@ -90,7 +92,10 @@
 		defineThemes();
 
 		const getTheme = () => {
-			return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'app-theme-dark' : 'app-theme-light';
+			if (theme === 'system') {
+				return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'app-theme-dark' : 'app-theme-light';
+			}
+			return theme === 'dark' ? 'app-theme-dark' : 'app-theme-light';
 		};
 
 		editor = monaco.editor.create(container, {
@@ -150,8 +155,8 @@
 			},
 		});
 
-		const updateTheme = (e: MediaQueryListEvent) => {
-			monaco.editor.setTheme(e.matches ? 'app-theme-dark' : 'app-theme-light');
+		const updateTheme = () => {
+			monaco.editor.setTheme(getTheme());
 		};
 
 		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -362,6 +367,7 @@
 		container.addEventListener('wheel', wheelListener, { capture: true });
 
 		return () => {
+			// Clean up listeners
 			mediaQuery.removeEventListener('change', updateTheme);
 			container.removeEventListener('wheel', wheelListener, { capture: true });
 
@@ -430,6 +436,20 @@
 				lineNumbers: settings.lineNumbers as 'on' | 'off' | 'relative' | 'interval',
 				fontSize: 14 * (zoomLevel / 100),
 			});
+		}
+	});
+
+	$effect(() => {
+		if (editor && theme) {
+			const targetTheme =
+				theme === 'system'
+					? window.matchMedia('(prefers-color-scheme: dark)').matches
+						? 'app-theme-dark'
+						: 'app-theme-light'
+					: theme === 'dark'
+						? 'app-theme-dark'
+						: 'app-theme-light';
+			monaco.editor.setTheme(targetTheme);
 		}
 	});
 </script>
