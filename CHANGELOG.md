@@ -1,5 +1,8 @@
 # Changelog
 
+## v2.4.2
+- Added full width toggle
+
 ## v2.4.1
 - Added Mermaid diagram support
 - Security fixes

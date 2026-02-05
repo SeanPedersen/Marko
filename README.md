@@ -13,6 +13,7 @@ Download from [markpad.sftwr.dev](https://markpad.sftwr.dev)
 - Monaco editor (VS Code)
 - Split view
 - Syntax highlighting both in editor and code blocks
+- Mermaid diagram support
 - Image and YouTube embeds
 - Familiar GitHub styled markdown rendering
 - Tiny memory usage (~10MB)
