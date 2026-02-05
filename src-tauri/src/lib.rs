@@ -5,6 +5,8 @@ use std::path::Path;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri::menu::ContextMenu;
+use regex::{Regex, Captures};
+use std::borrow::Cow;
 
 
 struct WatcherState {
@@ -21,8 +23,36 @@ async fn show_window(window: tauri::Window) {
     window.show().unwrap();
 }
 
+fn process_obsidian_embeds(content: &str) -> Cow<'_, str> {
+    let re = Regex::new(r"!\[\[(.*?)\]\]").unwrap();
+    
+    re.replace_all(content, |caps: &Captures| {
+        let inner = &caps[1];
+        let mut parts = inner.split('|');
+        let path = parts.next().unwrap_or("");
+        let size = parts.next();
+        
+        let path_escaped = path.replace(" ", "%20");
+        
+        if let Some(size_str) = size {
+            if size_str.contains('x') {
+                let mut dims = size_str.split('x');
+                let width = dims.next().unwrap_or("");
+                let height = dims.next().unwrap_or("");
+                format!("<img src=\"{}\" width=\"{}\" height=\"{}\" alt=\"{}\" />", path_escaped, width, height, path)
+            } else {
+                format!("<img src=\"{}\" width=\"{}\" alt=\"{}\" />", path_escaped, size_str, path)
+            }
+        } else {
+             format!("<img src=\"{}\" alt=\"{}\" />", path_escaped, path)
+        }
+    })
+}
+
 #[tauri::command]
 fn convert_markdown(content: &str) -> String {
+    let processed = process_obsidian_embeds(content);
+    
     let mut options = ComrakOptions {
         extension: ComrakExtensionOptions {
             strikethrough: true,
@@ -36,11 +66,11 @@ fn convert_markdown(content: &str) -> String {
         },
         ..ComrakOptions::default()
     };
-    options.render.unsafe_ = false;
+    options.render.unsafe_ = true;
     options.render.hardbreaks = true;
     options.render.sourcepos = true;
 
-    markdown_to_html(content, &options)
+    markdown_to_html(&processed, &options)
 }
 
 #[tauri::command]
