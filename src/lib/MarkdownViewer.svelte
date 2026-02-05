@@ -50,7 +50,11 @@
 	let isScrollSynced = $derived(tabManager.activeTab?.isScrollSynced ?? false);
 
 	let showHome = $state(false);
-	let isFullWidth = $state(false);
+	let isFullWidth = $state(localStorage.getItem('isFullWidth') === 'true');
+
+	$effect(() => {
+		localStorage.setItem('isFullWidth', String(isFullWidth));
+	});
 
 	// ui state
 	let tooltip = $state({ show: false, text: '', x: 0, y: 0 });
