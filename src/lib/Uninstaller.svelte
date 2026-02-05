@@ -121,6 +121,12 @@
 		filter: grayscale(0.5);
 	}
 
+	@media (prefers-color-scheme: dark) {
+		.app-icon {
+			filter: grayscale(0.5) invert(1);
+		}
+	}
+
 	h1 {
 		margin: 0;
 		font-size: 24px;

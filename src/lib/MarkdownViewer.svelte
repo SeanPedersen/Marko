@@ -56,6 +56,28 @@
 		localStorage.setItem('isFullWidth', String(isFullWidth));
 	});
 
+	// Theme State
+	let theme = $state<'system' | 'dark' | 'light'>('system');
+
+	onMount(() => {
+		const storedTheme = localStorage.getItem('theme') as 'system' | 'dark' | 'light' | null;
+		if (storedTheme) theme = storedTheme;
+	});
+
+	$effect(() => {
+		localStorage.setItem('theme', theme);
+
+		if (theme === 'system') {
+			delete document.documentElement.dataset.theme;
+		} else {
+			document.documentElement.dataset.theme = theme;
+		}
+
+		// Re-initialize mermaid or trigger update if needed
+		// Note: Mermaid 10+ usually doesn't support dynamic re-init easily but we can try re-rendering rich content
+		if (markdownBody && !isEditing) renderRichContent();
+	});
+
 	// ui state
 	let tooltip = $state({ show: false, text: '', x: 0, y: 0 });
 	let caretEl: HTMLElement;
@@ -249,9 +271,10 @@
 
 		if (!hljs || !renderMathInElement || !mermaid) return;
 
-		// Initialize Mermaid with theme based on system preference
-		const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-		mermaid.initialize({ startOnLoad: false, theme: isDarkMode ? 'dark' : 'neutral' });
+		// Initialize Mermaid with theme based on system preference or override
+		const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+		const effectiveTheme = theme === 'system' ? (isSystemDark ? 'dark' : 'neutral') : theme === 'dark' ? 'dark' : 'neutral';
+		mermaid.initialize({ startOnLoad: false, theme: effectiveTheme });
 
 		// Process code blocks
 		const codeBlocks = Array.from(markdownBody.querySelectorAll('pre code'));
@@ -1153,6 +1176,8 @@
 		onresetZoom={() => (zoomLevel = 100)}
 		{isFullWidth}
 		ontoggleFullWidth={() => (isFullWidth = !isFullWidth)}
+		{theme}
+		onSetTheme={(t) => (theme = t)}
 		oncloseTab={(id) => {
 			canCloseTab(id).then((can) => {
 				if (can) tabManager.closeTab(id);
@@ -1194,7 +1219,9 @@
 		{isScrollSynced}
 		ontoggleSync={() => tabManager.activeTabId && tabManager.toggleScrollSync(tabManager.activeTabId)}
 		{isFullWidth}
-		ontoggleFullWidth={() => (isFullWidth = !isFullWidth)} />
+		ontoggleFullWidth={() => (isFullWidth = !isFullWidth)}
+		{theme}
+		onSetTheme={(t) => (theme = t)} />
 
 	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
 		{#key tabManager.activeTabId}
@@ -1206,6 +1233,7 @@
 							<Editor
 								bind:value={tabManager.activeTab.rawContent}
 								language={editorLanguage}
+								{theme}
 								onsave={saveContent}
 								bind:zoomLevel
 								onnew={handleNewFile}

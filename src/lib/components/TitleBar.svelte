@@ -32,6 +32,8 @@
 		ontoggleSync,
 		isFullWidth,
 		ontoggleFullWidth,
+		theme = 'system',
+		onSetTheme,
 	} = $props<{
 		isFocused: boolean;
 		isScrolled: boolean;
@@ -59,6 +61,8 @@
 
 		isFullWidth?: boolean;
 		ontoggleFullWidth?: () => void;
+		theme?: 'system' | 'dark' | 'light';
+		onSetTheme?: (theme: 'system' | 'dark' | 'light') => void;
 	}>();
 
 	const appWindow = getCurrentWindow();
@@ -121,6 +125,7 @@
 	let visibleActionIds = $derived.by(() => {
 		const list: string[] = [];
 		if (zoomLevel && zoomLevel !== 100) list.push('zoom');
+		list.push('theme');
 
 		if (currentFile && !showHome) {
 			list.push('open_loc');
@@ -144,6 +149,25 @@
 		}
 		return list;
 	});
+
+	let themeMenuOpen = $state(false);
+
+	function handleSetTheme(t: 'system' | 'dark' | 'light') {
+		if (onSetTheme) onSetTheme(t);
+		themeMenuOpen = false;
+	}
+
+	$effect(() => {
+		const handleGlobalClick = () => {
+			themeMenuOpen = false;
+		};
+		if (themeMenuOpen) {
+			window.addEventListener('click', handleGlobalClick);
+		}
+		return () => {
+			window.removeEventListener('click', handleGlobalClick);
+		};
+	});
 </script>
 
 <div class="custom-title-bar {isScrolled ? 'scrolled' : ''} {!isMac ? 'windows' : ''}">
@@ -166,7 +190,11 @@
 			</div>
 		{/if}
 		<button class="icon-home-btn {showHome ? 'active' : ''}" onclick={ontoggleHome} aria-label="Home" onmouseenter={(e) => showTooltip(e, 'Home')} onmouseleave={hideTooltip}>
-			<img src={iconUrl} alt="icon" class="window-icon" />
+			<img
+				src={iconUrl}
+				alt="icon"
+				class="window-icon"
+				style:filter={theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'none' : 'invert(0.7)'} />
 		</button>
 	</div>
 
@@ -277,6 +305,47 @@
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
 							><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
 					</button>
+				{:else if id === 'theme'}
+					<div class="theme-dropdown-container">
+						<button
+							class="title-action-btn {themeMenuOpen ? 'active' : ''}"
+							onclick={(e) => {
+								e.stopPropagation();
+								themeMenuOpen = !themeMenuOpen;
+							}}
+							aria-label="Change Theme"
+							onmouseenter={(e) => showTooltip(e, 'Change Theme')}
+							onmouseleave={hideTooltip}
+							transition:fly={{ x: 10, duration: 200 }}>
+							{#if theme === 'light'}
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+									><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line
+										x1="4.22"
+										y1="4.22"
+										x2="5.64"
+										y2="5.64"></line
+									><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line
+										x1="4.22"
+										y1="19.78"
+										x2="5.64"
+										y2="18.36"></line
+									><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+							{:else if theme === 'dark'}
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+									><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+							{:else}
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+									><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+							{/if}
+						</button>
+						{#if themeMenuOpen}
+							<div class="theme-menu" transition:fly={{ y: 5, duration: 150 }} onclick={(e) => e.stopPropagation()}>
+								<button class="theme-option {theme === 'system' ? 'selected' : ''}" onclick={() => handleSetTheme('system')}> Follow System </button>
+								<button class="theme-option {theme === 'light' ? 'selected' : ''}" onclick={() => handleSetTheme('light')}> Light </button>
+								<button class="theme-option {theme === 'dark' ? 'selected' : ''}" onclick={() => handleSetTheme('dark')}> Dark </button>
+							</div>
+						{/if}
+					</div>
 				{/if}
 			</div>
 		{/each}
@@ -629,5 +698,46 @@
 		color: var(--color-fg-muted);
 		font-size: 10px;
 		font-family: inherit;
+	}
+
+	.theme-dropdown-container {
+		position: relative;
+	}
+
+	.theme-menu {
+		position: absolute;
+		top: 100%;
+		right: 0;
+		margin-top: 4px;
+		background-color: var(--color-canvas-default);
+		border: 1px solid var(--color-border-default);
+		border-radius: 6px;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+		padding: 4px;
+		display: flex;
+		flex-direction: column;
+		width: 120px;
+		z-index: 10005;
+	}
+
+	.theme-option {
+		background: transparent;
+		border: none;
+		text-align: left;
+		padding: 6px 12px;
+		font-size: 12px;
+		color: var(--color-fg-default);
+		cursor: pointer;
+		border-radius: 4px;
+		font-family: var(--win-font);
+	}
+
+	.theme-option:hover {
+		background-color: var(--color-canvas-subtle);
+	}
+
+	.theme-option.selected {
+		color: var(--color-accent-fg);
+		font-weight: 600;
 	}
 </style>

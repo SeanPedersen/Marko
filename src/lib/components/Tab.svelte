@@ -89,14 +89,8 @@
 	}
 
 	.tab.active {
-		background-color: var(--tab-active-bg, #dee1e6);
+		background-color: var(--tab-active-bg);
 		color: var(--color-fg-default);
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.tab.active {
-			--tab-active-bg: #2d2e30;
-		}
 	}
 
 	.tab-content-btn {
