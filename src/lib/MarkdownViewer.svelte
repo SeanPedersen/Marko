@@ -50,6 +50,11 @@
 	let isScrollSynced = $derived(tabManager.activeTab?.isScrollSynced ?? false);
 
 	let showHome = $state(false);
+	let isFullWidth = $state(localStorage.getItem('isFullWidth') === 'true');
+
+	$effect(() => {
+		localStorage.setItem('isFullWidth', String(isFullWidth));
+	});
 
 	// ui state
 	let tooltip = $state({ show: false, text: '', x: 0, y: 0 });
@@ -269,7 +274,7 @@
 					// Allow foreignObject for Mermaid text rendering
 					container.innerHTML = DOMPurify.sanitize(svg, {
 						ADD_TAGS: ['foreignObject'],
-						ADD_ATTR: ['dominant-baseline', 'text-anchor']
+						ADD_ATTR: ['dominant-baseline', 'text-anchor'],
 					});
 					preEl.replaceWith(container);
 				} catch (error) {
@@ -1146,6 +1151,8 @@
 		ondetach={handleDetach}
 		ontabclick={() => (showHome = false)}
 		onresetZoom={() => (zoomLevel = 100)}
+		{isFullWidth}
+		ontoggleFullWidth={() => (isFullWidth = !isFullWidth)}
 		oncloseTab={(id) => {
 			canCloseTab(id).then((can) => {
 				if (can) tabManager.closeTab(id);
@@ -1185,7 +1192,9 @@
 			});
 		}}
 		{isScrollSynced}
-		ontoggleSync={() => tabManager.activeTabId && tabManager.toggleScrollSync(tabManager.activeTabId)} />
+		ontoggleSync={() => tabManager.activeTabId && tabManager.toggleScrollSync(tabManager.activeTabId)}
+		{isFullWidth}
+		ontoggleFullWidth={() => (isFullWidth = !isFullWidth)} />
 
 	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
 		{#key tabManager.activeTabId}
@@ -1221,7 +1230,8 @@
 
 					<!-- Viewer Pane -->
 					<div class="pane viewer-pane" class:active={!isEditing || isSplit} style="flex: {isSplit ? 1 - tabManager.activeTab.splitRatio : !isEditing ? 1 : 0}">
-						<article bind:this={markdownBody} contenteditable="false" class="markdown-body" bind:innerHTML={htmlContent} onscroll={handleScroll}></article>
+						<article bind:this={markdownBody} contenteditable="false" class="markdown-body {isFullWidth ? 'full-width' : ''}" bind:innerHTML={htmlContent} onscroll={handleScroll}>
+						</article>
 					</div>
 				</div>
 			</div>
@@ -1291,7 +1301,12 @@
 		padding: 50px clamp(calc(calc(50% - 390px)), 5vw, 50px);
 		height: 100%;
 		overflow-y: auto;
-		transform: translate3d(0, 0, 0); /* Create stacking context */
+		transform: translate3d(0, 0, 0);
+	}
+
+	.markdown-body.full-width {
+		padding: 50px;
+		max-width: 100%;
 	}
 
 	.caret-indicator {

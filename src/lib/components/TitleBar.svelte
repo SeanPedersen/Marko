@@ -30,6 +30,8 @@
 		oncloseTab,
 		isScrollSynced,
 		ontoggleSync,
+		isFullWidth,
+		ontoggleFullWidth,
 	} = $props<{
 		isFocused: boolean;
 		isScrolled: boolean;
@@ -54,6 +56,9 @@
 		oncloseTab?: (id: string) => void;
 		isScrollSynced?: boolean;
 		ontoggleSync?: () => void;
+
+		isFullWidth?: boolean;
+		ontoggleFullWidth?: () => void;
 	}>();
 
 	const appWindow = getCurrentWindow();
@@ -126,8 +131,11 @@
 				list.push('split');
 				if (tabManager.activeTab?.isSplit) {
 					list.push('sync');
-				} else if (!isEditing) {
-					list.push('live');
+				} else {
+					list.push('fullWidth');
+					if (!isEditing) {
+						list.push('live');
+					}
 				}
 				if (!tabManager.activeTab?.isSplit) {
 					list.push('edit');
@@ -234,6 +242,18 @@
 						transition:fly={{ x: 10, duration: 200 }}>
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
 							><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+					</button>
+				{:else if id === 'fullWidth'}
+					<button
+						class="title-action-btn {isFullWidth ? 'active' : ''}"
+						onclick={() => ontoggleFullWidth?.()}
+						aria-label="Toggle Full Width"
+						onmouseenter={(e) => showTooltip(e, 'Toggle full width')}
+						onmouseleave={hideTooltip}
+						transition:fly={{ x: 10, duration: 200 }}>
+						<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"
+							><path
+								d="M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm640-560H160v480h640v-480Zm-640 0v480-480Zm200 360v-240L240-480l120 120Zm360-120L600-600v240l120-120Z" /></svg>
 					</button>
 				{:else if id === 'live'}
 					<button
