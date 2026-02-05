@@ -48,8 +48,14 @@
 	}>();
 
 	let container: HTMLDivElement;
-	let vimStatusNode: HTMLDivElement;
+	let vimStatusNode = $state<HTMLDivElement>();
 	let editor: monaco.editor.IStandaloneCodeEditor;
+
+	let cursorPosition = $state<monaco.Position | null>(null);
+	let selectionCount = $state(0);
+	let cursorCount = $state(0);
+	let wordCount = $state(0);
+	let currentLanguage = $state('markdown');
 	const currentTabId = tabManager.activeTabId;
 
 	self.MonacoEnvironment = {
@@ -165,6 +171,22 @@
 			},
 		});
 
+		editor.addAction({
+			id: 'toggle-status-bar',
+			label: 'Toggle Status Bar',
+			run: () => {
+				settings.toggleStatusBar();
+			},
+		});
+
+		editor.addAction({
+			id: 'toggle-word-count',
+			label: 'Toggle Word Count',
+			run: () => {
+				settings.toggleWordCount();
+			},
+		});
+
 		const updateTheme = () => {
 			monaco.editor.setTheme(getTheme());
 		};
@@ -182,7 +204,39 @@
 					tabManager.updateTabRawContent(tabManager.activeTabId, newValue);
 				}
 			}
+
+			// Update word count
+			const model = editor.getModel();
+			if (model) {
+				const text = model.getValue();
+				wordCount = (text.match(/\S+/g) || []).filter((w) => /\w/.test(w)).length;
+			}
 		});
+
+		editor.onDidChangeCursorPosition((e) => {
+			cursorPosition = e.position;
+		});
+
+		editor.onDidChangeCursorSelection((e) => {
+			const selections = editor.getSelections() || [];
+			cursorCount = selections.length;
+			const model = editor.getModel();
+
+			if (model && selections.length > 0) {
+				selectionCount = selections.reduce((acc: number, selection: monaco.Selection) => {
+					return acc + model.getValueInRange(selection).length;
+				}, 0);
+			} else {
+				selectionCount = 0;
+			}
+		});
+
+		// Initialize values
+		if (editor.getModel()) {
+			currentLanguage = editor.getModel()?.getLanguageId() || 'markdown';
+			const text = editor.getModel()?.getValue() || '';
+			wordCount = (text.match(/\S+/g) || []).filter((w) => /\w/.test(w)).length;
+		}
 
 		editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
 			if (onsave) onsave();
@@ -474,8 +528,39 @@
 </script>
 
 <div class="editor-container" bind:this={container}></div>
+
 {#if settings.vimMode}
 	<div class="vim-status-bar" bind:this={vimStatusNode}></div>
+{/if}
+
+{#if settings.statusBar}
+	<div class="status-bar">
+		<div class="status-item">
+			Ln {cursorPosition?.lineNumber ?? 1}, Col {cursorPosition?.column ?? 1}
+		</div>
+		{#if selectionCount > 0}
+			<div class="status-item">
+				{selectionCount} selected
+			</div>
+		{:else if cursorCount > 1}
+			<div class="status-item">
+				{cursorCount} selections
+			</div>
+		{/if}
+		{#if settings.wordCount}
+			<div class="status-item">
+				{wordCount} words
+			</div>
+		{/if}
+		<div class="status-item">
+			{zoomLevel}%
+		</div>
+		<div class="status-item">
+			{currentLanguage}
+		</div>
+		<div class="status-item">CRLF</div>
+		<div class="status-item">UTF-8</div>
+	</div>
 {/if}
 
 <style>
@@ -490,10 +575,29 @@
 		font-family: monospace;
 		font-size: 12px;
 		background: var(--bg-tertiary);
-		border-top: 1px solid var(--border-primary);
+		border-top: 1px solid var(--color-border-muted);
 		color: var(--text-primary);
 		display: flex;
 		align-items: center;
 		min-height: 20px;
+	}
+
+	.status-bar {
+		padding: 0 10px;
+		font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+		font-size: 12px;
+		background: var(--bg-tertiary);
+		border-top: 1px solid var(--color-border-muted);
+		color: var(--text-primary);
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		min-height: 22px;
+		gap: 20px;
+		user-select: none;
+	}
+
+	.status-item {
+		opacity: 0.8;
 	}
 </style>
