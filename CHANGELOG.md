@@ -6,6 +6,7 @@
 - Fixed titlebar icon color
 - Added togglable status bar
 - Added optional word count in status bar
+- Added Obsidian `![[]]` embed support
 
 ### Released
 
