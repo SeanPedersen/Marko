@@ -116,6 +116,7 @@
 			scrollBeyondLastLine: false,
 			wordWrap: settings.wordWrap as 'on' | 'off' | 'wordWrapColumn' | 'bounded',
 			lineNumbers: settings.lineNumbers as 'on' | 'off' | 'relative' | 'interval',
+			renderLineHighlight: settings.renderLineHighlight ? 'line' : 'none',
 		});
 
 		if (tabManager.activeTab?.editorViewState) {
@@ -184,6 +185,32 @@
 			label: 'Toggle Word Count',
 			run: () => {
 				settings.toggleWordCount();
+			},
+		});
+
+		editor.addAction({
+			id: 'toggle-line-highlight',
+			label: 'Toggle Line Highlight',
+			run: () => {
+				settings.toggleLineHighlight();
+			},
+		});
+
+		editor.addAction({
+			id: 'toggle-tabs',
+			label: 'Toggle Tabs',
+			keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyB],
+			run: () => {
+				settings.toggleTabs();
+			},
+		});
+
+		editor.addAction({
+			id: 'toggle-zen-mode',
+			label: 'Toggle Zen Mode',
+			keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyZ],
+			run: () => {
+				settings.toggleZenMode();
 			},
 		});
 
@@ -498,6 +525,7 @@
 				minimap: { enabled: settings.minimap },
 				wordWrap: settings.wordWrap as 'on' | 'off' | 'wordWrapColumn' | 'bounded',
 				lineNumbers: settings.lineNumbers as 'on' | 'off' | 'relative' | 'interval',
+				renderLineHighlight: settings.renderLineHighlight as 'line' | 'none',
 				fontSize: 14 * (zoomLevel / 100),
 			});
 		}

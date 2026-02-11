@@ -6,6 +6,7 @@
 	import iconUrl from '../../assets/icon.png';
 	import TabList from './TabList.svelte';
 	import { tabManager } from '../stores/tabs.svelte.js';
+	import { settings } from '../stores/settings.svelte.js';
 
 	let {
 		isFocused,
@@ -198,7 +199,7 @@
 		</button>
 	</div>
 
-	{#if tabManager.tabs.length > 0}
+	{#if tabManager.tabs.length > 0 && settings.showTabs}
 		<div class="tab-area">
 			<TabList onnewTab={() => tabManager.addNewTab()} {ondetach} {showHome} {ontabclick} {oncloseTab} />
 		</div>
