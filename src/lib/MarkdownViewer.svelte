@@ -263,6 +263,13 @@
 			if (filePath) saveRecentFile(filePath);
 		} catch (error) {
 			console.error('Error loading file:', error);
+			const errStr = String(error);
+			if (errStr.includes('The system cannot find the file specified') || errStr.includes('No such file or directory')) {
+				deleteRecentFile(filePath);
+				if (tabManager.activeTab && tabManager.activeTab.path === filePath) {
+					tabManager.closeTab(tabManager.activeTab.id);
+				}
+			}
 		}
 	}
 
