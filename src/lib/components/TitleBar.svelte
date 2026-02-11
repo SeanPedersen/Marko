@@ -288,12 +288,14 @@
 					<button
 						class="title-action-btn {liveMode ? 'active' : ''}"
 						onclick={ontoggleLiveMode}
-						aria-label="Toggle Live Mode "
-						onmouseenter={(e) => showTooltip(e, 'Watcher mode')}
+						aria-label="Toggle Auto-Reload"
+						onmouseenter={(e) => showTooltip(e, 'Auto-Reload')}
 						onmouseleave={hideTooltip}
 						transition:fly={{ x: 10, duration: 200 }}>
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z" /><circle cx="12" cy="12" r="3" /></svg>
+							><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path
+								d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path
+							></svg>
 					</button>
 				{:else if id === 'edit'}
 					<button

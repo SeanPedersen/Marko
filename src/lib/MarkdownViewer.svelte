@@ -263,6 +263,13 @@
 			if (filePath) saveRecentFile(filePath);
 		} catch (error) {
 			console.error('Error loading file:', error);
+			const errStr = String(error);
+			if (errStr.includes('The system cannot find the file specified') || errStr.includes('No such file or directory')) {
+				deleteRecentFile(filePath);
+				if (tabManager.activeTab && tabManager.activeTab.path === filePath) {
+					tabManager.closeTab(tabManager.activeTab.id);
+				}
+			}
 		}
 	}
 
@@ -400,6 +407,14 @@
 		}
 	});
 
+	$effect(() => {
+		if (markdownBody && !isEditing && tabManager.activeTabId) {
+			tick().then(() => {
+				markdownBody?.focus({ preventScroll: true });
+			});
+		}
+	});
+
 	function scrollToLine(line: number, ratio: number = 0) {
 		if (!markdownBody) return;
 
@@ -516,10 +531,14 @@
 		}
 	}
 
-	function removeRecentFile(path: string, event: MouseEvent) {
-		event.stopPropagation();
+	function deleteRecentFile(path: string) {
 		recentFiles = recentFiles.filter((f) => f !== path);
 		localStorage.setItem('recent-files', JSON.stringify(recentFiles));
+	}
+
+	function removeRecentFile(path: string, event: MouseEvent) {
+		event.stopPropagation();
+		deleteRecentFile(path);
 		if (currentFile === path) tabManager.closeTab(tabManager.activeTabId!);
 	}
 
@@ -1258,7 +1277,14 @@
 
 					<!-- Viewer Pane -->
 					<div class="pane viewer-pane" class:active={!isEditing || isSplit} style="flex: {isSplit ? 1 - tabManager.activeTab.splitRatio : !isEditing ? 1 : 0}">
-						<article bind:this={markdownBody} contenteditable="false" class="markdown-body {isFullWidth ? 'full-width' : ''}" bind:innerHTML={htmlContent} onscroll={handleScroll}>
+						<article
+							bind:this={markdownBody}
+							contenteditable="false"
+							class="markdown-body {isFullWidth ? 'full-width' : ''}"
+							bind:innerHTML={htmlContent}
+							onscroll={handleScroll}
+							tabindex="-1"
+							style="outline: none;">
 						</article>
 					</div>
 				</div>
