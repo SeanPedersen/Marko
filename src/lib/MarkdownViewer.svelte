@@ -6,7 +6,7 @@
 	import Installer from './Installer.svelte';
 	import Uninstaller from './Uninstaller.svelte';
 	import TitleBar from './components/TitleBar.svelte';
-	import MilkdownEditor from './components/MilkdownEditor.svelte';
+	import CodeMirrorEditor from './components/CodeMirrorEditor.svelte';
 	import TableOfContents from './components/TableOfContents.svelte';
 	import Modal from './components/Modal.svelte';
 
@@ -463,11 +463,19 @@
 		};
 	});
 
-	// Handle Milkdown content changes
-	function handleMilkdownChange(newContent: string) {
+	// Handle CodeMirror content changes
+	function handleEditorChange(newContent: string) {
 		if (tabManager.activeTabId) {
 			tabManager.updateTabRawContent(tabManager.activeTabId, newContent);
 		}
+	}
+
+	// Reference to the editor for TOC scrolling
+	let editorRef = $state<CodeMirrorEditor | null>(null);
+
+	// Handle TOC scroll request
+	function handleTocScroll(event: CustomEvent<{ lineNumber: number }>) {
+		editorRef?.scrollToLine(event.detail.lineNumber);
 	}
 </script>
 
@@ -529,6 +537,7 @@
 			rawContent={tabManager.activeTab?.rawContent ?? ''}
 			visible={tocVisible}
 			ontoggle={toggleToc}
+			onscrollto={handleTocScroll}
 		/>
 		<div
 			class="markdown-container"
@@ -536,12 +545,13 @@
 			style="zoom: {zoomLevel / 100}"
 			role="presentation"
 		>
-			<MilkdownEditor
+			<CodeMirrorEditor
+				bind:this={editorRef}
 				value={tabManager.activeTab?.rawContent ?? ''}
 				{theme}
 				{zoomLevel}
 				readonly={false}
-				onchange={handleMilkdownChange}
+				onchange={handleEditorChange}
 			/>
 		</div>
 	{:else}

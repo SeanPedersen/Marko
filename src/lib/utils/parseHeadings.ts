@@ -2,6 +2,7 @@ export interface Heading {
 	level: number;
 	text: string;
 	id: string;
+	lineNumber: number;
 }
 
 const HEADING_REGEX = /^(#{1,6})\s+(.+)$/;
@@ -20,8 +21,10 @@ export function parseHeadings(markdown: string): Heading[] {
 
 	const headings: Heading[] = [];
 	const slugCounts = new Map<string, number>();
+	const lines = markdown.split('\n');
 
-	for (const line of markdown.split('\n')) {
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
 		const match = line.trim().match(HEADING_REGEX);
 		if (!match) continue;
 
@@ -34,7 +37,8 @@ export function parseHeadings(markdown: string): Heading[] {
 		slugCounts.set(id, count + 1);
 		if (count > 0) id = `${id}-${count}`;
 
-		headings.push({ level, text, id });
+		// Line numbers are 1-indexed for CodeMirror
+		headings.push({ level, text, id, lineNumber: i + 1 });
 	}
 
 	return headings;

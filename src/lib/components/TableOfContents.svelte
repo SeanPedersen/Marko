@@ -1,19 +1,20 @@
 <script lang="ts">
 	import { parseHeadings, type Heading } from '../utils/parseHeadings.js';
+	import { createEventDispatcher } from 'svelte';
 
 	let {
 		rawContent = '',
 		visible = true,
 		ontoggle,
+		onscrollto,
 	} = $props<{
 		rawContent: string;
 		visible?: boolean;
 		ontoggle?: () => void;
+		onscrollto?: (event: CustomEvent<{ lineNumber: number }>) => void;
 	}>();
 
 	let activeHeadingIndex = $state(-1);
-	let observer: IntersectionObserver | null = null;
-	let headingElements: HTMLElement[] = [];
 
 	let headings = $derived(parseHeadings(rawContent));
 	let hasHeadings = $derived(headings.length > 0);
@@ -23,98 +24,19 @@
 	);
 
 	function scrollToHeading(heading: Heading, index: number) {
-		const editorContainer = document.querySelector('.milkdown-container');
-		if (!editorContainer) return;
+		activeHeadingIndex = index;
 
-		const allHeadings = editorContainer.querySelectorAll('h1, h2, h3, h4, h5, h6');
-		const target = findMatchingElement(allHeadings, heading, index);
-
-		if (target) {
-			target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-			activeHeadingIndex = index;
+		// Dispatch event with line number for CodeMirror to handle scrolling
+		if (onscrollto) {
+			onscrollto(new CustomEvent('scrollto', {
+				detail: { lineNumber: heading.lineNumber }
+			}));
 		}
 	}
 
-	function findMatchingElement(
-		elements: NodeListOf<Element>,
-		heading: Heading,
-		tocIndex: number
-	): Element | null {
-		const tagName = `H${heading.level}`;
-		let matchCount = 0;
-
-		// Count how many headings of the same level+text appear before this index
-		let targetOccurrence = 0;
-		for (let i = 0; i < tocIndex; i++) {
-			if (headings[i].level === heading.level && headings[i].text === heading.text) {
-				targetOccurrence++;
-			}
-		}
-
-		for (const el of elements) {
-			if (el.tagName !== tagName) continue;
-			const text = el.textContent?.trim() ?? '';
-			if (text === heading.text) {
-				if (matchCount === targetOccurrence) return el;
-				matchCount++;
-			}
-		}
-
-		return null;
-	}
-
-	function setupObserver() {
-		cleanupObserver();
-
-		const editorContainer = document.querySelector('.milkdown-container');
-		if (!editorContainer) return;
-
-		headingElements = Array.from(
-			editorContainer.querySelectorAll('h1, h2, h3, h4, h5, h6')
-		) as HTMLElement[];
-
-		if (headingElements.length === 0) return;
-
-		observer = new IntersectionObserver(
-			(entries) => {
-				for (const entry of entries) {
-					if (!entry.isIntersecting) continue;
-					const idx = headingElements.indexOf(entry.target as HTMLElement);
-					if (idx !== -1 && idx < headings.length) {
-						activeHeadingIndex = idx;
-					}
-				}
-			},
-			{
-				root: editorContainer,
-				rootMargin: '-10% 0px -80% 0px',
-				threshold: 0,
-			}
-		);
-
-		for (const el of headingElements) {
-			observer.observe(el);
-		}
-	}
-
-	function cleanupObserver() {
-		if (observer) {
-			observer.disconnect();
-			observer = null;
-		}
-		headingElements = [];
-	}
-
-	$effect(() => {
-		// Re-setup observer when headings change
-		const _ = headings;
-		// Small delay to let Milkdown render
-		const timer = setTimeout(setupObserver, 300);
-		return () => {
-			clearTimeout(timer);
-			cleanupObserver();
-		};
-	});
+	// Update active heading based on scroll position
+	// Since CodeMirror handles scrolling, we track based on user clicks
+	// A more sophisticated approach would involve the editor reporting visible headings
 </script>
 
 {#if hasHeadings}
