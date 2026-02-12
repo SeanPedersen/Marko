@@ -280,6 +280,8 @@
 							{/if}
 						</button>
 						{#if themeMenuOpen}
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<!-- svelte-ignore a11y_click_events_have_key_events -->
 							<div class="theme-menu" transition:fly={{ y: 5, duration: 150 }} onclick={(e) => e.stopPropagation()}>
 								<button class="theme-option {theme === 'system' ? 'selected' : ''}" onclick={() => handleSetTheme('system')}> Follow System </button>
 								<button class="theme-option {theme === 'light' ? 'selected' : ''}" onclick={() => handleSetTheme('light')}> Light </button>

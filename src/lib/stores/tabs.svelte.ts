@@ -12,6 +12,8 @@ export interface Tab {
 	historyIndex: number;
 	scrollPercentage: number;
 	anchorLine: number;
+	editorViewState?: unknown;
+	isSplit?: boolean;
 }
 
 class TabManager {
@@ -40,6 +42,8 @@ class TabManager {
 			historyIndex: 0,
 			scrollPercentage: 0,
 			anchorLine: 0,
+			editorViewState: null,
+			isSplit: false,
 		});
 
 		this.activeTabId = id;
@@ -63,6 +67,8 @@ class TabManager {
 			historyIndex: 0,
 			scrollPercentage: 0,
 			anchorLine: 0,
+			editorViewState: null,
+			isSplit: false,
 		});
 
 		this.activeTabId = id;
@@ -91,6 +97,8 @@ class TabManager {
 			historyIndex: 0,
 			scrollPercentage: 0,
 			anchorLine: 0,
+			editorViewState: null,
+			isSplit: false,
 		});
 
 		this.activeTabId = id;
@@ -167,7 +175,19 @@ class TabManager {
 		}
 	}
 
+	updateTabEditorState(id: string, state: unknown) {
+		const tab = this.tabs.find((t) => t.id === id);
+		if (tab) {
+			tab.editorViewState = state;
+		}
+	}
 
+	toggleSplit(id: string) {
+		const tab = this.tabs.find((t) => t.id === id);
+		if (tab) {
+			tab.isSplit = !tab.isSplit;
+		}
+	}
 
 	reorderTabs(fromIndex: number, toIndex: number) {
 		if (fromIndex === toIndex) return;
