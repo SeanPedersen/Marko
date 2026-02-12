@@ -8,6 +8,7 @@
 	import TitleBar from './components/TitleBar.svelte';
 	import CodeMirrorEditor from './components/CodeMirrorEditor.svelte';
 	import TableOfContents from './components/TableOfContents.svelte';
+	import FolderExplorer from './components/FolderExplorer.svelte';
 	import Modal from './components/Modal.svelte';
 
 	import HomePage from './components/HomePage.svelte';
@@ -16,6 +17,7 @@
 	let mode = $state<'loading' | 'app' | 'installer' | 'uninstall'>('loading');
 
 	let recentFiles = $state<string[]>([]);
+	let recentFolders = $state<string[]>([]);
 	let isFocused = $state(true);
 
 	// derived from tab manager
@@ -27,6 +29,8 @@
 	let showHome = $state(false);
 	let isDragging = $state(false);
 	let tocVisible = $state(localStorage.getItem('toc-visible') !== 'false');
+	let folderExplorerVisible = $state(localStorage.getItem('folder-explorer-visible') === 'true');
+	let currentFolder = $state(localStorage.getItem('current-folder') || '');
 
 	// Theme State
 	let theme = $state<'system' | 'dark' | 'light'>('system');
@@ -175,6 +179,53 @@
 		if (currentFile === path) tabManager.closeTab(tabManager.activeTabId!);
 	}
 
+	function saveRecentFolder(path: string) {
+		let folders = [...recentFolders].filter((f) => f !== path);
+		folders.unshift(path);
+		recentFolders = folders.slice(0, 6);
+		localStorage.setItem('recent-folders', JSON.stringify(recentFolders));
+	}
+
+	function loadRecentFolders() {
+		const stored = localStorage.getItem('recent-folders');
+		if (stored) {
+			try {
+				recentFolders = JSON.parse(stored);
+			} catch (e) {
+				console.error('Error parsing recent folders:', e);
+			}
+		}
+	}
+
+	function deleteRecentFolder(path: string) {
+		recentFolders = recentFolders.filter((f) => f !== path);
+		localStorage.setItem('recent-folders', JSON.stringify(recentFolders));
+	}
+
+	function removeRecentFolder(path: string, event: MouseEvent) {
+		event.stopPropagation();
+		deleteRecentFolder(path);
+		if (currentFolder === path) {
+			currentFolder = '';
+			localStorage.setItem('current-folder', '');
+			folderExplorerVisible = false;
+			localStorage.setItem('folder-explorer-visible', 'false');
+		}
+	}
+
+	function openFolder(path: string) {
+		currentFolder = path;
+		localStorage.setItem('current-folder', path);
+		folderExplorerVisible = true;
+		localStorage.setItem('folder-explorer-visible', 'true');
+		saveRecentFolder(path);
+		// Hide ToC when opening folder explorer
+		if (tocVisible) {
+			tocVisible = false;
+			localStorage.setItem('toc-visible', 'false');
+		}
+	}
+
 	async function canCloseTab(tabId: string): Promise<boolean> {
 		const tab = tabManager.tabs.find((t) => t.id === tabId);
 		if (!tab || (!tab.isDirty && tab.path !== '')) return true;
@@ -234,6 +285,31 @@
 	function toggleToc() {
 		tocVisible = !tocVisible;
 		localStorage.setItem('toc-visible', String(tocVisible));
+		// Hide folder explorer when showing ToC (mutually exclusive)
+		if (tocVisible && folderExplorerVisible) {
+			folderExplorerVisible = false;
+			localStorage.setItem('folder-explorer-visible', 'false');
+		}
+	}
+
+	function toggleFolderExplorer() {
+		folderExplorerVisible = !folderExplorerVisible;
+		localStorage.setItem('folder-explorer-visible', String(folderExplorerVisible));
+		// Hide ToC when showing folder explorer (mutually exclusive)
+		if (folderExplorerVisible && tocVisible) {
+			tocVisible = false;
+			localStorage.setItem('toc-visible', 'false');
+		}
+	}
+
+	async function selectFolder() {
+		const selected = await open({
+			multiple: false,
+			directory: true,
+		});
+		if (selected && typeof selected === 'string') {
+			openFolder(selected);
+		}
 	}
 
 	function handleNewFile() {
@@ -437,6 +513,7 @@
 
 	onMount(() => {
 		loadRecentFiles();
+		loadRecentFolders();
 
 		let unlisteners: (() => void)[] = [];
 
@@ -533,17 +610,25 @@
 			onSetTheme={(t) => (theme = t)}
 			{tocVisible}
 			ontoggleToc={toggleToc}
-			showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== ''} />
+			showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== ''}
+			{folderExplorerVisible}
+			ontoggleFolderExplorer={toggleFolderExplorer}
+			showFolderExplorerButton={!!currentFolder} />
 
 	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
 		<TableOfContents
 			rawContent={tabManager.activeTab?.rawContent ?? ''}
-			visible={tocVisible}
+			visible={tocVisible && !folderExplorerVisible}
 			onscrollto={handleTocScroll}
+		/>
+		<FolderExplorer
+			folderPath={currentFolder}
+			visible={folderExplorerVisible && !tocVisible}
+			onopenfile={loadMarkdown}
 		/>
 		<div
 			class="markdown-container"
-			class:toc-open={tocVisible}
+			class:toc-open={tocVisible || folderExplorerVisible}
 			style="zoom: {zoomLevel / 100}"
 			role="presentation"
 		>
@@ -557,7 +642,14 @@
 			/>
 		</div>
 	{:else}
-		<HomePage {recentFiles} onselectFile={selectFile} onloadFile={loadMarkdown} onremoveRecentFile={removeRecentFile} onnewFile={handleNewFile} />
+		<FolderExplorer
+			folderPath={currentFolder}
+			visible={folderExplorerVisible && !!currentFolder}
+			onopenfile={loadMarkdown}
+		/>
+		<div class="home-container" class:sidebar-open={folderExplorerVisible && !!currentFolder}>
+			<HomePage {recentFiles} {recentFolders} onselectFile={selectFile} onselectFolder={selectFolder} onloadFile={loadMarkdown} onopenFolder={openFolder} onremoveRecentFile={removeRecentFile} onremoveRecentFolder={removeRecentFolder} onnewFile={handleNewFile} />
+		</div>
 	{/if}
 
 	{#if tooltip.show}
@@ -634,6 +726,14 @@
 
 	.markdown-container.toc-open {
 		left: 220px;
+	}
+
+	.home-container {
+		transition: margin-left 0.15s ease-out;
+	}
+
+	.home-container.sidebar-open {
+		margin-left: 220px;
 	}
 
 	.tooltip {

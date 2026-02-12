@@ -1,5 +1,6 @@
 use comrak::{markdown_to_html, ComrakExtensionOptions, ComrakOptions};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+use serde::Serialize;
 use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
@@ -102,6 +103,52 @@ fn open_file_folder(path: String) -> Result<(), String> {
 #[tauri::command]
 fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
     fs::rename(old_path, new_path).map_err(|e| e.to_string())
+}
+
+#[derive(Serialize)]
+struct DirEntry {
+    name: String,
+    path: String,
+    is_dir: bool,
+}
+
+#[tauri::command]
+fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
+    let dir_path = Path::new(&path);
+    if !dir_path.is_dir() {
+        return Err("Path is not a directory".to_string());
+    }
+
+    let mut entries: Vec<DirEntry> = fs::read_dir(dir_path)
+        .map_err(|e| e.to_string())?
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+
+            // Skip hidden files/folders (starting with .)
+            if name.starts_with('.') {
+                return None;
+            }
+
+            Some(DirEntry {
+                name,
+                path: path.to_string_lossy().to_string(),
+                is_dir: path.is_dir(),
+            })
+        })
+        .collect();
+
+    // Sort: directories first, then files, both alphabetically
+    entries.sort_by(|a, b| {
+        match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        }
+    });
+
+    Ok(entries)
 }
 
 #[tauri::command]
@@ -481,6 +528,7 @@ pub fn run() {
             send_markdown_path,
             read_file_content,
             save_file_content,
+            read_directory,
 
             get_app_mode,
             setup::install_app,

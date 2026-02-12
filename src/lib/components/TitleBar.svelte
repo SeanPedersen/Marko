@@ -26,6 +26,9 @@
 		tocVisible = false,
 		ontoggleToc,
 		showTocButton = false,
+		folderExplorerVisible = false,
+		ontoggleFolderExplorer,
+		showFolderExplorerButton = false,
 	} = $props<{
 		isFocused: boolean;
 		isScrolled: boolean;
@@ -45,6 +48,9 @@
 		tocVisible?: boolean;
 		ontoggleToc?: () => void;
 		showTocButton?: boolean;
+		folderExplorerVisible?: boolean;
+		ontoggleFolderExplorer?: () => void;
+		showFolderExplorerButton?: boolean;
 	}>();
 
 	const appWindow = getCurrentWindow();
@@ -166,6 +172,19 @@
 				<polyline points="9 22 9 12 15 12 15 22"></polyline>
 			</svg>
 		</button>
+		{#if showFolderExplorerButton}
+			<button
+				class="icon-home-btn {folderExplorerVisible ? 'active' : ''}"
+				onclick={ontoggleFolderExplorer}
+				aria-label="Toggle File Explorer"
+				onmouseenter={(e) => showTooltip(e, folderExplorerVisible ? 'Hide Files' : 'Show Files')}
+				onmouseleave={hideTooltip}
+			>
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+				</svg>
+			</button>
+		{/if}
 		{#if showTocButton}
 			<button
 				class="icon-home-btn {tocVisible ? 'active' : ''}"
@@ -182,7 +201,7 @@
 	</div>
 
 	{#if tabManager.tabs.length > 0 && settings.showTabs}
-		<div class="tab-area" class:toc-offset={tocVisible && showTocButton}>
+		<div class="tab-area" class:toc-offset={(tocVisible && showTocButton) || (folderExplorerVisible && showFolderExplorerButton)}>
 			<TabList onnewTab={() => tabManager.addNewTab()} {ondetach} {showHome} {ontabclick} {oncloseTab} />
 		</div>
 	{:else}
