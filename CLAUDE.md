@@ -70,8 +70,6 @@ Theme colors defined in `MarkdownViewer.svelte`:
 ## Commands
 
 ```bash
-npm run dev          # Start dev server (port 1420 for Tauri)
 npm run build        # Production build
 npm run check        # TypeScript/Svelte type checking
-npm run tauri dev    # Run with Tauri
 ```
