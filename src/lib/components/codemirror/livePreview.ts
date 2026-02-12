@@ -45,6 +45,9 @@ class LinkWidget extends WidgetType {
     anchor.textContent = this.text;
     anchor.href = this.url;
     anchor.title = this.url;
+    anchor.style.color = '#0969da';
+    anchor.style.textDecoration = 'none';
+    anchor.style.cursor = 'pointer';
     anchor.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -52,6 +55,12 @@ class LinkWidget extends WidgetType {
       import('@tauri-apps/plugin-opener').then(({ openUrl }) => {
         openUrl(this.url).catch(console.error);
       });
+    });
+    anchor.addEventListener('mouseenter', () => {
+      anchor.style.textDecoration = 'underline';
+    });
+    anchor.addEventListener('mouseleave', () => {
+      anchor.style.textDecoration = 'none';
     });
     return anchor;
   }
@@ -162,6 +171,58 @@ interface ParsedElement {
 
 function getLineNumber(view: EditorView, pos: number): number {
   return view.state.doc.lineAt(pos).number;
+}
+
+// Function to detect plain URLs in text that aren't already parsed as links
+function findPlainUrls(view: EditorView, existingElements: ParsedElement[]): ParsedElement[] {
+  const elements: ParsedElement[] = [];
+  const doc = view.state.doc;
+  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`\[\]\)]+/g;
+
+  // Create a set of ranges that are already covered by existing elements (excluding list items)
+  const coveredRanges = new Set<string>();
+  for (const el of existingElements) {
+    // Don't consider list items as covering content for URL detection
+    if (el.type !== 'listItem') {
+      for (let i = el.from; i < el.to; i++) {
+        coveredRanges.add(`${el.line}-${i}`);
+      }
+    }
+  }
+
+  for (let lineNum = 1; lineNum <= doc.lines; lineNum++) {
+    const line = doc.line(lineNum);
+    const lineText = line.text;
+    let match;
+
+    while ((match = urlRegex.exec(lineText)) !== null) {
+      const startPos = line.from + match.index;
+      const endPos = startPos + match[0].length;
+      const url = match[0];
+
+      // Check if this range overlaps with any existing element
+      let isCovered = false;
+      for (let i = startPos; i < endPos; i++) {
+        if (coveredRanges.has(`${lineNum}-${i}`)) {
+          isCovered = true;
+          break;
+        }
+      }
+
+      if (!isCovered) {
+        elements.push({
+          type: 'url',
+          from: startPos,
+          to: endPos,
+          line: lineNum,
+          text: url,
+          url: url,
+        });
+      }
+    }
+  }
+
+  return elements;
 }
 
 function parseMarkdownElements(view: EditorView): ParsedElement[] {
@@ -432,6 +493,10 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
     },
   });
 
+  // Add plain URL detection
+  const plainUrls = findPlainUrls(view, elements);
+  elements.push(...plainUrls);
+
   return elements;
 }
 
@@ -573,6 +638,18 @@ function buildDecorations(view: EditorView): DecorationSet {
       case 'link': {
         if (!isOnCursorLine && el.text !== undefined && el.url !== undefined) {
           // Replace entire link syntax with styled link widget
+          decorations.push(
+            Decoration.replace({
+              widget: new LinkWidget(el.text, el.url),
+            }).range(el.from, el.to)
+          );
+        }
+        break;
+      }
+
+      case 'url': {
+        if (!isOnCursorLine && el.text !== undefined && el.url !== undefined) {
+          // Replace plain URL with styled link widget
           decorations.push(
             Decoration.replace({
               widget: new LinkWidget(el.text, el.url),
@@ -753,15 +830,15 @@ export const livePreviewStyles = EditorView.baseTheme({
     fontSize: '0.9em',
   },
 
-  // Links
-  '.cm-live-link': {
-    color: 'var(--color-accent-fg)',
-    textDecoration: 'none',
-    cursor: 'pointer',
-    '&:hover': {
-      textDecoration: 'underline',
-    },
-  },
+  // Links - styling handled inline in widget
+  // '.cm-live-link': {
+  //   color: 'var(--color-accent-fg) !important',
+  //   textDecoration: 'none',
+  //   cursor: 'pointer',
+  //   '&:hover': {
+  //     textDecoration: 'underline',
+  //   },
+  // },
 
   // Images
   '.cm-live-image-container': {
