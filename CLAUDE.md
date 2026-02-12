@@ -13,59 +13,97 @@ A Tauri-based markdown editor with Obsidian-style WYSIWYG inline editor.
 
 ```
 src/
+├── app.html                          # HTML shell
+├── styles.css                        # Global styles
+├── routes/
+│   ├── +layout.ts                    # SvelteKit layout (SSR disabled)
+│   └── +page.svelte                  # Root page (mounts MarkdownViewer)
+├── assets/
+│   ├── favicon.svg
+│   └── icon.png
 ├── lib/
+│   ├── MarkdownViewer.svelte         # Main app container (layout, file I/O, keybindings, auto-save)
+│   ├── Installer.svelte              # First-run installer flow
+│   ├── Uninstaller.svelte            # Uninstall flow
 │   ├── components/
 │   │   ├── codemirror/
-│   │   │   ├── livePreview.ts    # Obsidian-style live preview (hides syntax when cursor away)
-│   │   │   └── theme.ts          # CodeMirror theme using CSS variables
-│   │   ├── CodeMirrorEditor.svelte  # Main editor component
-│   │   ├── TableOfContents.svelte   # TOC sidebar (220px wide)
-│   │   ├── TitleBar.svelte          # Window title bar with tabs
-│   │   ├── TabList.svelte           # Tab management
-│   │   └── ...
+│   │   │   ├── livePreview.ts        # Obsidian-style live preview (hides syntax when cursor away)
+│   │   │   └── theme.ts             # CodeMirror theme using CSS variables
+│   │   ├── CodeMirrorEditor.svelte   # Editor wrapper (CodeMirror 6 instance)
+│   │   ├── TableOfContents.svelte    # TOC sidebar (220px, parses headings)
+│   │   ├── FolderExplorer.svelte     # File tree sidebar (220px, recursive dir listing)
+│   │   ├── TitleBar.svelte           # Window title bar (traffic lights, sidebar toggles, tabs, theme, window controls)
+│   │   ├── TabList.svelte            # Horizontal tab strip
+│   │   ├── Tab.svelte                # Single tab component
+│   │   ├── HomePage.svelte           # Start screen (recent files/folders)
+│   │   ├── Modal.svelte              # Confirmation dialog (save/discard/cancel)
+│   │   └── ContextMenu.svelte        # Right-click context menu
 │   ├── stores/
-│   │   ├── tabs.svelte.js        # Tab state management
-│   │   └── settings.svelte.js    # App settings
-│   ├── utils/
-│   │   └── parseHeadings.ts      # Extract headings from markdown (with line numbers)
-│   └── MarkdownViewer.svelte     # Main app container
-├── assets/
-└── routes/
+│   │   ├── tabs.svelte.ts            # TabManager class: tab CRUD, navigation history, dirty state
+│   │   └── settings.svelte.ts        # SettingsStore class: editor prefs persisted to localStorage
+│   └── utils/
+│       ├── debounce.ts               # Typed debounce with call()/cancel()
+│       ├── parseHeadings.ts          # Extract headings from markdown (with line numbers)
+│       └── frontmatter.ts            # YAML frontmatter parser
 ```
 
 ## Key Components
 
+### MarkdownViewer (`src/lib/MarkdownViewer.svelte`)
+- Main app shell: manages layout, file loading/saving, keyboard shortcuts, drag-and-drop
+- Auto-save: debounced (1s) via `debounce` utility, controlled by `settings.autoSave`
+- Sidebar layout: TOC and FolderExplorer overlay the editor; editor reflows only when viewport is narrow (uses `clamp()` on `left` to account for 720px content max-width + 2rem padding)
+- TOC button visibility depends on `hasHeadings` derived (only shown when document has headings)
+
 ### CodeMirror Editor (`src/lib/components/CodeMirrorEditor.svelte`)
-- Props: `value`, `readonly`, `theme`, `onchange`, `zoomLevel`
+- Props: `value`, `readonly`, `theme`, `onchange`, `zoomLevel`, `fileType`
 - Exports: `scrollToLine(lineNumber)`, `findHeadingLine(text, level, occurrence)`
 - Uses `EditorView.lineWrapping` for automatic line wrapping
+- Content layout: `.cm-scroller` has `padding: 2rem`, `.cm-content` has `max-width: 720px; margin: 0 auto`
 
 ### Live Preview (`src/lib/components/codemirror/livePreview.ts`)
 - Hides markdown syntax (**, ##, [](), etc.) when cursor is NOT on that line
 - Reveals syntax when cursor enters the line
 - Applies visual styling via CodeMirror decorations
-- **Important**: Avoid using CSS margins on line decorations - they break click position calculations. Use `line-height` for spacing instead.
+- **Important**: Avoid using CSS margins on line decorations — they break click position calculations. Use `line-height` for spacing instead.
 
 ### Table of Contents (`src/lib/components/TableOfContents.svelte`)
-- Fixed width: 220px
+- Fixed width: 220px, overlays editor (does not push content)
+- Only renders when `hasHeadings && visible`
 - Dispatches `onscrollto` event with `{ lineNumber }` for editor scrolling
-- Toggle button is in TitleBar, not in this component
+
+### FolderExplorer (`src/lib/components/FolderExplorer.svelte`)
+- Fixed width: 220px, overlays editor (does not push content)
+- Recursive directory tree with expand/collapse (persisted to localStorage)
+- Opens markdown files on click; mutually exclusive with TOC
 
 ### TitleBar (`src/lib/components/TitleBar.svelte`)
-- Contains: home button (house icon), TOC toggle button, tabs, theme switcher, window controls
-- Tab area has `toc-offset` class that adds left padding when TOC is visible
-- Props include `tocVisible`, `ontoggleToc`, `showTocButton`
+- Contains: home button, folder explorer toggle, TOC toggle, tab strip, theme switcher, window controls
+- macOS traffic lights + Windows title bar buttons
+- Tabs no longer shift when sidebars are open
+- Props include `tocVisible`, `ontoggleToc`, `showTocButton`, `folderExplorerVisible`, `ontoggleFolderExplorer`, `showFolderExplorerButton`
+
+### Settings Store (`src/lib/stores/settings.svelte.ts`)
+- Svelte 5 runes-based class with `$state` properties
+- All settings persisted to localStorage under `editor.*` keys
+- Settings: `minimap`, `wordWrap`, `lineNumbers`, `vimMode`, `statusBar`, `wordCount`, `renderLineHighlight`, `showTabs`, `zenMode`, `occurrencesHighlight`, `autoSave`
+- Each setting has a `toggle*()` method
+
+### Tab Manager (`src/lib/stores/tabs.svelte.ts`)
+- `Tab` interface: `id`, `path`, `title`, `rawContent`, `isDirty`, `isEditing`, `history[]`, `scrollTop`, etc.
+- `TabManager` class: `addTab`, `closeTab`, `setActive`, `cycleTab`, `navigate`, `goBack`/`goForward`, `updateTabRawContent`, `setTabRawContent`
+- Exported singleton: `tabManager`
 
 ## CSS Variables
 
 Theme colors defined in `MarkdownViewer.svelte`:
-- `--color-canvas-default` - background
-- `--color-canvas-subtle` - secondary background
-- `--color-fg-default` - primary text
-- `--color-fg-muted` - secondary text
-- `--color-border-default` - borders
-- `--color-accent-fg` - accent/link color
-- `--color-neutral-muted` - neutral highlights
+- `--color-canvas-default` — background
+- `--color-canvas-subtle` — secondary background
+- `--color-fg-default` — primary text
+- `--color-fg-muted` — secondary text
+- `--color-border-default` — borders
+- `--color-accent-fg` — accent/link color
+- `--color-neutral-muted` — neutral highlights
 
 ## Commands
 
