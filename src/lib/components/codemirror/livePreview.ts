@@ -40,11 +40,20 @@ class LinkWidget extends WidgetType {
   }
 
   toDOM(): HTMLElement {
-    const span = document.createElement('span');
-    span.className = 'cm-live-link';
-    span.textContent = this.text;
-    span.title = this.url;
-    return span;
+    const anchor = document.createElement('a');
+    anchor.className = 'cm-live-link';
+    anchor.textContent = this.text;
+    anchor.href = this.url;
+    anchor.title = this.url;
+    anchor.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Import openUrl here or use a custom event
+      import('@tauri-apps/plugin-opener').then(({ openUrl }) => {
+        openUrl(this.url).catch(console.error);
+      });
+    });
+    return anchor;
   }
 
   eq(other: LinkWidget): boolean {

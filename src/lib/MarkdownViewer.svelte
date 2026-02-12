@@ -403,7 +403,11 @@
 
 			if (anchor.href) {
 				event.preventDefault();
-				await openUrl(anchor.href);
+				try {
+					await openUrl(anchor.href);
+				} catch (error) {
+					console.error('Failed to open URL:', anchor.href, error);
+				}
 			}
 		}
 	}
