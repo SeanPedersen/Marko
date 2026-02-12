@@ -1,5 +1,5 @@
 ::selection {
-	background-color: rgba(78, 179, 226, 0.2) !important;
+	background-color: var(--color-selection) !important;
 	color: inherit !important;
 }
 
@@ -33,6 +33,8 @@ body {
 	--color-border-muted: hsla(210, 18%, 87%, 1);
 	--color-neutral-muted: rgba(51, 54, 56, 0.05);
 	--color-accent-fg: #0969da;
+	--color-selection: rgba(78, 179, 226, 0.24);
+	--color-selection-focus: rgba(78, 179, 226, 0.36);
 	--color-accent-emphasis: #0969da;
 	--color-success-fg: #1a7f37;
 	--color-success-emphasis: #1f883d;
@@ -68,6 +70,8 @@ body {
 	--color-border-muted: rgb(216, 222, 228);
 	--color-neutral-muted: rgba(51, 54, 56, 0.05);
 	--color-accent-fg: #0969da;
+	--color-selection: rgba(78, 179, 226, 0.24);
+	--color-selection-focus: rgba(78, 179, 226, 0.36);
 	--color-accent-emphasis: #0969da;
 	--color-success-fg: #1a7f37;
 	--color-success-emphasis: #1f883d;
@@ -103,6 +107,8 @@ body {
 		--color-border-muted: #21262d;
 		--color-neutral-muted: rgba(255, 255, 255, 0.05);
 		--color-accent-fg: #4390fc;
+		--color-selection: rgba(67, 144, 252, 0.32);
+		--color-selection-focus: rgba(67, 144, 252, 0.46);
 		--color-accent-emphasis: #3781f0;
 		--color-success-fg: #3fb950;
 		--color-success-emphasis: #238636;
@@ -141,6 +147,8 @@ body {
 	--color-border-muted: #21262d;
 	--color-neutral-muted: rgba(255, 255, 255, 0.05);
 	--color-accent-fg: #4390fc;
+	--color-selection: rgba(67, 144, 252, 0.32);
+	--color-selection-focus: rgba(67, 144, 252, 0.46);
 	--color-accent-emphasis: #3781f0;
 	--color-success-fg: #3fb950;
 	--color-success-emphasis: #238636;

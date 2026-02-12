@@ -19,11 +19,7 @@ const baseTheme = EditorView.theme({
     borderLeftColor: 'var(--color-fg-default)',
   },
   '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
-    backgroundColor: 'var(--color-accent-fg)',
-    opacity: '0.2',
-  },
-  '.cm-selectionBackground': {
-    backgroundColor: 'rgba(9, 105, 218, 0.2) !important',
+    backgroundColor: 'var(--color-selection) !important',
   },
   '.cm-activeLine': {
     backgroundColor: 'transparent',

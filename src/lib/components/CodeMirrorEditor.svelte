@@ -235,14 +235,14 @@
 		margin: 0 auto;
 	}
 
-	/* Selection styling */
-	.codemirror-container :global(.cm-selectionBackground) {
-		background-color: rgba(9, 105, 218, 0.2) !important;
-	}
+  /* Selection styling (uses CSS variables so theme can override) */
+  .codemirror-container :global(.cm-selectionBackground) {
+    background-color: var(--color-selection) !important;
+  }
 
-	.codemirror-container :global(.cm-focused .cm-selectionBackground) {
-		background-color: rgba(9, 105, 218, 0.3) !important;
-	}
+  .codemirror-container :global(.cm-focused .cm-selectionBackground) {
+    background-color: var(--color-selection-focus) !important;
+  }
 
 	/* Cursor */
 	.codemirror-container :global(.cm-cursor) {
