@@ -2,10 +2,13 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { onMount } from 'svelte';
 
+	type SortMode = 'az' | 'modified';
+
 	interface DirEntry {
 		name: string;
 		path: string;
 		is_dir: boolean;
+		modified_at: number;
 	}
 
 	let {
@@ -22,8 +25,37 @@
 	let expandedDirs = $state<Set<string>>(new Set());
 	let dirContents = $state<Map<string, DirEntry[]>>(new Map());
 	let loadingDirs = $state<Set<string>>(new Set());
+	let sortMode = $state<SortMode>('az');
 
-	// Load expanded state from localStorage
+	function getSortPrefsMap(): Record<string, SortMode> {
+		try {
+			return JSON.parse(localStorage.getItem('folder-explorer-sort') || '{}');
+		} catch {
+			return {};
+		}
+	}
+
+	function saveSortPref(folder: string, mode: SortMode) {
+		const prefs = getSortPrefsMap();
+		prefs[folder] = mode;
+		localStorage.setItem('folder-explorer-sort', JSON.stringify(prefs));
+	}
+
+	function sortEntries(items: DirEntry[]): DirEntry[] {
+		return [...items].sort((a, b) => {
+			// Directories always first
+			if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+			if (sortMode === 'modified') return b.modified_at - a.modified_at;
+			return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+		});
+	}
+
+	function toggleSort() {
+		sortMode = sortMode === 'az' ? 'modified' : 'az';
+		if (folderPath) saveSortPref(folderPath, sortMode);
+	}
+
+	// Load expanded state and sort preference from localStorage
 	onMount(() => {
 		const stored = localStorage.getItem('folder-explorer-expanded');
 		if (stored) {
@@ -43,6 +75,11 @@
 	// Load root directory when folderPath changes
 	$effect(() => {
 		if (folderPath) {
+			// Restore sort preference for this folder
+			const prefs = getSortPrefsMap();
+			if (prefs[folderPath]) sortMode = prefs[folderPath];
+			else sortMode = 'az';
+
 			loadDirectory(folderPath).then((result) => {
 				entries = result;
 				// Load any previously expanded directories
@@ -177,7 +214,7 @@
 		</button>
 	</li>
 	{#if entry.is_dir && expandedDirs.has(entry.path)}
-		{@const children = dirContents.get(entry.path) || []}
+		{@const children = sortEntries(dirContents.get(entry.path) || [])}
 		{#each children as child}
 			{@render renderEntry(child, depth + 1)}
 		{/each}
@@ -193,9 +230,27 @@
 	<nav class="explorer-sidebar" aria-label="File explorer">
 		<div class="explorer-header">
 			<span class="header-text" title={folderPath}>{getFolderName(folderPath)}</span>
+			<button
+				class="sort-toggle"
+				onclick={toggleSort}
+				title={sortMode === 'az' ? 'Sorted A–Z (click for recent)' : 'Sorted by recent (click for A–Z)'}
+				aria-label="Toggle sort mode"
+			>
+				{#if sortMode === 'az'}
+					<svg width="22" height="14" viewBox="0 0 34 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M3 17L7 5l4 12" /><path d="M4.5 13h5" />
+						<path d="M27 6v12" /><path d="M23 14l4 4 4-4" />
+					</svg>
+				{:else}
+					<svg width="22" height="14" viewBox="0 0 34 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="9" cy="13" r="7" /><path d="M9 9v4l2.5 2.5" />
+						<path d="M28 18V6" /><path d="M24 10l4-4 4 4" />
+					</svg>
+				{/if}
+			</button>
 		</div>
 		<ul class="explorer-list">
-			{#each entries as entry}
+			{#each sortEntries(entries) as entry}
 				{@render renderEntry(entry, 0)}
 			{/each}
 			{#if entries.length === 0}
@@ -251,6 +306,28 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		flex: 1;
+	}
+
+	.sort-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 28px;
+		height: 22px;
+		padding: 0;
+		border: none;
+		border-radius: 4px;
+		background: none;
+		color: var(--color-fg-muted);
+		cursor: pointer;
+		transition: color 0.1s, background 0.1s;
+	}
+
+	.sort-toggle:hover {
+		color: var(--color-fg-default);
+		background: var(--color-neutral-muted);
 	}
 
 	.explorer-list {

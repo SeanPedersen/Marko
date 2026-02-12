@@ -110,6 +110,7 @@ struct DirEntry {
     name: String,
     path: String,
     is_dir: bool,
+    modified_at: u64,
 }
 
 #[tauri::command]
@@ -136,10 +137,19 @@ fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
                 return None;
             }
 
+            let modified_at = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+
             Some(DirEntry {
                 name,
                 path: path.to_string_lossy().to_string(),
                 is_dir: path.is_dir(),
+                modified_at,
             })
         })
         .collect();
