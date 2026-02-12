@@ -155,6 +155,7 @@ const headingDecorations = [
 const codeBlockLineDecoration = Decoration.line({ class: 'cm-live-code-block-line' });
 const blockquoteLineDecoration = Decoration.line({ class: 'cm-live-blockquote-line' });
 const listItemDecoration = Decoration.line({ class: 'cm-live-list-item' });
+const frontmatterLineDecoration = Decoration.line({ class: 'cm-live-frontmatter-line' });
 
 interface ParsedElement {
   type: string;
@@ -500,6 +501,21 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
   return elements;
 }
 
+function getFrontmatterRange(view: EditorView): { startLine: number; endLine: number } | null {
+  const doc = view.state.doc;
+  if (doc.lines < 2) return null;
+
+  const firstLine = doc.line(1).text;
+  if (firstLine.trim() !== '---') return null;
+
+  for (let i = 2; i <= doc.lines; i++) {
+    if (doc.line(i).text.trim() === '---') {
+      return { startLine: 1, endLine: i };
+    }
+  }
+  return null;
+}
+
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const decorations: Range<Decoration>[] = [];
@@ -508,6 +524,17 @@ function buildDecorations(view: EditorView): DecorationSet {
   // Get cursor line
   const cursorPos = view.state.selection.main.head;
   const cursorLine = view.state.doc.lineAt(cursorPos).number;
+
+  // Detect frontmatter range to skip formatting and reset styles
+  const frontmatter = getFrontmatterRange(view);
+  const frontmatterLines = new Set<number>();
+  if (frontmatter) {
+    for (let i = frontmatter.startLine; i <= frontmatter.endLine; i++) {
+      frontmatterLines.add(i);
+      const lineObj = view.state.doc.line(i);
+      decorations.push(frontmatterLineDecoration.range(lineObj.from));
+    }
+  }
 
   // Track lines with code blocks for special handling
   const codeBlockLines = new Set<number>();
@@ -527,6 +554,9 @@ function buildDecorations(view: EditorView): DecorationSet {
   }
 
   for (const el of elements) {
+    // Skip all formatting for frontmatter lines
+    if (frontmatterLines.has(el.line)) continue;
+
     const isOnCursorLine = el.line === cursorLine;
 
     switch (el.type) {
@@ -888,6 +918,15 @@ export const livePreviewStyles = EditorView.baseTheme({
     borderTop: '2px solid var(--color-border-default)',
     height: '0',
     width: '100%',
+  },
+
+  // Frontmatter - reset all syntax highlighting overrides
+  '.cm-live-frontmatter-line span': {
+    fontSize: 'inherit !important',
+    fontWeight: 'normal !important',
+    fontStyle: 'normal !important',
+    textDecoration: 'none !important',
+    color: 'var(--color-fg-muted) !important',
   },
 });
 
