@@ -635,7 +635,6 @@
 
 	// Reference to the editor for TOC scrolling
 	let editorRef = $state<CodeMirrorEditor | null>(null);
-
 	// Handle TOC scroll request
 	function handleTocScroll(event: CustomEvent<{ lineNumber: number }>) {
 		editorRef?.scrollToLine(event.detail.lineNumber);

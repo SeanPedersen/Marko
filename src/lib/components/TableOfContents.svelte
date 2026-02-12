@@ -11,8 +11,6 @@
 		onscrollto?: (event: CustomEvent<{ lineNumber: number }>) => void;
 	}>();
 
-	let activeHeadingIndex = $state(-1);
-
 	let headings = $derived(parseHeadings(rawContent));
 	let hasHeadings = $derived(headings.length > 0);
 
@@ -20,10 +18,33 @@
 		headings.length > 0 ? Math.min(...headings.map((h) => h.level)) : 1
 	);
 
-	function scrollToHeading(heading: Heading, index: number) {
-		activeHeadingIndex = index;
+	// Collapsed state: keyed by heading index, stores whether children are collapsed
+	let collapsed = $state<Record<number, boolean>>({});
 
-		// Dispatch event with line number for CodeMirror to handle scrolling
+	// Determine which headings have children (subheadings directly beneath them)
+	function hasChildren(index: number): boolean {
+		if (index >= headings.length - 1) return false;
+		return headings[index + 1].level > headings[index].level;
+	}
+
+	// Determine if a heading is hidden because a parent is collapsed
+	function isHidden(index: number): boolean {
+		const level = headings[index].level;
+		// Walk backwards to find the nearest parent (lower level)
+		for (let i = index - 1; i >= 0; i--) {
+			if (headings[i].level >= level) continue; // sibling or deeper, skip
+			// Found nearest parent
+			if (collapsed[i]) return true;
+			return isHidden(i);
+		}
+		return false;
+	}
+
+	function toggleCollapse(index: number) {
+		collapsed[index] = !collapsed[index];
+	}
+
+	function scrollToHeading(heading: Heading) {
 		if (onscrollto) {
 			onscrollto(new CustomEvent('scrollto', {
 				detail: { lineNumber: heading.lineNumber }
@@ -31,29 +52,43 @@
 		}
 	}
 
-	// Update active heading based on scroll position
-	// Since CodeMirror handles scrolling, we track based on user clicks
-	// A more sophisticated approach would involve the editor reporting visible headings
+
 </script>
 
 {#if hasHeadings && visible}
 	<nav class="toc-sidebar" aria-label="Table of contents">
-		<div class="toc-header">Contents</div>
 		<ul class="toc-list">
 			{#each headings as heading, i}
-				<li
-					class="toc-item"
-					class:active={i === activeHeadingIndex}
-					style="padding-left: {(heading.level - MIN_INDENT_LEVEL) * 12 + 8}px"
-				>
-					<button
-						class="toc-link"
-						onclick={() => scrollToHeading(heading, i)}
-						title={heading.text}
+				{#if !isHidden(i)}
+					<li
+						class="toc-item"
+						style="padding-left: {(heading.level - MIN_INDENT_LEVEL) * 12 + 8}px"
 					>
-						{heading.text}
-					</button>
-				</li>
+						{#each Array(heading.level - MIN_INDENT_LEVEL) as _, depth}
+							<span class="toc-guide" style="left: {depth * 12 + 12}px"></span>
+						{/each}
+						{#if hasChildren(i)}
+							<button
+								class="toc-toggle"
+								class:collapsed={collapsed[i]}
+								onclick={() => toggleCollapse(i)}
+								aria-label={collapsed[i] ? 'Expand' : 'Collapse'}
+							>
+								<svg width="10" height="10" viewBox="0 0 10 10">
+									<path d={collapsed[i] ? 'M3 1 L7 5 L3 9' : 'M1 3 L5 7 L9 3'} fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+								</svg>
+							</button>
+						{/if}
+						<button
+							class="toc-link"
+							class:has-toggle={hasChildren(i)}
+							onclick={() => scrollToHeading(heading)}
+							title={heading.text}
+						>
+							{heading.text}
+						</button>
+					</li>
+				{/if}
 			{/each}
 		</ul>
 	</nav>
@@ -87,15 +122,6 @@
 		}
 	}
 
-	.toc-header {
-		padding: 4px 12px 8px;
-		font-size: 11px;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		color: var(--color-fg-muted);
-	}
-
 	.toc-list {
 		list-style: none;
 		margin: 0;
@@ -104,26 +130,47 @@
 
 	.toc-item {
 		position: relative;
+		display: flex;
+		align-items: center;
 	}
 
-	.toc-item.active {
-		background: var(--color-neutral-muted);
-	}
-
-	.toc-item.active::before {
-		content: '';
+	.toc-guide {
 		position: absolute;
-		left: 0;
 		top: 0;
 		bottom: 0;
-		width: 2px;
-		background: var(--color-accent-fg);
+		width: 1px;
+		background: var(--color-border-default);
+		opacity: 0.5;
+		pointer-events: none;
+	}
+
+	.toc-toggle {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 16px;
+		height: 16px;
+		margin-left: -2px;
+		border: none;
+		background: none;
+		color: var(--color-fg-muted);
+		cursor: pointer;
+		padding: 0;
+		border-radius: 2px;
+		opacity: 0.6;
+		transition: opacity 0.1s;
+	}
+
+	.toc-toggle:hover {
+		opacity: 1;
 	}
 
 	.toc-link {
 		display: block;
-		width: 100%;
-		padding: 4px 8px;
+		flex: 1;
+		min-width: 0;
+		padding: 4px 8px 4px 4px;
 		border: none;
 		background: none;
 		color: var(--color-fg-muted);
@@ -137,13 +184,12 @@
 		transition: color 0.1s;
 	}
 
-	.toc-link:hover {
-		color: var(--color-fg-default);
+	.toc-link:not(.has-toggle) {
+		padding-left: 18px;
 	}
 
-	.toc-item.active .toc-link {
-		color: var(--color-accent-fg);
-		font-weight: 500;
+	.toc-link:hover {
+		color: var(--color-fg-default);
 	}
 
 	/* Scrollbar styling */

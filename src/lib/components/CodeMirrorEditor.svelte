@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import { EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine, rectangularSelection } from '@codemirror/view';
+	import { EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine, rectangularSelection, scrollPastEnd } from '@codemirror/view';
 	import { EditorState, Compartment } from '@codemirror/state';
 	import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 	import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -70,6 +70,9 @@
 					onchange?.(newValue);
 				}
 			}),
+
+			// Allow scrolling past the end of the document
+			scrollPastEnd(),
 		];
 
 		// Conditionally add markdown-specific features
@@ -173,7 +176,7 @@
 		const line = doc.line(lineNumber);
 		view.dispatch({
 			selection: { anchor: line.from },
-			scrollIntoView: true,
+			effects: EditorView.scrollIntoView(line.from, { y: 'start' }),
 		});
 	}
 
