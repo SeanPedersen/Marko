@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Markpad",
+  "productName": "Marko",
   "version": "../package.json",
   "identifier": "com.alecdotdev.markpad",
   "build": {
@@ -42,14 +42,14 @@
         "ext": ["md", "markdown"],
         "mimeType": "text/markdown",
         "name": "Markdown File",
-        "description": "Opens Markdown files with Markpad",
+        "description": "Opens Markdown files with Marko",
         "role": "Viewer"
       },
       {
         "ext": ["txt"],
         "mimeType": "text/plain",
         "name": "Text File",
-        "description": "Opens Text files with Markpad",
+        "description": "Opens Text files with Marko",
         "role": "Viewer"
       }
     ],

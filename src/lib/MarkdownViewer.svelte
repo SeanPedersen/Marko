@@ -24,7 +24,7 @@
 	let currentFile = $derived(tabManager.activeTab?.path ?? '');
 	let scrollTop = $derived(tabManager.activeTab?.scrollTop ?? 0);
 	let isScrolled = $derived(scrollTop > 0);
-	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Markpad');
+	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Marko');
 
 	let showHome = $state(false);
 	let isDragging = $state(false);
@@ -441,7 +441,7 @@
 		const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
 		const webview = new WebviewWindow(label, {
 			url: 'index.html?file=' + encodeURIComponent(path),
-			title: 'Markpad - ' + path.split(/[/\\]/).pop(),
+			title: 'Marko - ' + path.split(/[/\\]/).pop(),
 			width: 1000,
 			height: 800,
 		});
@@ -569,7 +569,7 @@
 		{isFocused}
 		isScrolled={false}
 		currentFile={''}
-		windowTitle="Markpad"
+		windowTitle="Marko"
 		showHome={false}
 		{zoomLevel}
 		onselectFile={selectFile}

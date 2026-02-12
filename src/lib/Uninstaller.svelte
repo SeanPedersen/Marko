@@ -35,7 +35,7 @@
 	<div class="content">
 		<div class="header">
 			<img src={iconUrl} alt="App Icon" class="app-icon" />
-			<h1>Uninstall Markpad?</h1>
+			<h1>Uninstall Marko?</h1>
 			<p class="subtitle">This will remove the application and all its shortcuts.</p>
 		</div>
 
@@ -53,7 +53,7 @@
 		{:else}
 			<div class="installing-state">
 				<div class="spinner"></div>
-				<p>Removing Markpad...</p>
+				<p>Removing Marko...</p>
 			</div>
 		{/if}
 	</div>

@@ -1,7 +1,7 @@
 
 ![demo](pics/demo.gif)
 
-# [Markpad](https://markpad.sftwr.dev)
+# [Marko](https://markpad.sftwr.dev)
 
 A simple, lightweight Markdown viewer and text editor for Windows, macOS, and Linux.
 
@@ -27,7 +27,7 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 ## Installation
 
-Download the latest executable or installer from the [releases page](https://github.com/alecdotdev/Markpad/releases/latest) or from [markpad.sftwr.dev](https://markpad.sftwr.dev)
+Download the latest executable or installer from the [releases page](https://github.com/alecdotdev/Marko/releases/latest) or from [markpad.sftwr.dev](https://markpad.sftwr.dev)
 
 #### Windows Installer
 Automatically configures `.md` file association 

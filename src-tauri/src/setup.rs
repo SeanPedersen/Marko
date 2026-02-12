@@ -14,9 +14,9 @@ use winreg::enums::*;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
 
-const APP_NAME: &str = "Markpad";
+const APP_NAME: &str = "Marko";
 #[cfg(target_os = "windows")]
-const EXE_NAME: &str = "Markpad.exe";
+const EXE_NAME: &str = "Marko.exe";
 
 #[derive(Serialize)]
 pub struct InstallStatus {
@@ -32,7 +32,7 @@ pub fn get_install_path(all_users: bool) -> PathBuf {
         let program_files = env::var("ProgramFiles").unwrap_or_else(|_| "C:\\Program Files".to_string());
         PathBuf::from(program_files).join(APP_NAME)
     } else {
-        // AppData/Local/Markpad
+        // AppData/Local/Marko
         let local_app_data = env::var("LOCALAPPDATA").unwrap_or_else(|_| {
             let user_profile = env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".to_string());
             format!("{}\\AppData\\Local", user_profile)
@@ -304,7 +304,7 @@ pub async fn uninstall_app(handle: AppHandle, target_all_users: Option<bool>) ->
         let _ = root.delete_subkey(format!("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{}", APP_NAME));
         let _ = root.delete_subkey_all("Software\\Classes\\.md");
         let _ = root.delete_subkey_all("Software\\Classes\\.markdown");
-        let _ = root.delete_subkey_all("Software\\Classes\\Markpad.File");
+        let _ = root.delete_subkey_all("Software\\Classes\\Marko.File");
     }
 
     // 3. Self-destruction
@@ -368,15 +368,15 @@ fn register_file_association(exe_path: &Path, all_users: bool) -> Result<(), std
     
     // .md
     let (md_key, _) = root.create_subkey("Software\\Classes\\.md")?;
-    md_key.set_value("", &"Markpad.File")?;
+    md_key.set_value("", &"Marko.File")?;
     
     // .markdown
     let (markdown_key, _) = root.create_subkey("Software\\Classes\\.markdown")?;
-    markdown_key.set_value("", &"Markpad.File")?;
+    markdown_key.set_value("", &"Marko.File")?;
 
-    // Markpad.File
-    let (file_key, _) = root.create_subkey("Software\\Classes\\Markpad.File")?;
-    file_key.set_value("", &"Markpad File")?;
+    // Marko.File
+    let (file_key, _) = root.create_subkey("Software\\Classes\\Marko.File")?;
+    file_key.set_value("", &"Marko File")?;
     
     let (icon_key, _) = file_key.create_subkey("DefaultIcon")?;
     icon_key.set_value("", &format!("\"{}\",0", exe_path.display()))?;

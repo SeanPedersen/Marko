@@ -1,4 +1,4 @@
-# Marko (Markpad)
+# Marko (Marko)
 
 A Tauri-based markdown editor with Obsidian-style live preview.
 

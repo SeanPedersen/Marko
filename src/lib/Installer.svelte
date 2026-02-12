@@ -199,7 +199,7 @@
 		{:else}
 			<div class="installing-state">
 				<div class="spinner"></div>
-				<p>{isInstalled ? 'Updating' : 'Installing'} Markpad...</p>
+				<p>{isInstalled ? 'Updating' : 'Installing'} Marko...</p>
 			</div>
 		{/if}
 	</div>

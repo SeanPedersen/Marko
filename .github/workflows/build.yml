@@ -33,7 +33,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
-          name: Markpad v${{ steps.get_version.outputs.version }}
+          name: Marko v${{ steps.get_version.outputs.version }}
           draft: true
           prerelease: false
           generate_release_notes: true
@@ -100,9 +100,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp src-tauri/target/release/Markpad.exe Markpad-x64.exe
-          cp Markpad-x64.exe MarkpadInstaller-x64.exe
-          gh release upload v${{ needs.create-release.outputs.version }} Markpad-x64.exe MarkpadInstaller-x64.exe --clobber
+          cp src-tauri/target/release/Marko.exe Marko-x64.exe
+          cp Marko-x64.exe MarkoInstaller-x64.exe
+          gh release upload v${{ needs.create-release.outputs.version }} Marko-x64.exe MarkoInstaller-x64.exe --clobber
 
       # --- Windows Build (ARM64) ---
       - name: Build Windows ARM64
@@ -115,9 +115,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp src-tauri/target/aarch64-pc-windows-msvc/release/Markpad.exe Markpad-arm64.exe
-          cp Markpad-arm64.exe MarkpadInstaller-arm64.exe
-          gh release upload v${{ needs.create-release.outputs.version }} Markpad-arm64.exe MarkpadInstaller-arm64.exe --clobber
+          cp src-tauri/target/aarch64-pc-windows-msvc/release/Marko.exe Marko-arm64.exe
+          cp Marko-arm64.exe MarkoInstaller-arm64.exe
+          gh release upload v${{ needs.create-release.outputs.version }} Marko-arm64.exe MarkoInstaller-arm64.exe --clobber
 
       # --- Linux Build ---
       - name: Build Linux

@@ -2,6 +2,7 @@
 
 ### Unreleased
 
+- Rename to Marko
 - Replaced Monaco editor with Milkdown WYSIWYG Markdown editor
 - Removed split view functionality
 - Removed Vim mode

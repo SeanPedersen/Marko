@@ -1,4 +1,4 @@
-# Markpad
+# Marko
 
 Everything you'd want from a simple markdown viewer.
 
