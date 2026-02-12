@@ -137,6 +137,7 @@
 			class:is-markdown={isMarkdown}
 			class:disabled={!entry.is_dir && !isMarkdown}
 			onclick={(event) => handleFileClick(event, entry)}
+			onauxclick={(event) => { if (event.button === 1) handleFileClick(event, entry); }}
 			title={entry.path}
 		>
 			<span class="icon">

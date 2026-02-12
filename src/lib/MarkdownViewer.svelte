@@ -376,6 +376,10 @@
 
 	function handleContextMenu(e: MouseEvent) {
 		if (mode !== 'app') return;
+
+		const target = e.target as HTMLElement;
+		if (!target.closest('.cm-editor')) return;
+
 		e.preventDefault();
 
 		const selection = window.getSelection();
