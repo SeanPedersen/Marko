@@ -15,12 +15,14 @@
 		theme = 'system',
 		onchange,
 		zoomLevel = 100,
+		fileType = 'markdown', // 'markdown' or 'text'
 	} = $props<{
 		value?: string;
 		readonly?: boolean;
 		theme?: 'system' | 'dark' | 'light';
 		onchange?: (value: string) => void;
 		zoomLevel?: number;
+		fileType?: 'markdown' | 'text';
 	}>();
 
 	let container: HTMLDivElement;
@@ -33,7 +35,7 @@
 	const themeCompartment = new Compartment();
 
 	function createExtensions() {
-		return [
+		const extensions = [
 			// Basic editing
 			history(),
 			drawSelection(),
@@ -54,20 +56,8 @@
 				indentWithTab,
 			]),
 
-			// Markdown language support
-			markdown({
-				base: markdownLanguage,
-				codeLanguages: languages,
-			}),
-
-			// Syntax highlighting
-			syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-
 			// Custom theme
 			themeCompartment.of(createTheme()),
-
-			// Live preview (Obsidian-style)
-			livePreview(),
 
 			// Readonly mode
 			readonlyCompartment.of(EditorState.readOnly.of(readonly)),
@@ -81,6 +71,25 @@
 				}
 			}),
 		];
+
+		// Conditionally add markdown-specific features
+		if (fileType === 'markdown') {
+			extensions.push(
+				// Markdown language support
+				markdown({
+					base: markdownLanguage,
+					codeLanguages: languages,
+				}),
+
+				// Syntax highlighting
+				syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+
+				// Live preview (Obsidian-style)
+				livePreview(),
+			);
+		}
+
+		return extensions;
 	}
 
 	function initEditor() {
@@ -107,6 +116,12 @@
 
 	onMount(() => {
 		initEditor();
+	});
+
+	// Re-initialize editor when fileType changes
+	$effect(() => {
+		fileType; // Dependency
+		if (container) initEditor(); // Only re-init if container exists
 	});
 
 	onDestroy(() => {

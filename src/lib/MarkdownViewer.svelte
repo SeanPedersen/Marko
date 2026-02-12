@@ -22,6 +22,12 @@
 
 	// derived from tab manager
 	let currentFile = $derived(tabManager.activeTab?.path ?? '');
+	let currentFileType = $derived(() => {
+		if (!currentFile) return 'text';
+		const ext = currentFile.split('.').pop()?.toLowerCase();
+		const markdownExts = ['md', 'markdown', 'mdown', 'mkd'];
+		return markdownExts.includes(ext || '') ? 'markdown' : 'text';
+	});
 	let scrollTop = $derived(tabManager.activeTab?.scrollTop ?? 0);
 	let isScrolled = $derived(scrollTop > 0);
 	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Marko');
@@ -264,11 +270,20 @@
 
 		if (!targetPath) {
 			// Special handling for new (untitled) files
-			const selected = await save({
-				filters: [
+			const fileType = currentFileType();
+			const filters = fileType === 'markdown' 
+				? [
+					{ name: 'Markdown', extensions: ['md'] },
+					{ name: 'Text Files', extensions: ['txt', 'json', 'js', 'ts', 'py', 'rs', 'html', 'css', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf'] },
+					{ name: 'All Files', extensions: ['*'] },
+				]
+				: [
+					{ name: 'Text Files', extensions: ['txt', 'json', 'js', 'ts', 'py', 'rs', 'html', 'css', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf'] },
 					{ name: 'Markdown', extensions: ['md'] },
 					{ name: 'All Files', extensions: ['*'] },
-				],
+				];
+			const selected = await save({
+				filters,
 			});
 			if (selected) {
 				targetPath = selected;
@@ -332,6 +347,7 @@
 			multiple: false,
 			filters: [
 				{ name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd'] },
+				{ name: 'Text Files', extensions: ['txt', 'json', 'js', 'ts', 'py', 'rs', 'html', 'css', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf'] },
 				{ name: 'All Files', extensions: ['*'] },
 			],
 		});
@@ -659,7 +675,7 @@
 			onSetTheme={(t) => (theme = t)}
 			{tocVisible}
 			ontoggleToc={toggleToc}
-			showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== ''}
+			showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType() === 'markdown'}
 			{folderExplorerVisible}
 			ontoggleFolderExplorer={toggleFolderExplorer}
 			showFolderExplorerButton={!!currentFolder} />
@@ -667,7 +683,7 @@
 	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
 		<TableOfContents
 			rawContent={tabManager.activeTab?.rawContent ?? ''}
-			visible={tocVisible && !folderExplorerVisible}
+			visible={tocVisible && !folderExplorerVisible && currentFileType() === 'markdown'}
 			onscrollto={handleTocScroll}
 		/>
 		<FolderExplorer
@@ -687,6 +703,7 @@
 				{theme}
 				{zoomLevel}
 				readonly={false}
+				fileType={currentFileType()}
 				onchange={handleEditorChange}
 			/>
 		</div>
@@ -734,7 +751,7 @@
 					<polyline points="17 8 12 3 7 8" />
 					<line x1="12" y1="3" x2="12" y2="15" />
 				</svg>
-				<span>Drop to open Markdown files</span>
+				<span>Drop to open files</span>
 			</div>
 		</div>
 	{/if}
