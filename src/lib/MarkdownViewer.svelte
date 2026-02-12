@@ -13,6 +13,8 @@
 
 	import HomePage from './components/HomePage.svelte';
 	import { tabManager } from './stores/tabs.svelte.js';
+	import { settings } from './stores/settings.svelte.js';
+	import { debounce } from './utils/debounce.js';
 
 	let mode = $state<'loading' | 'app' | 'installer' | 'uninstall'>('loading');
 
@@ -605,10 +607,23 @@
 		};
 	});
 
+	const AUTO_SAVE_DELAY_MS = 1000;
+	const debouncedSave = debounce(() => saveContent(), AUTO_SAVE_DELAY_MS);
+
+	// Cancel pending auto-save when switching tabs
+	$effect(() => {
+		const _ = tabManager.activeTabId;
+		debouncedSave.cancel();
+	});
+
 	// Handle CodeMirror content changes
 	function handleEditorChange(newContent: string) {
 		if (tabManager.activeTabId) {
 			tabManager.updateTabRawContent(tabManager.activeTabId, newContent);
+
+			if (settings.autoSave && tabManager.activeTab?.path) {
+				debouncedSave.call();
+			}
 		}
 	}
 

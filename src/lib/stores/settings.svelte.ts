@@ -16,6 +16,7 @@ export class SettingsStore {
 		lineNumbers: string;
 	} | null>(null);
 	occurrencesHighlight = $state(false);
+	autoSave = $state(true);
 
 	constructor() {
 		if (typeof localStorage !== 'undefined') {
@@ -31,6 +32,7 @@ export class SettingsStore {
 			const savedZenMode = localStorage.getItem('editor.zenMode');
 			const savedPreZenState = localStorage.getItem('editor.preZenState');
 			const savedOccurrencesHighlight = localStorage.getItem('editor.occurrencesHighlight');
+			const savedAutoSave = localStorage.getItem('editor.autoSave');
 
 			if (savedMinimap !== null) this.minimap = savedMinimap === 'true';
 			if (savedWordWrap !== null) this.wordWrap = savedWordWrap;
@@ -43,6 +45,7 @@ export class SettingsStore {
 			if (savedShowTabs !== null) this.showTabs = savedShowTabs === 'true';
 			if (savedZenMode !== null) this.zenMode = savedZenMode === 'true';
 			if (savedOccurrencesHighlight !== null) this.occurrencesHighlight = savedOccurrencesHighlight === 'true';
+			if (savedAutoSave !== null) this.autoSave = savedAutoSave === 'true';
 			if (savedPreZenState !== null) {
 				try {
 					this.preZenState = JSON.parse(savedPreZenState);
@@ -64,6 +67,7 @@ export class SettingsStore {
 					localStorage.setItem('editor.showTabs', String(this.showTabs));
 					localStorage.setItem('editor.zenMode', String(this.zenMode));
 					localStorage.setItem('editor.occurrencesHighlight', String(this.occurrencesHighlight));
+					localStorage.setItem('editor.autoSave', String(this.autoSave));
 					if (this.preZenState) {
 						localStorage.setItem('editor.preZenState', JSON.stringify(this.preZenState));
 					} else {
@@ -135,6 +139,10 @@ export class SettingsStore {
 
 	toggleOccurrencesHighlight() {
 		this.occurrencesHighlight = !this.occurrencesHighlight;
+	}
+
+	toggleAutoSave() {
+		this.autoSave = !this.autoSave;
 	}
 }
 
