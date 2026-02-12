@@ -104,19 +104,29 @@
 		showHome = false;
 	});
 
-	async function loadMarkdown(filePath: string, options: { navigate?: boolean; skipTabManagement?: boolean } = {}) {
+	async function loadMarkdown(filePath: string, options: { navigate?: boolean; skipTabManagement?: boolean; newTab?: boolean } = {}) {
 		showHome = false;
 		try {
 			if (options.navigate && tabManager.activeTab) {
 				tabManager.navigate(tabManager.activeTab.id, filePath);
 			} else if (!options.skipTabManagement) {
-				const existing = tabManager.tabs.find((t) => t.path === filePath);
-				if (existing) {
-					tabManager.setActive(existing.id);
-				} else if (tabManager.activeTab && tabManager.activeTab.path === '') {
-					tabManager.updateTabPath(tabManager.activeTab.id, filePath);
+				if (options.newTab) {
+					const existing = tabManager.tabs.find((t) => t.path === filePath);
+					if (existing) {
+						tabManager.setActive(existing.id);
+					} else {
+						tabManager.addTab(filePath);
+					}
 				} else {
-					tabManager.addTab(filePath);
+					const existing = tabManager.tabs.find((t) => t.path === filePath);
+					if (existing) {
+						tabManager.setActive(existing.id);
+					} else if (tabManager.activeTab) {
+						// Replace current tab
+						tabManager.updateTabPath(tabManager.activeTab.id, filePath);
+					} else {
+						tabManager.addTab(filePath);
+					}
 				}
 			}
 			const activeId = tabManager.activeTabId;

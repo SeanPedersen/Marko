@@ -15,7 +15,7 @@
 	} = $props<{
 		folderPath: string;
 		visible?: boolean;
-		onopenfile?: (path: string) => void;
+		onopenfile?: (path: string, options?: { newTab?: boolean }) => void;
 	}>();
 
 	let entries = $state<DirEntry[]>([]);
@@ -91,14 +91,15 @@
 		}
 	}
 
-	function handleFileClick(entry: DirEntry) {
+	function handleFileClick(event: MouseEvent, entry: DirEntry) {
 		if (entry.is_dir) {
 			toggleDir(entry);
 		} else {
 			const ext = entry.name.split('.').pop()?.toLowerCase() || '';
 			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd'].includes(ext);
 			if (isMarkdown && onopenfile) {
-				onopenfile(entry.path);
+				const newTab = event.button === 1; // Middle mouse button
+				onopenfile(entry.path, { newTab });
 			}
 		}
 	}
@@ -135,7 +136,7 @@
 			class:is-dir={entry.is_dir}
 			class:is-markdown={isMarkdown}
 			class:disabled={!entry.is_dir && !isMarkdown}
-			onclick={() => handleFileClick(entry)}
+			onclick={(event) => handleFileClick(event, entry)}
 			title={entry.path}
 		>
 			<span class="icon">
