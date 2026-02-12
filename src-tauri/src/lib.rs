@@ -113,6 +113,11 @@ struct DirEntry {
 }
 
 #[tauri::command]
+fn is_directory(path: String) -> bool {
+    Path::new(&path).is_dir()
+}
+
+#[tauri::command]
 fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
     let dir_path = Path::new(&path);
     if !dir_path.is_dir() {
@@ -529,6 +534,7 @@ pub fn run() {
             read_file_content,
             save_file_content,
             read_directory,
+            is_directory,
 
             get_app_mode,
             setup::install_app,

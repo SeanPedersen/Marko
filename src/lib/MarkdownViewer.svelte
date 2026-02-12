@@ -29,7 +29,7 @@
 	let showHome = $state(false);
 	let isDragging = $state(false);
 	let tocVisible = $state(localStorage.getItem('toc-visible') !== 'false');
-	let folderExplorerVisible = $state(localStorage.getItem('folder-explorer-visible') === 'true');
+	let folderExplorerVisible = $state(false); // Don't restore on startup - only show when explicitly opened
 	let currentFolder = $state(localStorage.getItem('current-folder') || '');
 
 	// Theme State
@@ -511,6 +511,16 @@
 		}
 	}
 
+	async function handleFilePath(path: string) {
+		if (!path) return;
+		const isDir = await invoke('is_directory', { path }) as boolean;
+		if (isDir) {
+			openFolder(path);
+		} else {
+			loadMarkdown(path);
+		}
+	}
+
 	onMount(() => {
 		loadRecentFiles();
 		loadRecentFolders();
@@ -521,7 +531,32 @@
 
 		const init = async () => {
 			const { getCurrentWindow } = await import('@tauri-apps/api/window');
+			const { listen } = await import('@tauri-apps/api/event');
 			const appWindow = getCurrentWindow();
+
+			// Listen for file-path events (from CLI args, single-instance, file associations)
+			const unlistenFilePath = await listen<string>('file-path', (event) => {
+				handleFilePath(event.payload);
+			});
+			unlisteners.push(unlistenFilePath);
+
+			// Check for file passed via URL query param (for detached windows)
+			const urlParams = new URLSearchParams(window.location.search);
+			const fileParam = urlParams.get('file');
+			if (fileParam) {
+				handleFilePath(fileParam);
+			}
+
+			// Check for initial CLI args
+			try {
+				const paths = await invoke('send_markdown_path') as string[];
+				if (paths.length > 0) {
+					handleFilePath(paths[0]);
+				}
+			} catch (e) {
+				console.error('Failed to get startup paths:', e);
+			}
+
 			try {
 				const appModePromise = invoke('get_app_mode');
 				const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
