@@ -1,16 +1,12 @@
 
-![demo](pics/demo.gif)
+# Marko
 
-# [Marko](https://markpad.sftwr.dev)
-
-A simple, lightweight Markdown viewer and text editor for Windows, macOS, and Linux.
-
-Download from [markpad.sftwr.dev](https://markpad.sftwr.dev)
+A simple, lightweight WYSIWYG Markdown editor for Windows, macOS, and Linux.
 
 ## Features
 
 - Tabbed interface
-- WYSIWYG Markdown editor (Milkdown)
+- WYSIWYG Markdown editor
 - Syntax highlighting both in editor and code blocks
 - Mermaid diagram support
 - Auto-reload
@@ -25,10 +21,6 @@ Download from [markpad.sftwr.dev](https://markpad.sftwr.dev)
 
 See [CHANGELOG.md](CHANGELOG.md)
 
-## Installation
-
-Download the latest executable or installer from the [releases page](https://github.com/alecdotdev/Marko/releases/latest) or from [markpad.sftwr.dev](https://markpad.sftwr.dev)
-
 #### Windows Installer
 Automatically configures `.md` file association 
 
@@ -42,9 +34,6 @@ Right click on a markdown file and select "Open with" and select the downloaded 
 - Run `npm run tauri build` to build the installer
 - Repeat the steps above to set the executable as the default program to open `.md` files
 
-## Screenshots
+## Based on
 
-![readme splitview demo](pics/image.png)
-![codeblock demonstration](pics/image1.png)
-![editor view](pics/image2.png)
-![home page](pics/image3.png)
+[MarkPad](https://github.com/alecdotdev/Markpad) by Alec Ames
