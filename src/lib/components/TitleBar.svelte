@@ -3,7 +3,6 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { fly, slide } from 'svelte/transition';
 	import { flip } from 'svelte/animate';
-	import iconUrl from '../../assets/icon.png';
 	import TabList from './TabList.svelte';
 	import { tabManager } from '../stores/tabs.svelte.js';
 	import { settings } from '../stores/settings.svelte.js';
@@ -24,6 +23,9 @@
 		oncloseTab,
 		theme = 'system',
 		onSetTheme,
+		tocVisible = false,
+		ontoggleToc,
+		showTocButton = false,
 	} = $props<{
 		isFocused: boolean;
 		isScrolled: boolean;
@@ -40,6 +42,9 @@
 		oncloseTab?: (id: string) => void;
 		theme?: 'system' | 'dark' | 'light';
 		onSetTheme?: (theme: 'system' | 'dark' | 'light') => void;
+		tocVisible?: boolean;
+		ontoggleToc?: () => void;
+		showTocButton?: boolean;
 	}>();
 
 	const appWindow = getCurrentWindow();
@@ -156,16 +161,28 @@
 			</div>
 		{/if}
 		<button class="icon-home-btn {showHome ? 'active' : ''}" onclick={ontoggleHome} aria-label="Home" onmouseenter={(e) => showTooltip(e, 'Home')} onmouseleave={hideTooltip}>
-			<img
-				src={iconUrl}
-				alt="icon"
-				class="window-icon"
-				style:filter={theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'none' : 'invert(0.7)'} />
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+				<polyline points="9 22 9 12 15 12 15 22"></polyline>
+			</svg>
 		</button>
+		{#if showTocButton}
+			<button
+				class="icon-home-btn {tocVisible ? 'active' : ''}"
+				onclick={ontoggleToc}
+				aria-label="Toggle Table of Contents"
+				onmouseenter={(e) => showTooltip(e, tocVisible ? 'Hide Contents' : 'Show Contents')}
+				onmouseleave={hideTooltip}
+			>
+				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+					<path d="M2 3h12M2 7h8M2 11h10"/>
+				</svg>
+			</button>
+		{/if}
 	</div>
 
 	{#if tabManager.tabs.length > 0 && settings.showTabs}
-		<div class="tab-area">
+		<div class="tab-area" class:toc-offset={tocVisible && showTocButton}>
 			<TabList onnewTab={() => tabManager.addNewTab()} {ondetach} {showHome} {ontabclick} {oncloseTab} />
 		</div>
 	{:else}
@@ -323,6 +340,11 @@
 		height: 100%;
 		overflow: hidden;
 		min-width: 0;
+		transition: padding-left 0.15s ease-out;
+	}
+
+	.tab-area.toc-offset {
+		padding-left: 150px;
 	}
 
 	.window-controls-left {
@@ -371,35 +393,27 @@
 		color: var(--color-fg-default);
 	}
 
-	.window-icon {
-		width: 16px;
-		height: 16px;
-		opacity: 0.8;
-	}
-
-	@media (prefers-color-scheme: light) {
-		.window-icon {
-			filter: grayscale(1) brightness(0.2);
-			opacity: 0.6;
-		}
-	}
-
 	.icon-home-btn {
 		background: transparent;
 		border: none;
 		padding: 4px;
-		margin: -4px;
 		border-radius: 4px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		cursor: pointer;
-		transition: background 0.1s;
+		transition: background 0.1s, color 0.1s;
+		color: var(--color-fg-muted);
 	}
 
-	.icon-home-btn:hover,
+	.icon-home-btn:hover {
+		background: var(--color-canvas-subtle);
+		color: var(--color-fg-default);
+	}
+
 	.icon-home-btn.active {
 		background: var(--color-canvas-subtle);
+		color: var(--color-accent-fg);
 	}
 
 	.window-title-container {

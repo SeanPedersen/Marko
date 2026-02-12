@@ -1,16 +1,13 @@
 <script lang="ts">
 	import { parseHeadings, type Heading } from '../utils/parseHeadings.js';
-	import { createEventDispatcher } from 'svelte';
 
 	let {
 		rawContent = '',
 		visible = true,
-		ontoggle,
 		onscrollto,
 	} = $props<{
 		rawContent: string;
 		visible?: boolean;
-		ontoggle?: () => void;
 		onscrollto?: (event: CustomEvent<{ lineNumber: number }>) => void;
 	}>();
 
@@ -39,72 +36,30 @@
 	// A more sophisticated approach would involve the editor reporting visible headings
 </script>
 
-{#if hasHeadings}
-	<button
-		class="toc-toggle"
-		class:collapsed={!visible}
-		onclick={ontoggle}
-		title={visible ? 'Hide Table of Contents' : 'Show Table of Contents'}
-		aria-label="Toggle table of contents"
-	>
-		<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-			<path d="M2 3h12M2 7h8M2 11h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-		</svg>
-	</button>
-
-	{#if visible}
-		<nav class="toc-sidebar" aria-label="Table of contents">
-			<div class="toc-header">Contents</div>
-			<ul class="toc-list">
-				{#each headings as heading, i}
-					<li
-						class="toc-item"
-						class:active={i === activeHeadingIndex}
-						style="padding-left: {(heading.level - MIN_INDENT_LEVEL) * 12 + 8}px"
+{#if hasHeadings && visible}
+	<nav class="toc-sidebar" aria-label="Table of contents">
+		<div class="toc-header">Contents</div>
+		<ul class="toc-list">
+			{#each headings as heading, i}
+				<li
+					class="toc-item"
+					class:active={i === activeHeadingIndex}
+					style="padding-left: {(heading.level - MIN_INDENT_LEVEL) * 12 + 8}px"
+				>
+					<button
+						class="toc-link"
+						onclick={() => scrollToHeading(heading, i)}
+						title={heading.text}
 					>
-						<button
-							class="toc-link"
-							onclick={() => scrollToHeading(heading, i)}
-							title={heading.text}
-						>
-							{heading.text}
-						</button>
-					</li>
-				{/each}
-			</ul>
-		</nav>
-	{/if}
+						{heading.text}
+					</button>
+				</li>
+			{/each}
+		</ul>
+	</nav>
 {/if}
 
 <style>
-	.toc-toggle {
-		position: fixed;
-		top: 44px;
-		left: 8px;
-		z-index: 100;
-		width: 28px;
-		height: 28px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border: 1px solid var(--color-border-default);
-		border-radius: 6px;
-		background: var(--color-canvas-default);
-		color: var(--color-fg-muted);
-		cursor: pointer;
-		opacity: 0.7;
-		transition: opacity 0.15s, background 0.15s;
-	}
-
-	.toc-toggle:hover {
-		opacity: 1;
-		background: var(--color-canvas-subtle);
-	}
-
-	.toc-toggle.collapsed {
-		opacity: 0.5;
-	}
-
 	.toc-sidebar {
 		position: fixed;
 		top: 36px;
@@ -117,7 +72,7 @@
 		overflow-x: hidden;
 		z-index: 50;
 		font-family: var(--win-font);
-		padding-top: 40px;
+		padding-top: 8px;
 		animation: slideIn 0.15s ease-out;
 	}
 

@@ -530,13 +530,15 @@
 				});
 			}}
 			{theme}
-			onSetTheme={(t) => (theme = t)} />
+			onSetTheme={(t) => (theme = t)}
+			{tocVisible}
+			ontoggleToc={toggleToc}
+			showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== ''} />
 
 	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
 		<TableOfContents
 			rawContent={tabManager.activeTab?.rawContent ?? ''}
 			visible={tocVisible}
-			ontoggle={toggleToc}
 			onscrollto={handleTocScroll}
 		/>
 		<div
