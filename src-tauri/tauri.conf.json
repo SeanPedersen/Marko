@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Marko",
+  "productName": "marko",
   "version": "../package.json",
   "identifier": "com.seanpedersen.marko",
   "build": {

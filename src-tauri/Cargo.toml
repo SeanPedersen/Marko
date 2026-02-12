@@ -1,12 +1,12 @@
 [package]
-name = "Marko"
-version = "2.3.1"
+name = "marko"
+version = "4.20.0"
 description = "Simple Markdown viewer and text editor"
 authors = ["you"]
 edition = "2021"
 
 [[bin]]
-name = "Marko"
+name = "marko"
 path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
