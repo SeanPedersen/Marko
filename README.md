@@ -6,12 +6,11 @@ A simple, lightweight WYSIWYG Markdown editor for Windows, macOS, and Linux.
 ## Features
 
 - Tabbed interface
-- WYSIWYG Markdown editor (CodeMirror)
+- WYSIWYG Markdown inline editor (CodeMirror)
 - Auto-reload
-- Familiar GitHub styled markdown rendering
-- No telemetry or bloat
 - Free and open-source
 - Lightweight native UI
+- No telemetry or bloat
 
 ## Changelog
 
