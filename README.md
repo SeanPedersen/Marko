@@ -6,13 +6,9 @@ A simple, lightweight WYSIWYG Markdown editor for Windows, macOS, and Linux.
 ## Features
 
 - Tabbed interface
-- WYSIWYG Markdown editor
-- Syntax highlighting both in editor and code blocks
-- Mermaid diagram support
+- WYSIWYG Markdown editor (CodeMirror)
 - Auto-reload
-- Image and YouTube embeds
 - Familiar GitHub styled markdown rendering
-- Tiny memory usage (~10MB)
 - No telemetry or bloat
 - Free and open-source
 - Lightweight native UI

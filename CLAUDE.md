@@ -1,6 +1,6 @@
-# Marko (Marko)
+# Marko
 
-A Tauri-based markdown editor with Obsidian-style live preview.
+A Tauri-based markdown editor with Obsidian-style WYSIWYG inline editor.
 
 ## Tech Stack
 
@@ -75,9 +75,3 @@ npm run build        # Production build
 npm run check        # TypeScript/Svelte type checking
 npm run tauri dev    # Run with Tauri
 ```
-
-## Notes
-
-- Milkdown was replaced with CodeMirror 6 to prevent auto-formatting of markdown
-- The editor preserves exact markdown source - no reformatting on load/save
-- Heading sizes are intentionally subtle (H1: 1.5em, H2: 1.3em, etc.)
