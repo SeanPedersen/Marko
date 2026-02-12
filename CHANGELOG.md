@@ -1,6 +1,12 @@
 # Changelog
 
-<!-- ### Unreleased -->
+### Unreleased
+
+- Replaced Monaco editor with Milkdown WYSIWYG Markdown editor
+- Removed split view functionality
+- Removed Vim mode
+- Unified editing and viewing in a single WYSIWYG interface
+- Simplified UI by removing edit/view toggle and split controls
 
 
 ### Releases

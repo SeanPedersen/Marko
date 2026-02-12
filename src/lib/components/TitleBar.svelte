@@ -12,56 +12,32 @@
 		isFocused,
 		isScrolled,
 		currentFile,
-		liveMode,
-
 		windowTitle,
 		showHome,
 		onselectFile,
 		ontoggleHome,
 		ononpenFileLocation,
-		ontoggleLiveMode,
-
-		ontoggleEdit,
-		ontoggleSplit,
-		isEditing,
 		ondetach,
 		ontabclick,
 		zoomLevel,
 		onresetZoom,
 		oncloseTab,
-		isScrollSynced,
-		ontoggleSync,
-		isFullWidth,
-		ontoggleFullWidth,
 		theme = 'system',
 		onSetTheme,
 	} = $props<{
 		isFocused: boolean;
 		isScrolled: boolean;
 		currentFile: string;
-		liveMode: boolean;
-
 		windowTitle: string;
 		showHome: boolean;
 		onselectFile: () => void;
 		ontoggleHome: () => void;
 		ononpenFileLocation: () => void;
-		ontoggleLiveMode: () => void;
-
-		ontoggleEdit: () => void;
-		ontoggleSplit?: () => void;
-		isEditing: boolean;
-		ondetach: (tabId: string) => void;
+		ondetach?: (tabId: string) => void;
 		ontabclick?: () => void;
 		zoomLevel?: number;
 		onresetZoom?: () => void;
-
 		oncloseTab?: (id: string) => void;
-		isScrollSynced?: boolean;
-		ontoggleSync?: () => void;
-
-		isFullWidth?: boolean;
-		ontoggleFullWidth?: () => void;
 		theme?: 'system' | 'dark' | 'light';
 		onSetTheme?: (theme: 'system' | 'dark' | 'light') => void;
 	}>();
@@ -134,18 +110,7 @@
 			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd'].includes(ext);
 
 			if (isMarkdown) {
-				list.push('split');
-				if (tabManager.activeTab?.isSplit) {
-					list.push('sync');
-				} else {
-					list.push('fullWidth');
-					if (!isEditing) {
-						list.push('live');
-					}
-				}
-				if (!tabManager.activeTab?.isSplit) {
-					list.push('edit');
-				}
+				// Removed split, sync, fullWidth, live, and edit buttons since Milkdown provides unified WYSIWYG editing
 			}
 		}
 		return list;
@@ -241,72 +206,6 @@
 								x2="18"
 								y2="10"></line
 							></svg>
-					</button>
-				{:else if id === 'split'}
-					<button
-						class="title-action-btn {tabManager.activeTab?.isSplit ? 'active' : ''}"
-						onclick={() => ontoggleSplit?.()}
-						aria-label="Toggle Split View"
-						onmouseenter={(e) => showTooltip(e, 'Split view', 'H')}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line><rect
-								x="13"
-								y="2"
-								width="9"
-								height="20"
-								rx="2"
-								ry="2"
-								transform="rotate(0 13 2)"></rect
-							></svg>
-					</button>
-				{:else if id === 'sync'}
-					<button
-						class="title-action-btn {isScrollSynced ? 'active' : ''}"
-						onclick={() => ontoggleSync?.()}
-						aria-label="Toggle Scroll Sync"
-						onmouseenter={(e) => showTooltip(e, 'Scroll sync')}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-					</button>
-				{:else if id === 'fullWidth'}
-					<button
-						class="title-action-btn {isFullWidth ? 'active' : ''}"
-						onclick={() => ontoggleFullWidth?.()}
-						aria-label="Toggle Full Width"
-						onmouseenter={(e) => showTooltip(e, 'Toggle full width')}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"
-							><path
-								d="M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm640-560H160v480h640v-480Zm-640 0v480-480Zm200 360v-240L240-480l120 120Zm360-120L600-600v240l120-120Z" /></svg>
-					</button>
-				{:else if id === 'live'}
-					<button
-						class="title-action-btn {liveMode ? 'active' : ''}"
-						onclick={ontoggleLiveMode}
-						aria-label="Toggle Auto-Reload"
-						onmouseenter={(e) => showTooltip(e, 'Auto-Reload')}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path
-								d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path
-							></svg>
-					</button>
-				{:else if id === 'edit'}
-					<button
-						class="title-action-btn {isEditing ? 'active' : ''}"
-						onclick={ontoggleEdit}
-						aria-label="Edit File (Ctrl+E)"
-						onmouseenter={(e) => showTooltip(e, 'Edit file', 'E')}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
 					</button>
 				{:else if id === 'theme'}
 					<div class="theme-dropdown-container">

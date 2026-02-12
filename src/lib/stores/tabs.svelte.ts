@@ -10,12 +10,8 @@ export interface Tab {
 	isEditing: boolean;
 	history: string[];
 	historyIndex: number;
-	editorViewState: any; // monaco.editor.ICodeEditorViewState | null
 	scrollPercentage: number;
 	anchorLine: number;
-	isSplit: boolean;
-	splitRatio: number;
-	isScrollSynced: boolean;
 }
 
 class TabManager {
@@ -39,15 +35,11 @@ class TabManager {
 			originalContent: content,
 			scrollTop: 0,
 			isDirty: false,
-			isEditing: false,
+			isEditing: true, // Always editing with Milkdown
 			history: [content],
 			historyIndex: 0,
-			editorViewState: null,
 			scrollPercentage: 0,
 			anchorLine: 0,
-			isSplit: false,
-			splitRatio: 0.5,
-			isScrollSynced: false
 		});
 
 		this.activeTabId = id;
@@ -66,15 +58,11 @@ class TabManager {
 			originalContent: content,
 			scrollTop: 0,
 			isDirty: false,
-			isEditing: true, // Start in edit mode
+			isEditing: true, // Always editing with Milkdown
 			history: [content],
 			historyIndex: 0,
-			editorViewState: null,
 			scrollPercentage: 0,
 			anchorLine: 0,
-			isSplit: false,
-			splitRatio: 0.5,
-			isScrollSynced: false
 		});
 
 		this.activeTabId = id;
@@ -101,12 +89,8 @@ class TabManager {
 			isEditing: false,
 			history: [],
 			historyIndex: 0,
-			editorViewState: null,
 			scrollPercentage: 0,
 			anchorLine: 0,
-			isSplit: false,
-			splitRatio: 0.5,
-			isScrollSynced: false
 		});
 
 		this.activeTabId = id;
@@ -169,13 +153,6 @@ class TabManager {
 		}
 	}
 
-	updateTabEditorState(id: string, viewState: any) {
-		const tab = this.tabs.find((t) => t.id === id);
-		if (tab) {
-			tab.editorViewState = viewState;
-		}
-	}
-
 	updateTabScrollPercentage(id: string, percentage: number) {
 		const tab = this.tabs.find((t) => t.id === id);
 		if (tab) {
@@ -187,27 +164,6 @@ class TabManager {
 		const tab = this.tabs.find((t) => t.id === id);
 		if (tab) {
 			tab.anchorLine = line;
-		}
-	}
-
-	toggleSplit(id: string) {
-		const tab = this.tabs.find((t) => t.id === id);
-		if (tab) {
-			tab.isSplit = !tab.isSplit;
-		}
-	}
-
-	setSplitRatio(id: string, ratio: number) {
-		const tab = this.tabs.find((t) => t.id === id);
-		if (tab) {
-			tab.splitRatio = Math.max(0.1, Math.min(0.9, ratio));
-		}
-	}
-
-	toggleScrollSync(id: string) {
-		const tab = this.tabs.find((t) => t.id === id);
-		if (tab) {
-			tab.isScrollSynced = !tab.isScrollSynced;
 		}
 	}
 

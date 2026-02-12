@@ -10,13 +10,10 @@ Download from [markpad.sftwr.dev](https://markpad.sftwr.dev)
 ## Features
 
 - Tabbed interface
-- Monaco editor (VS Code)
-- Split view
+- WYSIWYG Markdown editor (Milkdown)
 - Syntax highlighting both in editor and code blocks
 - Mermaid diagram support
-- Vim mode
 - Auto-reload
-- Zen mode
 - Image and YouTube embeds
 - Familiar GitHub styled markdown rendering
 - Tiny memory usage (~10MB)
