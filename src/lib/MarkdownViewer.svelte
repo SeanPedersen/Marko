@@ -15,6 +15,7 @@
 	import { tabManager } from './stores/tabs.svelte.js';
 	import { settings } from './stores/settings.svelte.js';
 	import { debounce } from './utils/debounce.js';
+	import { parseHeadings } from './utils/parseHeadings.js';
 
 	let mode = $state<'loading' | 'app' | 'installer' | 'uninstall'>('loading');
 
@@ -30,6 +31,7 @@
 		const markdownExts = ['md', 'markdown', 'mdown', 'mkd'];
 		return markdownExts.includes(ext || '') ? 'markdown' : 'text';
 	});
+	let hasHeadings = $derived(parseHeadings(tabManager.activeTab?.rawContent ?? '').length > 0);
 	let scrollTop = $derived(tabManager.activeTab?.scrollTop ?? 0);
 	let isScrolled = $derived(scrollTop > 0);
 	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Marko');
@@ -690,7 +692,7 @@
 			onSetTheme={(t) => (theme = t)}
 			{tocVisible}
 			ontoggleToc={toggleToc}
-			showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType === 'markdown'}
+			showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType === 'markdown' && hasHeadings}
 			{folderExplorerVisible}
 			ontoggleFolderExplorer={toggleFolderExplorer}
 			showFolderExplorerButton={!!currentFolder} />
@@ -708,7 +710,7 @@
 		/>
 		<div
 			class="markdown-container"
-			class:toc-open={tocVisible || folderExplorerVisible}
+			class:sidebar-open={tocVisible || folderExplorerVisible}
 			style="zoom: {zoomLevel / 100}"
 			role="presentation"
 		>
@@ -802,11 +804,10 @@
 		right: 0;
 		bottom: 0;
 		overflow: hidden;
-		transition: left 0.15s ease-out;
 	}
 
-	.markdown-container.toc-open {
-		left: 220px;
+	.markdown-container.sidebar-open {
+		left: clamp(0px, 1184px - 100vw, calc(232px - 2rem));
 	}
 
 	.home-container {

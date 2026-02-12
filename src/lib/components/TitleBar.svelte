@@ -201,7 +201,7 @@
 	</div>
 
 	{#if tabManager.tabs.length > 0 && settings.showTabs}
-		<div class="tab-area" class:toc-offset={(tocVisible && showTocButton) || (folderExplorerVisible && showFolderExplorerButton)}>
+		<div class="tab-area">
 			<TabList onnewTab={() => tabManager.addNewTab()} {ondetach} {showHome} {ontabclick} {oncloseTab} />
 		</div>
 	{:else}
@@ -362,10 +362,6 @@
 		overflow: hidden;
 		min-width: 0;
 		transition: padding-left 0.15s ease-out;
-	}
-
-	.tab-area.toc-offset {
-		padding-left: 150px;
 	}
 
 	.window-controls-left {
