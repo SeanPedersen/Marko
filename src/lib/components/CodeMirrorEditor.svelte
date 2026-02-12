@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine, rectangularSelection } from '@codemirror/view';
 	import { EditorState, Compartment } from '@codemirror/state';
 	import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -120,8 +120,10 @@
 
 	// Re-initialize editor when fileType changes
 	$effect(() => {
-		fileType; // Dependency
-		if (container) initEditor(); // Only re-init if container exists
+		fileType; // Only track fileType changes
+		untrack(() => {
+			if (container) initEditor();
+		});
 	});
 
 	onDestroy(() => {

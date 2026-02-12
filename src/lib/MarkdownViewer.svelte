@@ -22,7 +22,7 @@
 
 	// derived from tab manager
 	let currentFile = $derived(tabManager.activeTab?.path ?? '');
-	let currentFileType = $derived(() => {
+	let currentFileType = $derived.by((): 'markdown' | 'text' => {
 		if (!currentFile) return 'text';
 		const ext = currentFile.split('.').pop()?.toLowerCase();
 		const markdownExts = ['md', 'markdown', 'mdown', 'mkd'];
@@ -270,7 +270,7 @@
 
 		if (!targetPath) {
 			// Special handling for new (untitled) files
-			const fileType = currentFileType();
+			const fileType = currentFileType;
 			const filters = fileType === 'markdown' 
 				? [
 					{ name: 'Markdown', extensions: ['md'] },
@@ -675,7 +675,7 @@
 			onSetTheme={(t) => (theme = t)}
 			{tocVisible}
 			ontoggleToc={toggleToc}
-			showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType() === 'markdown'}
+			showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType === 'markdown'}
 			{folderExplorerVisible}
 			ontoggleFolderExplorer={toggleFolderExplorer}
 			showFolderExplorerButton={!!currentFolder} />
@@ -683,7 +683,7 @@
 	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
 		<TableOfContents
 			rawContent={tabManager.activeTab?.rawContent ?? ''}
-			visible={tocVisible && !folderExplorerVisible && currentFileType() === 'markdown'}
+			visible={tocVisible && !folderExplorerVisible && currentFileType === 'markdown'}
 			onscrollto={handleTocScroll}
 		/>
 		<FolderExplorer
@@ -703,7 +703,7 @@
 				{theme}
 				{zoomLevel}
 				readonly={false}
-				fileType={currentFileType()}
+				fileType={currentFileType}
 				onchange={handleEditorChange}
 			/>
 		</div>
