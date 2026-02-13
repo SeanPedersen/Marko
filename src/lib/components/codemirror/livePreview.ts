@@ -167,6 +167,7 @@ const italicDecoration = Decoration.mark({ class: 'cm-live-italic' });
 const strikethroughDecoration = Decoration.mark({ class: 'cm-live-strikethrough' });
 const inlineCodeDecoration = Decoration.mark({ class: 'cm-live-inline-code' });
 const blockquoteDecoration = Decoration.mark({ class: 'cm-live-blockquote' });
+const plainTextDecoration = Decoration.mark({ class: 'cm-live-plain-text' });
 
 // Line-level decorations
 const headingDecorations = [
@@ -217,11 +218,21 @@ function trimUnbalancedParens(url: string): string {
   return url.slice(0, end);
 }
 
+// Common TLDs for bare domain detection (e.g. groq.com, example.org)
+const COMMON_TLDS = new Set([
+  'com', 'org', 'net', 'io', 'dev', 'ai', 'co', 'app', 'edu', 'gov',
+  'xyz', 'me', 'info', 'biz', 'tech', 'site', 'online', 'store', 'cloud',
+  'de', 'uk', 'fr', 'jp', 'cn', 'ru', 'br', 'in', 'au', 'ca', 'nl',
+  'it', 'es', 'ch', 'se', 'no', 'fi', 'dk', 'at', 'be', 'pl', 'cz',
+  'pt', 'kr', 'tw', 'sg', 'hk', 'nz', 'za', 'mx', 'ar', 'cl',
+]);
+
 // Function to detect plain URLs in text that aren't already parsed as links
 function findPlainUrls(view: EditorView, existingElements: ParsedElement[]): ParsedElement[] {
   const elements: ParsedElement[] = [];
   const doc = view.state.doc;
-  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/g;
+  // Match URLs with protocol, www. prefix, or bare domains (word.tld)
+  const urlRegex = /(?:https?:\/\/|www\.)[^\s<>"{}|\\^`\[\]]+|(?<![.@/\\\w])(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(?:\/[^\s<>"{}|\\^`\[\]]*)?/g;
 
   // Create a set of ranges that are already covered by existing elements (excluding list items)
   const coveredRanges = new Set<string>();
@@ -240,7 +251,22 @@ function findPlainUrls(view: EditorView, existingElements: ParsedElement[]): Par
     let match;
 
     while ((match = urlRegex.exec(lineText)) !== null) {
-      const url = trimUnbalancedParens(match[0]);
+      let url = trimUnbalancedParens(match[0]);
+      // Strip trailing punctuation that's likely sentence-level (,.;:!?)
+      url = url.replace(/[,;:!?]+$/, '');
+
+      const isProtocolUrl = /^https?:\/\//.test(url);
+      const isWwwUrl = /^www\./i.test(url);
+      const isBareDomain = !isProtocolUrl && !isWwwUrl;
+
+      // For bare domains, validate the TLD to avoid false positives
+      if (isBareDomain) {
+        const dotIndex = url.indexOf('/');
+        const domain = dotIndex >= 0 ? url.slice(0, dotIndex) : url;
+        const tld = domain.split('.').pop()?.toLowerCase();
+        if (!tld || !COMMON_TLDS.has(tld)) continue;
+      }
+
       const startPos = line.from + match.index;
       const endPos = startPos + url.length;
 
@@ -254,13 +280,14 @@ function findPlainUrls(view: EditorView, existingElements: ParsedElement[]): Par
       }
 
       if (!isCovered) {
+        const href = isProtocolUrl ? url : `https://${url}`;
         elements.push({
           type: 'url',
           from: startPos,
           to: endPos,
           line: lineNum,
           text: url,
-          url: url,
+          url: href,
         });
       }
     }
@@ -535,11 +562,38 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
           });
           break;
         }
+
+        case 'URL':
+        case 'Autolink': {
+          const rawText = doc.sliceString(from, to);
+          const inner = rawText.startsWith('<') ? rawText.slice(1, -1) : rawText;
+
+          // Detect emails: preceded by @ or contains @
+          const isEmail =
+            inner.includes('@') ||
+            (from > 0 && doc.sliceString(from - 1, from) === '@');
+
+          if (isEmail) {
+            elements.push({ type: 'emailUrl', from, to, line });
+            break;
+          }
+
+          const href = inner.startsWith('http') ? inner : `https://${inner}`;
+          elements.push({
+            type: 'url',
+            from,
+            to,
+            line,
+            text: inner,
+            url: href,
+          });
+          break;
+        }
       }
     },
   });
 
-  // Add plain URL detection
+  // Add plain URL detection for URLs not caught by the parser
   const plainUrls = findPlainUrls(view, elements);
   elements.push(...plainUrls);
 
@@ -732,6 +786,12 @@ function buildDecorations(view: EditorView): DecorationSet {
         break;
       }
 
+      case 'emailUrl': {
+        // Override default URL highlighting for email domains
+        decorations.push(plainTextDecoration.range(el.from, el.to));
+        break;
+      }
+
       case 'image': {
         if (!isOnCursorLine && el.text !== undefined && el.url !== undefined) {
           decorations.push(
@@ -901,6 +961,13 @@ export const livePreviewStyles = EditorView.baseTheme({
     borderRadius: '3px',
     padding: '0.15em 0.4em',
     fontSize: '0.9em',
+  },
+
+  // Reset styling for URLs inside emails
+  '.cm-live-plain-text': {
+    color: 'inherit !important',
+    textDecoration: 'none !important',
+    cursor: 'inherit !important',
   },
 
   // Links
