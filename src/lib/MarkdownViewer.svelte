@@ -559,11 +559,7 @@
 			e.preventDefault();
 			handleNewFile();
 		}
-		if (cmdOrCtrl && !e.shiftKey && key === 't') {
-			e.preventDefault();
-			tabManager.addHomeTab();
-		}
-		if (cmdOrCtrl && key === 's') {
+			if (cmdOrCtrl && key === 's') {
 			e.preventDefault();
 			saveContent();
 		}
