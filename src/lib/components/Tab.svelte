@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Tab } from '../stores/tabs.svelte.js';
+	import { settings } from '../stores/settings.svelte.js';
 	import { tick } from 'svelte';
 
 	let {
@@ -92,6 +93,8 @@
 
 	// home tab has empty path
 	let isHomeTab = $derived(tab.path === '');
+	// Hide dirty indicator when auto-save is enabled (file will be saved automatically)
+	let showDirtyIndicator = $derived(tab.isDirty && !(settings.autoSave && tab.path));
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -115,12 +118,12 @@
 		</button>
 	{/if}
 	<div class="tab-actions">
-		<button class="tab-close" class:dirty={tab.isDirty} class:deleted={tab.isDeleted} onclick={handleClose} onmousedown={(e) => e.stopPropagation()} title="Close (Ctrl+W)">
+		<button class="tab-close" class:dirty={showDirtyIndicator} class:deleted={tab.isDeleted} onclick={handleClose} onmousedown={(e) => e.stopPropagation()} title="Close (Ctrl+W)">
 			{#if tab.isDeleted}
 				<svg class="deleted-icon" width="12" height="12" viewBox="0 0 16 16">
 					<path fill="currentColor" d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5m-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5M4.5 5.029l.5 8.5a.5.5 0 1 0 .998-.06l-.5-8.5a.5.5 0 1 0-.998.06m6.53-.528a.5.5 0 0 0-.528.47l-.5 8.5a.5.5 0 0 0 .998.058l.5-8.5a.5.5 0 0 0-.47-.528M8 4.5a.5.5 0 0 0-.5.5v8.5a.5.5 0 0 0 1 0V5a.5.5 0 0 0-.5-.5"/>
 				</svg>
-			{:else if tab.isDirty}
+			{:else if showDirtyIndicator}
 				<span class="dirty-dot"></span>
 			{/if}
 			<svg class="close-icon" width="12" height="12" viewBox="0 0 12 12"

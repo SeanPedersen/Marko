@@ -760,7 +760,7 @@
 		}
 	});
 
-	const AUTO_SAVE_DELAY_MS = 1000;
+	const AUTO_SAVE_DELAY_MS = 300;
 	const debouncedSave = debounce(() => saveContent(), AUTO_SAVE_DELAY_MS);
 
 	const FOLDER_REFRESH_DELAY_MS = 500;
