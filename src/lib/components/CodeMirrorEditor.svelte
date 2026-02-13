@@ -159,9 +159,7 @@
 		suppressUpdate = false;
 
 		// Scroll to top for new file content
-		view.dispatch({
-			effects: EditorView.scrollIntoView(0, { y: 'start' }),
-		});
+		view.scrollDOM.scrollTop = 0;
 	});
 
 	// Update readonly state
