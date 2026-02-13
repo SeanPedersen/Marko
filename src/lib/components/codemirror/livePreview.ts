@@ -146,6 +146,31 @@ class CheckboxWidget extends WidgetType {
   }
 }
 
+class BulletWidget extends WidgetType {
+  constructor(
+    readonly isOrdered: boolean,
+    readonly orderNumber?: number
+  ) {
+    super();
+  }
+
+  toDOM(): HTMLElement {
+    const span = document.createElement('span');
+    span.className = 'cm-live-bullet';
+    if (this.isOrdered && this.orderNumber !== undefined) {
+      span.textContent = `${this.orderNumber}. `;
+    } else {
+      span.textContent = '• ';
+    }
+    return span;
+  }
+
+  eq(other: BulletWidget): boolean {
+    return this.isOrdered === other.isOrdered &&
+           this.orderNumber === other.orderNumber;
+  }
+}
+
 class HorizontalRuleWidget extends WidgetType {
   toDOM(): HTMLElement {
     const hr = document.createElement('div');
@@ -181,7 +206,18 @@ const headingDecorations = [
 
 const codeBlockLineDecoration = Decoration.line({ class: 'cm-live-code-block-line' });
 const blockquoteLineDecoration = Decoration.line({ class: 'cm-live-blockquote-line' });
-const listItemDecoration = Decoration.line({ class: 'cm-live-list-item' });
+// List item decorations with indent levels
+const listItemDecorations = [
+  Decoration.line({ class: 'cm-live-list-item cm-live-list-indent-0' }),
+  Decoration.line({ class: 'cm-live-list-item cm-live-list-indent-1' }),
+  Decoration.line({ class: 'cm-live-list-item cm-live-list-indent-2' }),
+  Decoration.line({ class: 'cm-live-list-item cm-live-list-indent-3' }),
+  Decoration.line({ class: 'cm-live-list-item cm-live-list-indent-4' }),
+  Decoration.line({ class: 'cm-live-list-item cm-live-list-indent-5' }),
+];
+
+// Marker styling decoration (for when cursor is on line)
+const listMarkerDecoration = Decoration.mark({ class: 'cm-live-list-marker' });
 const frontmatterLineDecoration = Decoration.line({ class: 'cm-live-frontmatter-line' });
 
 interface ParsedElement {
@@ -195,6 +231,11 @@ interface ParsedElement {
   url?: string;
   level?: number;
   checked?: boolean;
+  indentLevel?: number;
+  indentFrom?: number;
+  indentTo?: number;
+  isOrdered?: boolean;
+  orderNumber?: number;
 }
 
 function getLineNumber(view: EditorView, pos: number): number {
@@ -525,6 +566,15 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
           // Match bullet (-, *, +) or number (1., 2.) markers
           const bulletMatch = lineText.match(/^(\s*)([-*+]|\d+\.)\s/);
           if (bulletMatch) {
+            const indentSpaces = bulletMatch[1].length;
+            const marker = bulletMatch[2];
+            const isOrdered = /^\d+\.$/.test(marker);
+            const orderNumber = isOrdered ? parseInt(marker) : undefined;
+            // Calculate indent level (typically 2 or 4 spaces per level)
+            const indentLevel = Math.floor(indentSpaces / 2);
+
+            const indentFrom = lineObj.from;
+            const indentTo = lineObj.from + indentSpaces;
             const markerStart = lineObj.from + bulletMatch[1].length;
             const markerEnd = lineObj.from + bulletMatch[0].length;
             elements.push({
@@ -532,8 +582,13 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
               from: lineObj.from,
               to: lineObj.to,
               line: lineObj.number,
+              indentFrom,
+              indentTo,
               markerFrom: markerStart,
               markerTo: markerEnd,
+              indentLevel,
+              isOrdered,
+              orderNumber,
             });
           }
           break;
@@ -843,10 +898,32 @@ function buildDecorations(view: EditorView): DecorationSet {
 
       case 'listItem': {
         const lineObj = view.state.doc.lineAt(el.from);
-        decorations.push(listItemDecoration.range(lineObj.from));
+        const indentLevel = Math.min(el.indentLevel ?? 0, 5);
 
-        // Don't hide list markers - they're useful for visual hierarchy
-        // But we could style them differently if needed
+        // Apply line decoration with consistent indentation
+        decorations.push(listItemDecorations[indentLevel].range(lineObj.from));
+
+        // Always hide the leading whitespace (indentation) - CSS padding handles it
+        if (el.indentFrom !== undefined && el.indentTo !== undefined && el.indentFrom < el.indentTo) {
+          decorations.push(hideDecoration.range(el.indentFrom, el.indentTo));
+        }
+
+        if (el.markerFrom !== undefined && el.markerTo !== undefined) {
+          if (isOnCursorLine) {
+            // Style the marker but keep it visible for editing
+            decorations.push(listMarkerDecoration.range(el.markerFrom, el.markerTo));
+          } else {
+            // Replace marker with styled bullet
+            decorations.push(
+              Decoration.replace({
+                widget: new BulletWidget(
+                  el.isOrdered ?? false,
+                  el.orderNumber
+                ),
+              }).range(el.markerFrom, el.markerTo)
+            );
+          }
+        }
         break;
       }
 
@@ -1009,9 +1086,39 @@ export const livePreviewStyles = EditorView.baseTheme({
     fontStyle: 'italic',
   },
 
-  // Lists
+  // Lists - base styling
   '.cm-live-list-item': {
-    // Default list styling handled by markers
+    // Base list item styling
+  },
+
+  // List indent levels (applied via line decoration)
+  '.cm-live-list-indent-0': {
+    paddingLeft: '0 !important',
+  },
+  '.cm-live-list-indent-1': {
+    paddingLeft: '1.5em !important',
+  },
+  '.cm-live-list-indent-2': {
+    paddingLeft: '3em !important',
+  },
+  '.cm-live-list-indent-3': {
+    paddingLeft: '4.5em !important',
+  },
+  '.cm-live-list-indent-4': {
+    paddingLeft: '6em !important',
+  },
+  '.cm-live-list-indent-5': {
+    paddingLeft: '7.5em !important',
+  },
+
+  // Bullet widget (replaces -, *, + with •)
+  '.cm-live-bullet': {
+    color: 'var(--color-fg-muted)',
+  },
+
+  // Marker styling when editing (cursor on line)
+  '.cm-live-list-marker': {
+    color: 'var(--color-fg-muted)',
   },
 
   // Task checkboxes
