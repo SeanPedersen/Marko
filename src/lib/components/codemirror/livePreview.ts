@@ -244,9 +244,11 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
         case 'ATXHeading6': {
           const level = parseInt(name.slice(-1));
           // Find the header mark (# symbols)
+          // Use text from the node start (not line start) to handle indented headings in list items
           let markerTo = from;
-          const lineText = doc.lineAt(from).text;
-          const match = lineText.match(/^(#{1,6})\s/);
+          const lineObj = doc.lineAt(from);
+          const textFromNode = lineObj.text.slice(from - lineObj.from);
+          const match = textFromNode.match(/^(#{1,6})\s/);
           if (match) {
             markerTo = from + match[0].length;
           }
