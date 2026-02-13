@@ -12,8 +12,9 @@
 	import Modal from './components/Modal.svelte';
 
 	import HomePage from './components/HomePage.svelte';
+	import SettingsModal from './components/SettingsModal.svelte';
 	import { tabManager } from './stores/tabs.svelte.js';
-	import { settings } from './stores/settings.svelte.js';
+	import { settings, EDITOR_WIDTH_VALUES } from './stores/settings.svelte.js';
 	import { debounce } from './utils/debounce.js';
 	import { parseHeadings } from './utils/parseHeadings.js';
 
@@ -42,6 +43,7 @@
 	let tocVisible = $state(localStorage.getItem('toc-visible') !== 'false');
 	let folderExplorerVisible = $state(false); // Don't restore on startup - only show when explicitly opened
 	let currentFolder = $state(localStorage.getItem('current-folder') || '');
+	let settingsVisible = $state(false);
 
 	// Theme State
 	let theme = $state<'system' | 'dark' | 'light'>('system');
@@ -329,6 +331,10 @@
 			tocVisible = false;
 			localStorage.setItem('toc-visible', 'false');
 		}
+	}
+
+	function toggleSettings() {
+		settingsVisible = !settingsVisible;
 	}
 
 	async function selectFolder() {
@@ -924,7 +930,8 @@
 		ononpenFileLocation={openFileLocation}
 		onresetZoom={() => (zoomLevel = 100)}
 		{theme}
-		onSetTheme={(t) => (theme = t)} />
+		onSetTheme={(t) => (theme = t)}
+		ontoggleSettings={toggleSettings} />
 	<div class="loading-screen">
 		<svg class="spinner" viewBox="0 0 50 50">
 			<circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
@@ -962,13 +969,15 @@
 			showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType === 'markdown' && hasHeadings}
 			{folderExplorerVisible}
 			ontoggleFolderExplorer={toggleFolderExplorer}
-			showFolderExplorerButton={!!currentFolder} />
+			showFolderExplorerButton={!!currentFolder}
+		ontoggleSettings={toggleSettings} />
 
 	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
 		<TableOfContents
 			rawContent={tabManager.activeTab?.rawContent ?? ''}
 			visible={tocVisible && !folderExplorerVisible && currentFileType === 'markdown'}
 			onscrollto={handleTocScroll}
+			sidebarPosition={settings.sidebarPosition}
 		/>
 		<FolderExplorer
 			folderPath={currentFolder}
@@ -976,10 +985,12 @@
 			onopenfile={loadMarkdown}
 			onfileschanged={handleFilesChanged}
 			refreshKey={folderRefreshKey}
+			sidebarPosition={settings.sidebarPosition}
 		/>
 		<div
 			class="markdown-container"
 			class:sidebar-open={tocVisible || folderExplorerVisible}
+			class:sidebar-right={settings.sidebarPosition === 'right'}
 			style="zoom: {zoomLevel / 100}"
 			role="presentation"
 		>
@@ -991,6 +1002,7 @@
 				readonly={false}
 				fileType={currentFileType}
 				onchange={handleEditorChange}
+				editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
 			/>
 		</div>
 	{:else}
@@ -1000,9 +1012,10 @@
 			onopenfile={loadMarkdown}
 			onfileschanged={handleFilesChanged}
 			refreshKey={folderRefreshKey}
+			sidebarPosition={settings.sidebarPosition}
 		/>
-		<div class="home-container" class:sidebar-open={folderExplorerVisible && !!currentFolder}>
-			<HomePage {recentFiles} {recentFolders} onselectFile={selectFile} onselectFolder={selectFolder} onloadFile={loadMarkdown} onopenFolder={openFolder} onremoveRecentFile={removeRecentFile} onremoveRecentFolder={removeRecentFolder} onnewFile={handleNewFile} />
+		<div class="home-container" class:sidebar-open={folderExplorerVisible && !!currentFolder} class:sidebar-right={settings.sidebarPosition === 'right'}>
+			<HomePage {recentFiles} {recentFolders} onselectFile={selectFile} onselectFolder={selectFolder} onloadFile={loadMarkdown} onopenFolder={openFolder} onremoveRecentFile={removeRecentFile} onremoveRecentFolder={removeRecentFolder} onnewFile={handleNewFile} onsettings={toggleSettings} />
 		</div>
 	{/if}
 
@@ -1022,6 +1035,10 @@
 		onconfirm={handleModalConfirm}
 		onsave={handleModalSave}
 		oncancel={handleModalCancel} />
+
+	<SettingsModal
+		show={settingsVisible}
+		onclose={() => (settingsVisible = false)} />
 
 	{#if isDragging}
 		<div class="drag-overlay" role="presentation">
@@ -1082,12 +1099,22 @@
 		left: clamp(0px, 1184px - 100vw, calc(232px - 2rem));
 	}
 
+	.markdown-container.sidebar-open.sidebar-right {
+		left: 0;
+		right: clamp(0px, 1184px - 100vw, calc(232px - 2rem));
+	}
+
 	.home-container {
-		transition: margin-left 0.15s ease-out;
+		transition: margin-left 0.15s ease-out, margin-right 0.15s ease-out;
 	}
 
 	.home-container.sidebar-open {
 		margin-left: 220px;
+	}
+
+	.home-container.sidebar-open.sidebar-right {
+		margin-left: 0;
+		margin-right: 220px;
 	}
 
 	.tooltip {

@@ -5,10 +5,12 @@
 		rawContent = '',
 		visible = true,
 		onscrollto,
+		sidebarPosition = 'left',
 	} = $props<{
 		rawContent: string;
 		visible?: boolean;
 		onscrollto?: (event: CustomEvent<{ lineNumber: number }>) => void;
+		sidebarPosition?: 'left' | 'right';
 	}>();
 
 	let headings = $derived(parseHeadings(rawContent));
@@ -56,7 +58,7 @@
 </script>
 
 {#if hasHeadings && visible}
-	<nav class="toc-sidebar" aria-label="Table of contents">
+	<nav class="toc-sidebar {sidebarPosition === 'right' ? 'position-right' : ''}" aria-label="Table of contents">
 		<ul class="toc-list">
 			{#each headings as heading, i}
 				{#if !isHidden(i)}
@@ -111,9 +113,28 @@
 		animation: slideIn 0.15s ease-out;
 	}
 
+	.toc-sidebar.position-right {
+		left: auto;
+		right: 0;
+		border-right: none;
+		border-left: 1px solid var(--color-border-default);
+		animation: slideInRight 0.15s ease-out;
+	}
+
 	@keyframes slideIn {
 		from {
 			transform: translateX(-100%);
+			opacity: 0;
+		}
+		to {
+			transform: translateX(0);
+			opacity: 1;
+		}
+	}
+
+	@keyframes slideInRight {
+		from {
+			transform: translateX(100%);
 			opacity: 0;
 		}
 		to {

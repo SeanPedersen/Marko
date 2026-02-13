@@ -17,12 +17,14 @@
 		onopenfile,
 		onfileschanged,
 		refreshKey = 0,
+		sidebarPosition = 'left',
 	} = $props<{
 		folderPath: string;
 		visible?: boolean;
 		onopenfile?: (path: string, options?: { newTab?: boolean }) => void;
 		onfileschanged?: (removed: string[], added: string[]) => void;
 		refreshKey?: number;
+		sidebarPosition?: 'left' | 'right';
 	}>();
 
 	let entries = $state<DirEntry[]>([]);
@@ -284,7 +286,7 @@
 {/snippet}
 
 {#if visible && folderPath}
-	<nav class="explorer-sidebar" aria-label="File explorer">
+	<nav class="explorer-sidebar {sidebarPosition === 'right' ? 'position-right' : ''}" aria-label="File explorer">
 		<div class="explorer-header">
 			<span class="header-text" title={folderPath}>{getFolderName(folderPath)}</span>
 			<button
@@ -336,9 +338,28 @@
 		animation: slideIn 0.15s ease-out;
 	}
 
+	.explorer-sidebar.position-right {
+		left: auto;
+		right: 0;
+		border-right: none;
+		border-left: 1px solid var(--color-border-default);
+		animation: slideInRight 0.15s ease-out;
+	}
+
 	@keyframes slideIn {
 		from {
 			transform: translateX(-100%);
+			opacity: 0;
+		}
+		to {
+			transform: translateX(0);
+			opacity: 1;
+		}
+	}
+
+	@keyframes slideInRight {
+		from {
+			transform: translateX(100%);
 			opacity: 0;
 		}
 		to {

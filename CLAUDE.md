@@ -37,6 +37,7 @@ src/
 │   │   ├── Tab.svelte                # Single tab component
 │   │   ├── HomePage.svelte           # Start screen (recent files/folders)
 │   │   ├── Modal.svelte              # Confirmation dialog (save/discard/cancel)
+│   │   ├── SettingsModal.svelte      # Settings dialog (editor width, sidebar position, CLI install)
 │   │   └── ContextMenu.svelte        # Right-click context menu
 │   ├── stores/
 │   │   ├── tabs.svelte.ts            # TabManager class: tab CRUD, navigation history, dirty state
@@ -56,10 +57,10 @@ src/
 - TOC button visibility depends on `hasHeadings` derived (only shown when document has headings)
 
 ### CodeMirror Editor (`src/lib/components/CodeMirrorEditor.svelte`)
-- Props: `value`, `readonly`, `theme`, `onchange`, `zoomLevel`, `fileType`
+- Props: `value`, `readonly`, `theme`, `onchange`, `zoomLevel`, `fileType`, `editorWidth`
 - Exports: `scrollToLine(lineNumber)`, `findHeadingLine(text, level, occurrence)`
 - Uses `EditorView.lineWrapping` for automatic line wrapping
-- Content layout: `.cm-scroller` has `padding: 2rem`, `.cm-content` has `max-width: 720px; margin: 0 auto`
+- Content layout: `.cm-scroller` has `padding: 2rem`, `.cm-content` has `max-width` set via `--editor-max-width` CSS variable
 
 ### Live Preview (`src/lib/components/codemirror/livePreview.ts`)
 - Hides markdown syntax (**, ##, [](), etc.) when cursor is NOT on that line
@@ -71,25 +72,29 @@ src/
 - Fixed width: 220px, overlays editor (does not push content)
 - Only renders when `hasHeadings && visible`
 - Dispatches `onscrollto` event with `{ lineNumber }` for editor scrolling
+- Supports `sidebarPosition` prop for left/right positioning
 
 ### FolderExplorer (`src/lib/components/FolderExplorer.svelte`)
 - Fixed width: 220px, overlays editor (does not push content)
 - Recursive directory tree with expand/collapse (persisted to localStorage)
 - Opens markdown files on click; mutually exclusive with TOC
 - Tracks `knownFiles` to detect file additions/removals and notify parent via `onfileschanged`
+- Supports `sidebarPosition` prop for left/right positioning
 - **Important**: `knownFiles` is reset when `folderPath` changes to prevent false "deleted" diffs when switching folders
 
 ### TitleBar (`src/lib/components/TitleBar.svelte`)
-- Contains: home button, folder explorer toggle, TOC toggle, tab strip, theme switcher, window controls
+- Contains: home button, folder explorer toggle, TOC toggle, tab strip, settings button, theme switcher, window controls
 - macOS traffic lights + Windows title bar buttons
 - Tabs no longer shift when sidebars are open
-- Props include `tocVisible`, `ontoggleToc`, `showTocButton`, `folderExplorerVisible`, `ontoggleFolderExplorer`, `showFolderExplorerButton`
+- Props include `tocVisible`, `ontoggleToc`, `showTocButton`, `folderExplorerVisible`, `ontoggleFolderExplorer`, `showFolderExplorerButton`, `ontoggleSettings`
 
 ### Settings Store (`src/lib/stores/settings.svelte.ts`)
 - Svelte 5 runes-based class with `$state` properties
 - All settings persisted to localStorage under `editor.*` keys
-- Settings: `minimap`, `wordWrap`, `lineNumbers`, `vimMode`, `statusBar`, `wordCount`, `renderLineHighlight`, `showTabs`, `zenMode`, `occurrencesHighlight`, `autoSave`
-- Each setting has a `toggle*()` method
+- Settings: `minimap`, `wordWrap`, `lineNumbers`, `vimMode`, `statusBar`, `wordCount`, `renderLineHighlight`, `showTabs`, `zenMode`, `occurrencesHighlight`, `autoSave`, `editorWidth`, `sidebarPosition`
+- `editorWidth`: `'compact' | 'default' | 'wide' | 'full'` (maps to 600px, 720px, 900px, 100%)
+- `sidebarPosition`: `'left' | 'right'` — controls which side TOC/FolderExplorer appear
+- Each setting has a `toggle*()` or `set*()` method
 
 ### Tab Manager (`src/lib/stores/tabs.svelte.ts`)
 - `Tab` interface: `id`, `path`, `title`, `rawContent`, `isDirty`, `isEditing`, `history[]`, `scrollTop`, etc.
@@ -113,3 +118,16 @@ Theme colors defined in `MarkdownViewer.svelte`:
 npm run build        # Production build
 npm run check        # TypeScript/Svelte type checking
 ```
+
+## CLI Command
+
+After installing via Settings > "Install Command", you can open files from terminal:
+```bash
+marko <file>         # Open a file in Marko
+marko <folder>       # Open folder in Marko's file explorer
+marko                # Open Marko without a file
+```
+
+The CLI is installed to:
+- **macOS/Linux**: `/usr/local/bin/marko`
+- **Windows**: `%LOCALAPPDATA%\Marko\bin\marko.cmd` (added to PATH)

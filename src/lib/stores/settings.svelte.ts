@@ -1,3 +1,13 @@
+export type EditorWidth = 'compact' | 'default' | 'wide' | 'full';
+export type SidebarPosition = 'left' | 'right';
+
+export const EDITOR_WIDTH_VALUES: Record<EditorWidth, string> = {
+	compact: '600px',
+	default: '720px',
+	wide: '900px',
+	full: '100%',
+};
+
 export class SettingsStore {
 	minimap = $state(false);
 	wordWrap = $state('on');
@@ -17,6 +27,8 @@ export class SettingsStore {
 	} | null>(null);
 	occurrencesHighlight = $state(false);
 	autoSave = $state(true);
+	editorWidth = $state<EditorWidth>('default');
+	sidebarPosition = $state<SidebarPosition>('left');
 
 	constructor() {
 		if (typeof localStorage !== 'undefined') {
@@ -33,6 +45,8 @@ export class SettingsStore {
 			const savedPreZenState = localStorage.getItem('editor.preZenState');
 			const savedOccurrencesHighlight = localStorage.getItem('editor.occurrencesHighlight');
 			const savedAutoSave = localStorage.getItem('editor.autoSave');
+			const savedEditorWidth = localStorage.getItem('editor.editorWidth');
+			const savedSidebarPosition = localStorage.getItem('editor.sidebarPosition');
 
 			if (savedMinimap !== null) this.minimap = savedMinimap === 'true';
 			if (savedWordWrap !== null) this.wordWrap = savedWordWrap;
@@ -46,6 +60,12 @@ export class SettingsStore {
 			if (savedZenMode !== null) this.zenMode = savedZenMode === 'true';
 			if (savedOccurrencesHighlight !== null) this.occurrencesHighlight = savedOccurrencesHighlight === 'true';
 			if (savedAutoSave !== null) this.autoSave = savedAutoSave === 'true';
+			if (savedEditorWidth !== null && ['compact', 'default', 'wide', 'full'].includes(savedEditorWidth)) {
+				this.editorWidth = savedEditorWidth as EditorWidth;
+			}
+			if (savedSidebarPosition !== null && ['left', 'right'].includes(savedSidebarPosition)) {
+				this.sidebarPosition = savedSidebarPosition as SidebarPosition;
+			}
 			if (savedPreZenState !== null) {
 				try {
 					this.preZenState = JSON.parse(savedPreZenState);
@@ -68,6 +88,8 @@ export class SettingsStore {
 					localStorage.setItem('editor.zenMode', String(this.zenMode));
 					localStorage.setItem('editor.occurrencesHighlight', String(this.occurrencesHighlight));
 					localStorage.setItem('editor.autoSave', String(this.autoSave));
+					localStorage.setItem('editor.editorWidth', this.editorWidth);
+					localStorage.setItem('editor.sidebarPosition', this.sidebarPosition);
 					if (this.preZenState) {
 						localStorage.setItem('editor.preZenState', JSON.stringify(this.preZenState));
 					} else {
@@ -143,6 +165,14 @@ export class SettingsStore {
 
 	toggleAutoSave() {
 		this.autoSave = !this.autoSave;
+	}
+
+	setEditorWidth(width: EditorWidth) {
+		this.editorWidth = width;
+	}
+
+	setSidebarPosition(position: SidebarPosition) {
+		this.sidebarPosition = position;
 	}
 }
 

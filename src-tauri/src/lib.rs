@@ -124,7 +124,9 @@ struct DirEntry {
 
 #[tauri::command]
 fn is_directory(path: String) -> bool {
-    Path::new(&path).is_dir()
+    // Normalize path - remove trailing /. or /./
+    let clean_path = path.trim_end_matches("/.");
+    Path::new(clean_path).is_dir()
 }
 
 
@@ -316,6 +318,176 @@ fn is_win11() -> bool {
 }
 
 #[tauri::command]
+fn install_cli(_app: AppHandle) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let app_path = std::env::current_exe().map_err(|e| e.to_string())?;
+
+        let cli_path = Path::new("/usr/local/bin/marko");
+
+        // Create a shell script wrapper
+        let script_content = format!(r#"#!/bin/bash
+# Marko CLI - opens files with Marko markdown editor
+if [ $# -eq 0 ]; then
+    open -a "Marko"
+else
+    for arg in "$@"; do
+        # Resolve to absolute path and normalize
+        if [[ "$arg" = "." ]]; then
+            file="$(pwd)"
+        elif [[ "$arg" = /* ]]; then
+            file="$arg"
+        else
+            file="$(cd "$(dirname "$arg")" && pwd)/$(basename "$arg")"
+        fi
+        # Remove trailing /. if present
+        file="${{file%/.}}"
+        "{}" "$file" &
+    done
+fi
+"#, app_path.display());
+
+        // Try to write directly first, then fall back to using osascript for admin rights
+        match fs::write(cli_path, &script_content) {
+            Ok(_) => {
+                // Make executable
+                std::process::Command::new("chmod")
+                    .args(["+x", "/usr/local/bin/marko"])
+                    .output()
+                    .map_err(|e| e.to_string())?;
+                Ok("CLI installed successfully".to_string())
+            }
+            Err(_) => {
+                // Need elevated permissions - write to temp file first, then use osascript to copy
+                let temp_path = "/tmp/marko_cli_script.sh";
+                fs::write(temp_path, &script_content).map_err(|e| e.to_string())?;
+
+                let apple_script = r#"do shell script "cp /tmp/marko_cli_script.sh /usr/local/bin/marko && chmod +x /usr/local/bin/marko && rm /tmp/marko_cli_script.sh" with administrator privileges"#;
+
+                let output = std::process::Command::new("osascript")
+                    .args(["-e", apple_script])
+                    .output()
+                    .map_err(|e| e.to_string())?;
+
+                if output.status.success() {
+                    Ok("CLI installed successfully".to_string())
+                } else {
+                    let _ = fs::remove_file(temp_path);
+                    Err(String::from_utf8_lossy(&output.stderr).to_string())
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let app_path = std::env::current_exe().map_err(|e| e.to_string())?;
+        let local_app_data = std::env::var("LOCALAPPDATA").map_err(|e| e.to_string())?;
+        let cli_dir = Path::new(&local_app_data).join("Marko").join("bin");
+
+        fs::create_dir_all(&cli_dir).map_err(|e| e.to_string())?;
+
+        let bat_path = cli_dir.join("marko.cmd");
+        let script_content = format!(r#"@echo off
+"{}" %*
+"#, app_path.display());
+
+        fs::write(&bat_path, script_content).map_err(|e| e.to_string())?;
+
+        // Add to user PATH if not already there
+        use winreg::RegKey;
+        use winreg::enums::*;
+
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let env = hkcu.open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE).map_err(|e| e.to_string())?;
+        let current_path: String = env.get_value("Path").unwrap_or_default();
+
+        let cli_dir_str = cli_dir.to_string_lossy().to_string();
+        if !current_path.contains(&cli_dir_str) {
+            let new_path = if current_path.is_empty() {
+                cli_dir_str
+            } else {
+                format!("{};{}", current_path, cli_dir_str)
+            };
+            env.set_value("Path", &new_path).map_err(|e| e.to_string())?;
+
+            // Broadcast environment change
+            unsafe {
+                use windows_sys::Win32::UI::WindowsAndMessaging::*;
+                use windows_sys::Win32::Foundation::*;
+                let env_str: Vec<u16> = "Environment\0".encode_utf16().collect();
+                SendMessageTimeoutW(
+                    HWND_BROADCAST,
+                    WM_SETTINGCHANGE,
+                    0,
+                    env_str.as_ptr() as isize,
+                    SMTO_ABORTIFHUNG,
+                    5000,
+                    std::ptr::null_mut(),
+                );
+            }
+        }
+
+        Ok(format!("CLI installed to {}. Please restart your terminal.", bat_path.display()))
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let app_path = std::env::current_exe().map_err(|e| e.to_string())?;
+        let cli_path = Path::new("/usr/local/bin/marko");
+
+        let script_content = format!(r#"#!/bin/bash
+# Marko CLI - opens files with Marko markdown editor
+if [ $# -eq 0 ]; then
+    "{}" &
+else
+    for arg in "$@"; do
+        # Resolve to absolute path and normalize
+        if [[ "$arg" = "." ]]; then
+            file="$(pwd)"
+        elif [[ "$arg" = /* ]]; then
+            file="$arg"
+        else
+            file="$(cd "$(dirname "$arg")" && pwd)/$(basename "$arg")"
+        fi
+        # Remove trailing /. if present
+        file="${{file%/.}}"
+        "{}" "$file" &
+    done
+fi
+"#, app_path.display(), app_path.display());
+
+        // Try direct write first
+        match fs::write(cli_path, &script_content) {
+            Ok(_) => {
+                std::process::Command::new("chmod")
+                    .args(["+x", "/usr/local/bin/marko"])
+                    .output()
+                    .map_err(|e| e.to_string())?;
+                Ok("CLI installed successfully".to_string())
+            }
+            Err(_) => {
+                // Use pkexec for elevated permissions - write to temp first
+                let temp_path = "/tmp/marko_cli_script.sh";
+                fs::write(temp_path, &script_content).map_err(|e| e.to_string())?;
+
+                let output = std::process::Command::new("pkexec")
+                    .args(["bash", "-c", "cp /tmp/marko_cli_script.sh /usr/local/bin/marko && chmod +x /usr/local/bin/marko && rm /tmp/marko_cli_script.sh"])
+                    .output()
+                    .map_err(|e| e.to_string())?;
+
+                if output.status.success() {
+                    Ok("CLI installed successfully".to_string())
+                } else {
+                    let _ = fs::remove_file(temp_path);
+                    Err(String::from_utf8_lossy(&output.stderr).to_string())
+                }
+            }
+        }
+    }
+}
+
+#[tauri::command]
 fn show_context_menu(
     app: AppHandle,
     state: State<'_, ContextMenuState>,
@@ -451,8 +623,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
-            println!("Single Instance Args: {:?}", args);
-            
             let path_str = args.iter().skip(1).find(|a| !a.starts_with("-")).map(|a| a.as_str()).unwrap_or("");
             
             if !path_str.is_empty() {
@@ -571,7 +741,6 @@ pub fn run() {
         })
         .setup(|app| {
             let args: Vec<String> = std::env::args().collect();
-            println!("Setup Args: {:?}", args);
 
             let current_exe = std::env::current_exe().unwrap_or_default();
             let exe_name = current_exe.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
@@ -658,7 +827,8 @@ pub fn run() {
 
             show_context_menu,
             show_window,
-            save_theme
+            save_theme,
+            install_cli
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

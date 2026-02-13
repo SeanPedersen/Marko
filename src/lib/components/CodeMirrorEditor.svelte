@@ -45,6 +45,7 @@
 		onchange,
 		zoomLevel = 100,
 		fileType = 'markdown', // 'markdown' or 'text'
+		editorWidth = '720px',
 	} = $props<{
 		value?: string;
 		readonly?: boolean;
@@ -52,6 +53,7 @@
 		onchange?: (value: string) => void;
 		zoomLevel?: number;
 		fileType?: 'markdown' | 'text';
+		editorWidth?: string;
 	}>();
 
 	let container: HTMLDivElement;
@@ -252,7 +254,7 @@
 <div
 	bind:this={container}
 	class="codemirror-container"
-	style="font-size: {zoomLevel / 100}em;"
+	style="font-size: {zoomLevel / 100}em; --editor-max-width: {editorWidth};"
 ></div>
 
 <style>
@@ -274,7 +276,7 @@
 	}
 
 	.codemirror-container :global(.cm-content) {
-		max-width: 720px;
+		max-width: var(--editor-max-width, 720px);
 		margin: 0 auto;
 	}
 
