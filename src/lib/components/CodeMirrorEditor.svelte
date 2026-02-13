@@ -180,11 +180,15 @@
 		if (lineNumber < 1 || lineNumber > doc.lines) return;
 
 		const line = doc.line(lineNumber);
+		const previousSelection = view.state.selection;
 		view.dispatch({
 			selection: { anchor: line.from },
 			effects: EditorView.scrollIntoView(line.from, { y: 'start' }),
 		});
-		view.focus();
+		requestAnimationFrame(() => {
+			if (!view) return;
+			view.dispatch({ selection: previousSelection });
+		});
 	}
 
 	// Export function to get line number for a heading
