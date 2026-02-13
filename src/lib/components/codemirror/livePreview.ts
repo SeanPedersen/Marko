@@ -60,18 +60,18 @@ class LinkWidget extends WidgetType {
         Object.assign(tooltip.style, {
           position: 'fixed',
           zIndex: '1000',
-          padding: '4px 8px',
+          padding: '6px 10px',
           borderRadius: '6px',
-          fontSize: '12px',
-          lineHeight: '1.3',
+          fontSize: '13px',
+          lineHeight: '1.4',
           whiteSpace: 'nowrap',
           maxWidth: '450px',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           color: 'var(--color-fg-default)',
-          backgroundColor: 'var(--color-canvas-subtle)',
+          backgroundColor: 'var(--color-canvas-default)',
           border: '1px solid var(--color-border-default)',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
           pointerEvents: 'none',
         });
         document.body.appendChild(tooltip);
