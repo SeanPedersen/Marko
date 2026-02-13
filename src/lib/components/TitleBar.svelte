@@ -166,7 +166,7 @@
 				</button>
 			</div>
 		{/if}
-		<button class="icon-home-btn {showHome ? 'active' : ''}" onclick={ontoggleHome} aria-label="Home" onmouseenter={(e) => showTooltip(e, 'Home')} onmouseleave={hideTooltip}>
+		<button class="icon-home-btn {showHome ? 'active' : ''}" onclick={ontoggleHome} aria-label="Home">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 				<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
 				<polyline points="9 22 9 12 15 12 15 22"></polyline>
@@ -177,8 +177,6 @@
 				class="icon-home-btn {folderExplorerVisible ? 'active' : ''}"
 				onclick={ontoggleFolderExplorer}
 				aria-label="Toggle File Explorer"
-				onmouseenter={(e) => showTooltip(e, folderExplorerVisible ? 'Hide Files' : 'Show Files')}
-				onmouseleave={hideTooltip}
 			>
 				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 					<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
@@ -190,8 +188,6 @@
 				class="icon-home-btn {tocVisible ? 'active' : ''}"
 				onclick={ontoggleToc}
 				aria-label="Toggle Table of Contents"
-				onmouseenter={(e) => showTooltip(e, tocVisible ? 'Hide Contents' : 'Show Contents')}
-				onmouseleave={hideTooltip}
 			>
 				<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
 					<path d="M2 3h12M2 7h8M2 11h10"/>
