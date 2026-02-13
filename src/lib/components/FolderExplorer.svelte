@@ -92,6 +92,15 @@
 		return paths;
 	}
 
+	// Reset knownFiles when the folder itself changes (not just refreshKey)
+	let prevFolder = '';
+	$effect(() => {
+		if (folderPath !== prevFolder) {
+			knownFiles = new Set();
+			prevFolder = folderPath;
+		}
+	});
+
 	// Load root directory when folderPath or refreshKey changes
 	$effect(() => {
 		const _refresh = refreshKey;
