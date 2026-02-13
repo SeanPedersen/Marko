@@ -15,17 +15,20 @@
 		folderPath = '',
 		visible = true,
 		onopenfile,
+		onfileschanged,
 		refreshKey = 0,
 	} = $props<{
 		folderPath: string;
 		visible?: boolean;
 		onopenfile?: (path: string, options?: { newTab?: boolean }) => void;
+		onfileschanged?: (removed: string[], added: string[]) => void;
 		refreshKey?: number;
 	}>();
 
 	let entries = $state<DirEntry[]>([]);
 	let expandedDirs = $state<Set<string>>(new Set());
 	let dirContents = $state<Map<string, DirEntry[]>>(new Map());
+	let knownFiles = new Set<string>();
 	let loadingDirs = $state<Set<string>>(new Set());
 	let sortMode = $state<SortMode>('az');
 
@@ -74,6 +77,21 @@
 		localStorage.setItem('folder-explorer-expanded', JSON.stringify([...expandedDirs]));
 	});
 
+	function collectFilePaths(rootEntries: DirEntry[], dirMap: Map<string, DirEntry[]>): Set<string> {
+		const paths = new Set<string>();
+		function walk(items: DirEntry[]) {
+			for (const e of items) {
+				if (!e.is_dir) paths.add(e.path);
+				else {
+					const children = dirMap.get(e.path);
+					if (children) walk(children);
+				}
+			}
+		}
+		walk(rootEntries);
+		return paths;
+	}
+
 	// Load root directory when folderPath or refreshKey changes
 	$effect(() => {
 		const _refresh = refreshKey;
@@ -83,20 +101,35 @@
 			if (prefs[folderPath]) sortMode = prefs[folderPath];
 			else sortMode = 'az';
 
-			loadDirectory(folderPath).then((result) => {
+			loadDirectory(folderPath).then(async (result) => {
 				entries = result;
 				// Load any previously expanded directories
+				const expandedLoads: Promise<void>[] = [];
 				for (const dir of expandedDirs) {
 					if (dir.startsWith(folderPath)) {
-						loadDirectory(dir).then((contents) => {
-							dirContents.set(dir, contents);
-							dirContents = new Map(dirContents);
-						});
+						expandedLoads.push(
+							loadDirectory(dir).then((contents) => {
+								dirContents.set(dir, contents);
+								dirContents = new Map(dirContents);
+							})
+						);
 					}
 				}
+				await Promise.all(expandedLoads);
+
+				const newFiles = collectFilePaths(entries, dirContents);
+				if (knownFiles.size > 0 && onfileschanged) {
+					const removed = [...knownFiles].filter((p) => !newFiles.has(p));
+					const added = [...newFiles].filter((p) => !knownFiles.has(p));
+					if (removed.length > 0 || added.length > 0) {
+						onfileschanged(removed, added);
+					}
+				}
+				knownFiles = newFiles;
 			});
 		} else {
 			entries = [];
+			knownFiles = new Set();
 		}
 	});
 

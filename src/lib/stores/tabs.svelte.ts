@@ -14,6 +14,7 @@ export interface Tab {
 	anchorLine: number;
 	editorViewState?: unknown;
 	isSplit?: boolean;
+	isDeleted?: boolean;
 }
 
 class TabManager {

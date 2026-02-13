@@ -48,8 +48,12 @@
 		</span>
 	</button>
 	<div class="tab-actions">
-		<button class="tab-close" class:dirty={tab.isDirty} onclick={handleClose} onmousedown={(e) => e.stopPropagation()} title="Close (Ctrl+W)">
-			{#if tab.isDirty}
+		<button class="tab-close" class:dirty={tab.isDirty} class:deleted={tab.isDeleted} onclick={handleClose} onmousedown={(e) => e.stopPropagation()} title="Close (Ctrl+W)">
+			{#if tab.isDeleted}
+				<svg class="deleted-icon" width="12" height="12" viewBox="0 0 16 16">
+					<path fill="currentColor" d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5m-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5M4.5 5.029l.5 8.5a.5.5 0 1 0 .998-.06l-.5-8.5a.5.5 0 1 0-.998.06m6.53-.528a.5.5 0 0 0-.528.47l-.5 8.5a.5.5 0 0 0 .998.058l.5-8.5a.5.5 0 0 0-.47-.528M8 4.5a.5.5 0 0 0-.5.5v8.5a.5.5 0 0 0 1 0V5a.5.5 0 0 0-.5-.5"/>
+				</svg>
+			{:else if tab.isDirty}
 				<span class="dirty-dot"></span>
 			{/if}
 			<svg class="close-icon" width="12" height="12" viewBox="0 0 12 12"
@@ -127,7 +131,8 @@
 
 	.tab:hover .tab-actions,
 	.tab.active .tab-actions,
-	.tab-actions:has(.dirty) {
+	.tab-actions:has(.dirty),
+	.tab-actions:has(.deleted) {
 		opacity: 1;
 	}
 
@@ -156,6 +161,10 @@
 		display: block;
 	}
 
+	.tab:hover .deleted-icon {
+		display: none;
+	}
+
 	.tab:hover .dirty-dot {
 		display: none;
 	}
@@ -165,6 +174,11 @@
 		height: 8px;
 		background-color: var(--color-fg-default);
 		border-radius: 50%;
+		display: block;
+	}
+
+	.deleted-icon {
+		color: #d32f2f;
 		display: block;
 	}
 

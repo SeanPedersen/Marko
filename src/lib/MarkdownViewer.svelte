@@ -300,6 +300,7 @@
 				saveRecentFile(targetPath);
 			}
 			tab.isDirty = false;
+			tab.isDeleted = false;
 			return true;
 		} catch (e) {
 			console.error('Failed to save file', e);
@@ -585,6 +586,11 @@
 			});
 			unlisteners.push(unlistenCopyPath);
 
+			const unlistenFolderChanged = await listen('folder-changed', () => {
+				debouncedFolderRefresh.call();
+			});
+			unlisteners.push(unlistenFolderChanged);
+
 			const unlistenFileTrash = await listen<string>('menu-file-trash', async (event) => {
 				const path = event.payload;
 				try {
@@ -630,11 +636,54 @@
 
 		return () => {
 			unlisteners.forEach((u) => u());
+			debouncedFolderRefresh.cancel();
+			invoke('unwatch_folder').catch(console.error);
 		};
+	});
+
+	$effect(() => {
+		if (currentFolder) {
+			invoke('watch_folder', { path: currentFolder }).catch(console.error);
+		} else {
+			invoke('unwatch_folder').catch(console.error);
+		}
 	});
 
 	const AUTO_SAVE_DELAY_MS = 1000;
 	const debouncedSave = debounce(() => saveContent(), AUTO_SAVE_DELAY_MS);
+
+	const FOLDER_REFRESH_DELAY_MS = 500;
+	const debouncedFolderRefresh = debounce(() => { folderRefreshKey++; }, FOLDER_REFRESH_DELAY_MS);
+
+	function handleFilesChanged(removed: string[], added: string[]) {
+		for (const tab of tabManager.tabs) {
+			if (!tab.path || tab.path === 'HOME') continue;
+			if (!removed.includes(tab.path)) continue;
+
+			// File was removed — check if it was renamed (1 removed + 1 added in same dir)
+			const tabDir = tab.path.substring(0, Math.max(tab.path.lastIndexOf('/'), tab.path.lastIndexOf('\\')));
+			const addedInSameDir = added.filter((p) => {
+				const dir = p.substring(0, Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\')));
+				return dir === tabDir;
+			});
+
+			if (addedInSameDir.length === 1) {
+				tabManager.renameTab(tab.id, addedInSameDir[0]);
+				tab.isDeleted = false;
+				// Remove from added so it's not matched again
+				added.splice(added.indexOf(addedInSameDir[0]), 1);
+			} else {
+				tab.isDeleted = true;
+			}
+		}
+
+		// Clear isDeleted for files that reappeared
+		for (const addedPath of added) {
+			for (const tab of tabManager.tabs) {
+				if (tab.path === addedPath && tab.isDeleted) tab.isDeleted = false;
+			}
+		}
+	}
 
 	// Cancel pending auto-save when switching tabs
 	$effect(() => {
@@ -730,6 +779,7 @@
 			folderPath={currentFolder}
 			visible={folderExplorerVisible && !tocVisible}
 			onopenfile={loadMarkdown}
+			onfileschanged={handleFilesChanged}
 			refreshKey={folderRefreshKey}
 		/>
 		<div
@@ -753,6 +803,7 @@
 			folderPath={currentFolder}
 			visible={folderExplorerVisible && !!currentFolder}
 			onopenfile={loadMarkdown}
+			onfileschanged={handleFilesChanged}
 			refreshKey={folderRefreshKey}
 		/>
 		<div class="home-container" class:sidebar-open={folderExplorerVisible && !!currentFolder}>

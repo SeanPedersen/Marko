@@ -14,6 +14,10 @@ struct WatcherState {
     watcher: Mutex<Option<RecommendedWatcher>>,
 }
 
+struct FolderWatcherState {
+    watcher: Mutex<Option<RecommendedWatcher>>,
+}
+
 
 mod setup;
 
@@ -123,6 +127,8 @@ fn is_directory(path: String) -> bool {
     Path::new(&path).is_dir()
 }
 
+
+
 #[tauri::command]
 fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
     let dir_path = Path::new(&path);
@@ -201,6 +207,38 @@ fn watch_file(handle: AppHandle, state: State<'_, WatcherState>, path: String) -
 
 #[tauri::command]
 fn unwatch_file(state: State<'_, WatcherState>) -> Result<(), String> {
+    let mut watcher_lock = state.watcher.lock().unwrap();
+    *watcher_lock = None;
+    Ok(())
+}
+
+#[tauri::command]
+fn watch_folder(handle: AppHandle, state: State<'_, FolderWatcherState>, path: String) -> Result<(), String> {
+    let mut watcher_lock = state.watcher.lock().unwrap();
+    *watcher_lock = None;
+
+    let app_handle = handle.clone();
+    let watcher = RecommendedWatcher::new(
+        move |res: Result<notify::Event, notify::Error>| {
+            if let Ok(_) = res {
+                let _ = app_handle.emit("folder-changed", ());
+            }
+        },
+        Config::default(),
+    )
+    .map_err(|e| e.to_string())?;
+
+    let mut watcher = watcher;
+    watcher
+        .watch(Path::new(&path), RecursiveMode::Recursive)
+        .map_err(|e| e.to_string())?;
+
+    *watcher_lock = Some(watcher);
+    Ok(())
+}
+
+#[tauri::command]
+fn unwatch_folder(state: State<'_, FolderWatcherState>) -> Result<(), String> {
     let mut watcher_lock = state.watcher.lock().unwrap();
     *watcher_lock = None;
     Ok(())
@@ -401,6 +439,9 @@ pub fn run() {
             startup_file: Mutex::new(None),
         })
         .manage(WatcherState {
+            watcher: Mutex::new(None),
+        })
+        .manage(FolderWatcherState {
             watcher: Mutex::new(None),
         })
         .manage(ContextMenuState {
@@ -612,6 +653,8 @@ pub fn run() {
             trash_file,
             watch_file,
             unwatch_file,
+            watch_folder,
+            unwatch_folder,
 
             show_context_menu,
             show_window,
