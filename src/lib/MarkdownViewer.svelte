@@ -273,21 +273,16 @@
 		let targetPath = tab.path;
 
 		if (!targetPath) {
-			// Special handling for new (untitled) files
-			const fileType = currentFileType;
-			const filters = fileType === 'markdown' 
-				? [
-					{ name: 'Markdown', extensions: ['md'] },
-					{ name: 'Text Files', extensions: ['txt', 'json', 'js', 'ts', 'py', 'rs', 'html', 'css', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf'] },
-					{ name: 'All Files', extensions: ['*'] },
-				]
-				: [
-					{ name: 'Text Files', extensions: ['txt', 'json', 'js', 'ts', 'py', 'rs', 'html', 'css', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf'] },
-					{ name: 'Markdown', extensions: ['md'] },
-					{ name: 'All Files', extensions: ['*'] },
-				];
+			// New files default to .md, saved in the currently opened folder
 			const selected = await save({
-				filters,
+				defaultPath: currentFolder
+					? `${currentFolder}/untitled.md`
+					: 'untitled.md',
+				filters: [
+					{ name: 'Markdown', extensions: ['md'] },
+					{ name: 'Text Files', extensions: ['txt', 'json', 'js', 'ts', 'py', 'rs', 'html', 'css', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf'] },
+					{ name: 'All Files', extensions: ['*'] },
+				],
 			});
 			if (selected) {
 				targetPath = selected;
