@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import { EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine, rectangularSelection, scrollPastEnd } from '@codemirror/view';
+	import { EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine, rectangularSelection, ViewPlugin } from '@codemirror/view';
 	import { EditorState, Compartment } from '@codemirror/state';
 	import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 	import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -8,6 +8,35 @@
 	import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language';
 	import { createTheme } from './codemirror/theme.js';
 	import { livePreview } from './codemirror/livePreview.js';
+	import type { Extension } from '@codemirror/state';
+
+	// Custom scrollPastEnd that only adds half viewport height
+	const scrollPastEndHalfPlugin = ViewPlugin.fromClass(
+		class {
+			height = 500;
+			attrs: { style: string } = { style: 'padding-bottom: 500px' };
+
+			update(update: { view: EditorView }) {
+				const { view } = update;
+				// Use scrollDOM height as the viewport reference
+				const editorHeight = view.scrollDOM.clientHeight;
+				const height = Math.max(0, (editorHeight - view.defaultLineHeight) / 2);
+				if (height !== this.height) {
+					this.height = height;
+					this.attrs = { style: `padding-bottom: ${height}px` };
+				}
+			}
+		}
+	);
+
+	function scrollPastEndHalf(): Extension {
+		return [
+			scrollPastEndHalfPlugin,
+			EditorView.contentAttributes.of((view) => {
+				return view.plugin(scrollPastEndHalfPlugin)?.attrs || null;
+			}),
+		];
+	}
 
 	let {
 		value = '',
@@ -71,8 +100,8 @@
 				}
 			}),
 
-			// Allow scrolling past the end of the document
-			scrollPastEnd(),
+			// Allow scrolling past the end (half viewport height)
+			scrollPastEndHalf(),
 		];
 
 		// Conditionally add markdown-specific features
