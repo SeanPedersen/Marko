@@ -189,6 +189,11 @@
 		});
 	}
 
+	// Export function to focus the editor
+	export function focus() {
+		view?.focus();
+	}
+
 	// Export function to get line number for a heading
 	export function findHeadingLine(headingText: string, level: number, occurrence: number = 0): number {
 		if (!view) return -1;

@@ -11,12 +11,14 @@
 		showHome = false,
 		ontabclick,
 		oncloseTab,
+		oncommitRename,
 	} = $props<{
 		onnewTab: () => void;
 		ondetach?: (tabId: string) => void;
 		showHome?: boolean;
 		ontabclick?: () => void;
 		oncloseTab?: (id: string) => void;
+		oncommitRename?: (id: string, newTitle: string) => void;
 	}>();
 
 	let scrollContainer = $state<HTMLElement | null>(null);
@@ -204,7 +206,9 @@
 							tabManager.setActive(tab.id);
 							ontabclick?.();
 						}}
-						onclose={() => oncloseTab?.(tab.id)} />
+						onclose={() => oncloseTab?.(tab.id)}
+						onstartRename={() => tabManager.startRenaming(tab.id)}
+						onrename={(newTitle) => oncommitRename?.(tab.id, newTitle)} />
 				</div>
 			{/each}
 		</div>

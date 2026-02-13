@@ -1,13 +1,45 @@
 <script lang="ts">
 	import type { Tab } from '../stores/tabs.svelte.js';
+	import { tick } from 'svelte';
 
-	let { tab, isActive, isLast, onclick, onclose } = $props<{
+	let {
+		tab,
+		isActive,
+		isLast,
+		onclick,
+		onclose,
+		onrename,
+		onstartRename,
+	} = $props<{
 		tab: Tab;
 		isActive: boolean;
 		isLast?: boolean;
 		onclick: () => void;
 		onclose: (e: MouseEvent) => void;
+		onrename?: (newTitle: string) => void;
+		onstartRename?: () => void;
 	}>();
+
+	let inputRef = $state<HTMLInputElement | null>(null);
+	let editValue = $state(tab.title);
+
+	// When entering rename mode, focus input and select name without extension
+	$effect(() => {
+		if (tab.isRenaming && inputRef) {
+			editValue = tab.title;
+			tick().then(() => {
+				if (!inputRef) return;
+				inputRef.focus();
+				// Select only the filename without extension
+				const lastDot = editValue.lastIndexOf('.');
+				if (lastDot > 0) {
+					inputRef.setSelectionRange(0, lastDot);
+				} else {
+					inputRef.select();
+				}
+			});
+		}
+	});
 
 	function handleClose(e: MouseEvent) {
 		e.stopPropagation();
@@ -35,18 +67,53 @@
 		}).catch(console.error);
 	}
 
+	function handleDoubleClick(e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		if (tab.path !== 'HOME') {
+			onstartRename?.();
+		}
+	}
+
+	function handleInputKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			onrename?.(editValue);
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			editValue = tab.title;
+			onrename?.(tab.title);
+		}
+	}
+
+	function handleInputBlur() {
+		onrename?.(editValue);
+	}
+
 	// home tab has empty path
 	let isHomeTab = $derived(tab.path === '');
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="tab {isActive ? 'active' : ''}" class:last={isLast} role="group" title={tab.path || 'Recents'} oncontextmenu={handleContextMenu}>
-	<button class="tab-content-btn" {onclick} onmousedown={handleMiddleClick}>
-		<span class="tab-label">
-			{tab.title}
-		</span>
-	</button>
+<div class="tab {isActive ? 'active' : ''}" class:last={isLast} class:renaming={tab.isRenaming} role="group" title={tab.path || 'Recents'} oncontextmenu={handleContextMenu}>
+	{#if tab.isRenaming}
+		<input
+			bind:this={inputRef}
+			class="tab-rename-input"
+			type="text"
+			bind:value={editValue}
+			onkeydown={handleInputKeydown}
+			onblur={handleInputBlur}
+			onclick={(e) => e.stopPropagation()}
+		/>
+	{:else}
+		<button class="tab-content-btn" {onclick} onmousedown={handleMiddleClick} ondblclick={handleDoubleClick}>
+			<span class="tab-label">
+				{tab.title}
+			</span>
+		</button>
+	{/if}
 	<div class="tab-actions">
 		<button class="tab-close" class:dirty={tab.isDirty} class:deleted={tab.isDeleted} onclick={handleClose} onmousedown={(e) => e.stopPropagation()} title="Close (Ctrl+W)">
 			{#if tab.isDeleted}
@@ -184,5 +251,24 @@
 
 	.tab-close:hover {
 		background-color: var(--color-neutral-muted);
+	}
+
+	.tab-rename-input {
+		flex: 1;
+		height: 20px;
+		margin: 0 4px 0 8px;
+		padding: 0 4px;
+		border: 1px solid var(--color-accent-fg);
+		border-radius: 4px;
+		background: var(--color-canvas-default);
+		color: var(--color-fg-default);
+		font-family: inherit;
+		font-size: inherit;
+		outline: none;
+		min-width: 0;
+	}
+
+	.tab.renaming .tab-actions {
+		opacity: 0;
 	}
 </style>

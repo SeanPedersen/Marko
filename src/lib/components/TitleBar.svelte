@@ -21,6 +21,8 @@
 		zoomLevel,
 		onresetZoom,
 		oncloseTab,
+		oncommitRename,
+		onnewTab,
 		theme = 'system',
 		onSetTheme,
 		tocVisible = false,
@@ -43,6 +45,8 @@
 		zoomLevel?: number;
 		onresetZoom?: () => void;
 		oncloseTab?: (id: string) => void;
+		oncommitRename?: (id: string, newTitle: string) => void;
+		onnewTab?: () => void;
 		theme?: 'system' | 'dark' | 'light';
 		onSetTheme?: (theme: 'system' | 'dark' | 'light') => void;
 		tocVisible?: boolean;
@@ -198,7 +202,7 @@
 
 	{#if tabManager.tabs.length > 0 && settings.showTabs}
 		<div class="tab-area">
-			<TabList onnewTab={() => tabManager.addNewTab()} {ondetach} {showHome} {ontabclick} {oncloseTab} />
+			<TabList onnewTab={onnewTab ?? (() => tabManager.addNewTab())} {ondetach} {showHome} {ontabclick} {oncloseTab} {oncommitRename} />
 		</div>
 	{:else}
 		<div class="window-title-container" data-tauri-drag-region>

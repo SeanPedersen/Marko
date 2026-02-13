@@ -8,6 +8,7 @@ export interface Tab {
 	scrollTop: number;
 	isDirty: boolean;
 	isEditing: boolean;
+	isRenaming: boolean;
 	history: string[];
 	historyIndex: number;
 	scrollPercentage: number;
@@ -38,7 +39,8 @@ class TabManager {
 			originalContent: content,
 			scrollTop: 0,
 			isDirty: false,
-			isEditing: true, // Always editing with Milkdown
+			isEditing: true,
+			isRenaming: false,
 			history: [content],
 			historyIndex: 0,
 			scrollPercentage: 0,
@@ -53,17 +55,19 @@ class TabManager {
 	addNewTab() {
 		const id = crypto.randomUUID();
 		const content = '';
+		const title = this.nextUntitledName();
 
 		this.tabs.push({
 			id,
 			path: '',
-			title: 'Untitled',
+			title,
 			content,
 			rawContent: content,
 			originalContent: content,
 			scrollTop: 0,
 			isDirty: false,
-			isEditing: true, // Always editing with Milkdown
+			isEditing: true,
+			isRenaming: false,
 			history: [content],
 			historyIndex: 0,
 			scrollPercentage: 0,
@@ -73,6 +77,21 @@ class TabManager {
 		});
 
 		this.activeTabId = id;
+	}
+
+	private nextUntitledName(): string {
+		const existing = new Set(
+			this.tabs
+				.filter((t) => t.title === 'Untitled' || /^Untitled \d+$/.test(t.title))
+				.map((t) => t.title)
+		);
+
+		if (!existing.has('Untitled')) return 'Untitled';
+
+		for (let i = 1; ; i++) {
+			const candidate = `Untitled ${i}`;
+			if (!existing.has(candidate)) return candidate;
+		}
 	}
 
 	addHomeTab() {
@@ -94,6 +113,7 @@ class TabManager {
 			scrollTop: 0,
 			isDirty: false,
 			isEditing: false,
+			isRenaming: false,
 			history: [],
 			historyIndex: 0,
 			scrollPercentage: 0,
@@ -291,6 +311,62 @@ class TabManager {
 			return path;
 		}
 		return null;
+	}
+
+	// Rename methods
+	startRenaming(id: string) {
+		const tab = this.tabs.find((t) => t.id === id);
+		if (tab && tab.path !== 'HOME') {
+			tab.isRenaming = true;
+		}
+	}
+
+	cancelRenaming(id: string) {
+		const tab = this.tabs.find((t) => t.id === id);
+		if (tab) {
+			tab.isRenaming = false;
+		}
+	}
+
+	commitRenameTitle(id: string, newTitle: string) {
+		const tab = this.tabs.find((t) => t.id === id);
+		if (tab) {
+			tab.isRenaming = false;
+			if (newTitle.trim()) {
+				tab.title = newTitle.trim();
+			}
+		}
+	}
+
+	// Close other tabs (keep only the specified tab)
+	closeOthers(id: string) {
+		const tabToKeep = this.tabs.find((t) => t.id === id);
+		if (!tabToKeep) return;
+
+		const closedPaths = this.tabs
+			.filter((t) => t.id !== id && t.path && t.path !== 'HOME')
+			.map((t) => t.path);
+		this.recentlyClosed.push(...closedPaths);
+
+		this.tabs = [tabToKeep];
+		this.activeTabId = id;
+	}
+
+	// Close tabs to the right of the specified tab
+	closeToRight(id: string) {
+		const index = this.tabs.findIndex((t) => t.id === id);
+		if (index === -1) return;
+
+		const closedPaths = this.tabs
+			.slice(index + 1)
+			.filter((t) => t.path && t.path !== 'HOME')
+			.map((t) => t.path);
+		this.recentlyClosed.push(...closedPaths);
+
+		this.tabs = this.tabs.slice(0, index + 1);
+		if (!this.tabs.find((t) => t.id === this.activeTabId)) {
+			this.activeTabId = id;
+		}
 	}
 
 	recentlyClosed = $state<string[]>([]);

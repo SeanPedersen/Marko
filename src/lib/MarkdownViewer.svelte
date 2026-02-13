@@ -72,6 +72,7 @@
 		message: string;
 		kind: 'info' | 'warning' | 'error';
 		showSave: boolean;
+		okOnly: boolean;
 		resolve: ((v: 'save' | 'discard' | 'cancel') => void) | null;
 	}>({
 		show: false,
@@ -79,10 +80,11 @@
 		message: '',
 		kind: 'info',
 		showSave: false,
+		okOnly: false,
 		resolve: null,
 	});
 
-	function askCustom(message: string, options: { title: string; kind: 'info' | 'warning' | 'error'; showSave?: boolean }): Promise<'save' | 'discard' | 'cancel'> {
+	function askCustom(message: string, options: { title: string; kind: 'info' | 'warning' | 'error'; showSave?: boolean; okOnly?: boolean }): Promise<'save' | 'discard' | 'cancel'> {
 		return new Promise((resolve) => {
 			modalState = {
 				show: true,
@@ -90,6 +92,7 @@
 				message,
 				kind: options.kind,
 				showSave: options.showSave ?? false,
+				okOnly: options.okOnly ?? false,
 				resolve,
 			};
 		});
@@ -338,9 +341,68 @@
 		}
 	}
 
-	function handleNewFile() {
-		tabManager.addNewTab();
-		showHome = false;
+	async function handleNewFile() {
+		// Must have a folder open to create files
+		if (!currentFolder) {
+			// Open folder picker first
+			const selected = await open({
+				multiple: false,
+				directory: true,
+			});
+			if (!selected || typeof selected !== 'string') return;
+			openFolder(selected);
+		}
+
+		// Generate unique filename (checks both open tabs and files on disk)
+		const filename = await nextUntitledFilename();
+		const newPath = `${currentFolder}/${filename}`;
+
+		try {
+			await invoke('save_file_content', { path: newPath, content: '' });
+			await loadMarkdown(newPath, { newTab: true });
+			saveRecentFile(newPath);
+			showHome = false;
+			// Start rename mode so user can change the name if desired
+			if (tabManager.activeTabId) {
+				tabManager.startRenaming(tabManager.activeTabId);
+			}
+		} catch (e) {
+			console.error('Failed to create new file:', e);
+		}
+	}
+
+	async function nextUntitledFilename(): Promise<string> {
+		// macOS and Windows are case-insensitive, Linux is case-sensitive
+		const isCaseInsensitive = navigator.userAgent.includes('Macintosh') || navigator.userAgent.includes('Windows');
+		const normalize = (s: string) => isCaseInsensitive ? s.toLowerCase() : s;
+
+		// Collect existing names from open tabs
+		const existingNames = new Set(
+			tabManager.tabs
+				.filter((t) => normalize(t.title).startsWith(normalize('Untitled')))
+				.map((t) => normalize(t.title.replace(/\.md$/i, '')))
+		);
+
+		// Also check files on disk in the current folder
+		if (currentFolder) {
+			try {
+				const entries = await invoke('read_directory', { path: currentFolder }) as { name: string; is_dir: boolean }[];
+				for (const entry of entries) {
+					if (!entry.is_dir && normalize(entry.name).startsWith(normalize('Untitled'))) {
+						existingNames.add(normalize(entry.name.replace(/\.md$/i, '')));
+					}
+				}
+			} catch (e) {
+				// Folder might not exist or be readable, ignore
+			}
+		}
+
+		if (!existingNames.has(normalize('Untitled'))) return 'Untitled.md';
+
+		for (let i = 1; ; i++) {
+			const candidate = `Untitled ${i}`;
+			if (!existingNames.has(normalize(candidate))) return `${candidate}.md`;
+		}
 	}
 
 	async function selectFile() {
@@ -493,6 +555,10 @@
 			e.preventDefault();
 			closeFile();
 		}
+		if (cmdOrCtrl && key === 'n') {
+			e.preventDefault();
+			handleNewFile();
+		}
 		if (cmdOrCtrl && !e.shiftKey && key === 't') {
 			e.preventDefault();
 			tabManager.addHomeTab();
@@ -604,6 +670,55 @@
 			});
 			unlisteners.push(unlistenFileTrash);
 
+			// Tab context menu events
+			const unlistenTabNew = await listen('menu-tab-new', () => {
+				handleNewFile();
+			});
+			unlisteners.push(unlistenTabNew);
+
+			const unlistenTabUndo = await listen('menu-tab-undo', () => {
+				handleUndoCloseTab();
+			});
+			unlisteners.push(unlistenTabUndo);
+
+			const unlistenTabRename = await listen<string>('menu-tab-rename', (event) => {
+				tabManager.startRenaming(event.payload);
+			});
+			unlisteners.push(unlistenTabRename);
+
+			const unlistenTabClose = await listen<string>('menu-tab-close', async (event) => {
+				const tabId = event.payload;
+				if (await canCloseTab(tabId)) {
+					tabManager.closeTab(tabId);
+				}
+			});
+			unlisteners.push(unlistenTabClose);
+
+			const unlistenTabCloseOthers = await listen<string>('menu-tab-close-others', async (event) => {
+				const tabId = event.payload;
+				// Close all other tabs (with confirmation for dirty ones)
+				const otherTabs = tabManager.tabs.filter((t) => t.id !== tabId);
+				for (const tab of otherTabs) {
+					if (await canCloseTab(tab.id)) {
+						tabManager.closeTab(tab.id);
+					}
+				}
+			});
+			unlisteners.push(unlistenTabCloseOthers);
+
+			const unlistenTabCloseRight = await listen<string>('menu-tab-close-right', async (event) => {
+				const tabId = event.payload;
+				const index = tabManager.tabs.findIndex((t) => t.id === tabId);
+				if (index === -1) return;
+				const rightTabs = tabManager.tabs.slice(index + 1);
+				for (const tab of rightTabs) {
+					if (await canCloseTab(tab.id)) {
+						tabManager.closeTab(tab.id);
+					}
+				}
+			});
+			unlisteners.push(unlistenTabCloseRight);
+
 			// Check for file passed via URL query param (for detached windows)
 			const urlParams = new URLSearchParams(window.location.search);
 			const fileParam = urlParams.get('file');
@@ -708,6 +823,88 @@
 	function handleTocScroll(event: CustomEvent<{ lineNumber: number }>) {
 		editorRef?.scrollToLine(event.detail.lineNumber);
 	}
+
+	// Handle tab rename (files are always saved, so this renames on disk)
+	async function handleCommitRename(id: string, newTitle: string) {
+		const tab = tabManager.tabs.find((t) => t.id === id);
+		if (!tab || !tab.path) {
+			tabManager.cancelRenaming(id);
+			editorRef?.focus();
+			return;
+		}
+
+		// If the title hasn't changed, just cancel
+		if (tab.title === newTitle.trim()) {
+			tabManager.cancelRenaming(id);
+			editorRef?.focus();
+			return;
+		}
+
+		let filename = newTitle.trim();
+		if (!filename) {
+			tabManager.cancelRenaming(id);
+			editorRef?.focus();
+			return;
+		}
+
+		// Preserve the original extension if user didn't provide one
+		const oldExt = tab.path.includes('.') ? tab.path.substring(tab.path.lastIndexOf('.')) : '';
+		if (!filename.includes('.') && oldExt) {
+			filename += oldExt;
+		}
+
+		const dir = tab.path.substring(0, Math.max(tab.path.lastIndexOf('/'), tab.path.lastIndexOf('\\')));
+		const newPath = dir + '/' + filename;
+
+		// Check for collision before renaming
+		const collision = await checkFileCollision(dir, filename, tab.path);
+		if (collision) {
+			await askCustom(`A file named "${filename}" already exists in this folder.`, {
+				title: 'File Already Exists',
+				kind: 'warning',
+				okOnly: true,
+			});
+			// Trigger re-focus of rename input by toggling isRenaming
+			tabManager.cancelRenaming(id);
+			await tick();
+			tabManager.startRenaming(id);
+			return;
+		}
+
+		try {
+			await invoke('rename_file', { oldPath: tab.path, newPath });
+			tabManager.renameTab(id, newPath);
+			tabManager.cancelRenaming(id);
+			saveRecentFile(newPath);
+			deleteRecentFile(tab.path);
+		} catch (e) {
+			console.error('Failed to rename file:', e);
+			tabManager.cancelRenaming(id);
+		}
+		editorRef?.focus();
+	}
+
+	async function checkFileCollision(dir: string, filename: string, currentPath: string): Promise<boolean> {
+		// macOS and Windows are case-insensitive, Linux is case-sensitive
+		const isCaseInsensitive = navigator.userAgent.includes('Macintosh') || navigator.userAgent.includes('Windows');
+		const normalize = (s: string) => isCaseInsensitive ? s.toLowerCase() : s;
+		const targetName = normalize(filename);
+
+		try {
+			const entries = await invoke('read_directory', { path: dir }) as { name: string; path: string; is_dir: boolean }[];
+			for (const entry of entries) {
+				if (entry.is_dir) continue;
+				// Skip the current file (we're renaming it)
+				if (entry.path === currentPath) continue;
+				if (normalize(entry.name) === targetName) {
+					return true;
+				}
+			}
+		} catch (e) {
+			// If we can't read the directory, allow the rename and let it fail naturally
+		}
+		return false;
+	}
 </script>
 
 <svelte:document
@@ -760,6 +957,8 @@
 					if (can) tabManager.closeTab(id);
 				});
 			}}
+			oncommitRename={handleCommitRename}
+			onnewTab={handleNewFile}
 			{theme}
 			onSetTheme={(t) => (theme = t)}
 			{tocVisible}
@@ -823,6 +1022,7 @@
 		message={modalState.message}
 		kind={modalState.kind}
 		showSave={modalState.showSave}
+		okOnly={modalState.okOnly}
 		onconfirm={handleModalConfirm}
 		onsave={handleModalSave}
 		oncancel={handleModalCancel} />

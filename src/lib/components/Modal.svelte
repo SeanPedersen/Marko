@@ -7,6 +7,7 @@
 		message,
 		kind = 'info',
 		showSave = false,
+		okOnly = false,
 		onconfirm,
 		onsave,
 		oncancel,
@@ -16,6 +17,7 @@
 		message: string;
 		kind?: 'info' | 'warning' | 'error';
 		showSave?: boolean;
+		okOnly?: boolean;
 		onconfirm: () => void;
 		onsave?: () => void;
 		oncancel: () => void;
@@ -112,13 +114,17 @@
 				<p>{message}</p>
 			</div>
 			<div class="modal-footer">
-				<button class="modal-btn secondary" onclick={oncancel}>Cancel</button>
-				<div class="footer-spacer"></div>
-				<button class="modal-btn secondary" onclick={onconfirm}>
-					{kind === 'warning' ? "Don't Save" : 'Confirm'}
-				</button>
-				{#if showSave}
-					<button class="modal-btn primary" onclick={onsave}>Save</button>
+				{#if okOnly}
+					<button class="modal-btn primary" onclick={onconfirm}>OK</button>
+				{:else}
+					<button class="modal-btn secondary" onclick={oncancel}>Cancel</button>
+					<div class="footer-spacer"></div>
+					<button class="modal-btn secondary" onclick={onconfirm}>
+						{kind === 'warning' ? "Don't Save" : 'Confirm'}
+					</button>
+					{#if showSave}
+						<button class="modal-btn primary" onclick={onsave}>Save</button>
+					{/if}
 				{/if}
 			</div>
 		</div>
