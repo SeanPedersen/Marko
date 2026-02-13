@@ -174,11 +174,28 @@ function getLineNumber(view: EditorView, pos: number): number {
   return view.state.doc.lineAt(pos).number;
 }
 
+// Trim trailing unbalanced closing parentheses from a URL match
+function trimUnbalancedParens(url: string): string {
+  let depth = 0;
+  let end = url.length;
+  for (let i = 0; i < url.length; i++) {
+    if (url[i] === '(') depth++;
+    else if (url[i] === ')') {
+      if (depth > 0) depth--;
+      else {
+        end = i;
+        break;
+      }
+    }
+  }
+  return url.slice(0, end);
+}
+
 // Function to detect plain URLs in text that aren't already parsed as links
 function findPlainUrls(view: EditorView, existingElements: ParsedElement[]): ParsedElement[] {
   const elements: ParsedElement[] = [];
   const doc = view.state.doc;
-  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`\[\]\)]+/g;
+  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/g;
 
   // Create a set of ranges that are already covered by existing elements (excluding list items)
   const coveredRanges = new Set<string>();
@@ -197,9 +214,9 @@ function findPlainUrls(view: EditorView, existingElements: ParsedElement[]): Par
     let match;
 
     while ((match = urlRegex.exec(lineText)) !== null) {
+      const url = trimUnbalancedParens(match[0]);
       const startPos = line.from + match.index;
-      const endPos = startPos + match[0].length;
-      const url = match[0];
+      const endPos = startPos + url.length;
 
       // Check if this range overlaps with any existing element
       let isCovered = false;
@@ -360,9 +377,9 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
         }
 
         case 'Link': {
-          // [text](url)
+          // [text](url) — url may contain balanced parentheses
           const text = doc.sliceString(from, to);
-          const match = text.match(/^\[([^\]]*)\]\(([^)]*)\)$/);
+          const match = text.match(/^\[([^\]]*)\]\((.*)\)$/s);
           if (match) {
             elements.push({
               type: 'link',
@@ -377,9 +394,9 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
         }
 
         case 'Image': {
-          // ![alt](url)
+          // ![alt](url) — url may contain balanced parentheses
           const text = doc.sliceString(from, to);
-          const match = text.match(/^!\[([^\]]*)\]\(([^)]*)\)$/);
+          const match = text.match(/^!\[([^\]]*)\]\((.*)\)$/s);
           if (match) {
             elements.push({
               type: 'image',
