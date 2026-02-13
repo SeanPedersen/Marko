@@ -34,39 +34,65 @@ class FormattedWidget extends WidgetType {
 class LinkWidget extends WidgetType {
   constructor(
     readonly text: string,
-    readonly url: string
+    readonly url: string,
+    readonly showUrlPreview: boolean = false
   ) {
     super();
   }
 
   toDOM(): HTMLElement {
-    const anchor = document.createElement('a');
-    anchor.className = 'cm-live-link';
-    anchor.textContent = this.text;
-    anchor.href = this.url;
-    anchor.title = this.url;
-    anchor.style.color = '#0969da';
-    anchor.style.textDecoration = 'none';
-    anchor.style.cursor = 'pointer';
-    anchor.addEventListener('click', (e) => {
+    const span = document.createElement('span');
+    span.className = 'cm-live-link';
+    span.textContent = this.text;
+    span.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      // Import openUrl here or use a custom event
       import('@tauri-apps/plugin-opener').then(({ openUrl }) => {
         openUrl(this.url).catch(console.error);
       });
     });
-    anchor.addEventListener('mouseenter', () => {
-      anchor.style.textDecoration = 'underline';
-    });
-    anchor.addEventListener('mouseleave', () => {
-      anchor.style.textDecoration = 'none';
-    });
-    return anchor;
+
+    if (this.showUrlPreview) {
+      let tooltip: HTMLElement | null = null;
+      span.addEventListener('mouseenter', () => {
+        tooltip = document.createElement('div');
+        tooltip.textContent = this.url;
+        Object.assign(tooltip.style, {
+          position: 'fixed',
+          zIndex: '1000',
+          padding: '4px 8px',
+          borderRadius: '6px',
+          fontSize: '12px',
+          lineHeight: '1.3',
+          whiteSpace: 'nowrap',
+          maxWidth: '450px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          color: 'var(--color-fg-default)',
+          backgroundColor: 'var(--color-canvas-subtle)',
+          border: '1px solid var(--color-border-default)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          pointerEvents: 'none',
+        });
+        document.body.appendChild(tooltip);
+        const linkRect = span.getBoundingClientRect();
+        const tipRect = tooltip.getBoundingClientRect();
+        const left = linkRect.left + (linkRect.width - tipRect.width) / 2;
+        const clampedLeft = Math.max(4, Math.min(left, window.innerWidth - tipRect.width - 4));
+        tooltip.style.left = `${clampedLeft}px`;
+        tooltip.style.top = `${linkRect.top - tipRect.height - 6}px`;
+      });
+      span.addEventListener('mouseleave', () => {
+        tooltip?.remove();
+        tooltip = null;
+      });
+    }
+
+    return span;
   }
 
   eq(other: LinkWidget): boolean {
-    return this.text === other.text && this.url === other.url;
+    return this.text === other.text && this.url === other.url && this.showUrlPreview === other.showUrlPreview;
   }
 }
 
@@ -686,10 +712,9 @@ function buildDecorations(view: EditorView): DecorationSet {
 
       case 'link': {
         if (!isOnCursorLine && el.text !== undefined && el.url !== undefined) {
-          // Replace entire link syntax with styled link widget
           decorations.push(
             Decoration.replace({
-              widget: new LinkWidget(el.text, el.url),
+              widget: new LinkWidget(el.text, el.url, true),
             }).range(el.from, el.to)
           );
         }
@@ -698,10 +723,9 @@ function buildDecorations(view: EditorView): DecorationSet {
 
       case 'url': {
         if (!isOnCursorLine && el.text !== undefined && el.url !== undefined) {
-          // Replace plain URL with styled link widget
           decorations.push(
             Decoration.replace({
-              widget: new LinkWidget(el.text, el.url),
+              widget: new LinkWidget(el.text, el.url, false),
             }).range(el.from, el.to)
           );
         }
@@ -879,15 +903,15 @@ export const livePreviewStyles = EditorView.baseTheme({
     fontSize: '0.9em',
   },
 
-  // Links - styling handled inline in widget
-  // '.cm-live-link': {
-  //   color: 'var(--color-accent-fg) !important',
-  //   textDecoration: 'none',
-  //   cursor: 'pointer',
-  //   '&:hover': {
-  //     textDecoration: 'underline',
-  //   },
-  // },
+  // Links
+  '.cm-live-link': {
+    color: 'var(--color-accent-fg, #0969da)',
+    textDecoration: 'none',
+    cursor: 'pointer',
+    '&:hover': {
+      textDecoration: 'underline',
+    },
+  },
 
   // Images
   '.cm-live-image-container': {
