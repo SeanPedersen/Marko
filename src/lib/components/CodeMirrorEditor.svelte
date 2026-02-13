@@ -152,10 +152,16 @@
 				to: view.state.doc.length,
 				insert: newValue,
 			},
+			selection: { anchor: 0 },
 		});
 		view.dispatch(transaction);
 		internalValue = newValue;
 		suppressUpdate = false;
+
+		// Scroll to top for new file content
+		view.dispatch({
+			effects: EditorView.scrollIntoView(0, { y: 'start' }),
+		});
 	});
 
 	// Update readonly state
