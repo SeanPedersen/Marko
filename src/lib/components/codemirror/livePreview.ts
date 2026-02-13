@@ -32,6 +32,10 @@ class FormattedWidget extends WidgetType {
 }
 
 class LinkWidget extends WidgetType {
+  private tooltip: HTMLElement | null = null;
+  private span: HTMLElement | null = null;
+  private boundCleanup: (() => void) | null = null;
+
   constructor(
     readonly text: string,
     readonly url: string,
@@ -40,8 +44,16 @@ class LinkWidget extends WidgetType {
     super();
   }
 
+  private cleanupTooltip = () => {
+    if (this.tooltip) {
+      this.tooltip.remove();
+      this.tooltip = null;
+    }
+  };
+
   toDOM(): HTMLElement {
     const span = document.createElement('span');
+    this.span = span;
     span.className = 'cm-live-link';
     span.textContent = this.text;
     span.addEventListener('click', (e) => {
@@ -53,11 +65,10 @@ class LinkWidget extends WidgetType {
     });
 
     if (this.showUrlPreview) {
-      let tooltip: HTMLElement | null = null;
       span.addEventListener('mouseenter', () => {
-        tooltip = document.createElement('div');
-        tooltip.textContent = this.url;
-        Object.assign(tooltip.style, {
+        this.tooltip = document.createElement('div');
+        this.tooltip.textContent = this.url;
+        Object.assign(this.tooltip.style, {
           position: 'fixed',
           zIndex: '1000',
           padding: '6px 10px',
@@ -74,21 +85,23 @@ class LinkWidget extends WidgetType {
           boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
           pointerEvents: 'none',
         });
-        document.body.appendChild(tooltip);
+        document.body.appendChild(this.tooltip);
         const linkRect = span.getBoundingClientRect();
-        const tipRect = tooltip.getBoundingClientRect();
+        const tipRect = this.tooltip.getBoundingClientRect();
         const left = linkRect.left + (linkRect.width - tipRect.width) / 2;
         const clampedLeft = Math.max(4, Math.min(left, window.innerWidth - tipRect.width - 4));
-        tooltip.style.left = `${clampedLeft}px`;
-        tooltip.style.top = `${linkRect.top - tipRect.height - 6}px`;
+        this.tooltip.style.left = `${clampedLeft}px`;
+        this.tooltip.style.top = `${linkRect.top - tipRect.height - 6}px`;
       });
-      span.addEventListener('mouseleave', () => {
-        tooltip?.remove();
-        tooltip = null;
-      });
+      span.addEventListener('mouseleave', this.cleanupTooltip);
     }
 
     return span;
+  }
+
+  destroy(): void {
+    this.cleanupTooltip();
+    this.span = null;
   }
 
   eq(other: LinkWidget): boolean {
