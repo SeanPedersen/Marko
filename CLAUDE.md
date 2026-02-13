@@ -76,6 +76,8 @@ src/
 - Fixed width: 220px, overlays editor (does not push content)
 - Recursive directory tree with expand/collapse (persisted to localStorage)
 - Opens markdown files on click; mutually exclusive with TOC
+- Tracks `knownFiles` to detect file additions/removals and notify parent via `onfileschanged`
+- **Important**: `knownFiles` is reset when `folderPath` changes to prevent false "deleted" diffs when switching folders
 
 ### TitleBar (`src/lib/components/TitleBar.svelte`)
 - Contains: home button, folder explorer toggle, TOC toggle, tab strip, theme switcher, window controls
