@@ -178,6 +178,7 @@
 			selection: { anchor: line.from },
 			effects: EditorView.scrollIntoView(line.from, { y: 'start' }),
 		});
+		view.focus();
 	}
 
 	// Export function to get line number for a heading
