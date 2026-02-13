@@ -37,6 +37,7 @@
 	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Marko');
 
 	let showHome = $state(false);
+	let folderRefreshKey = $state(0);
 	let isDragging = $state(false);
 	let tocVisible = $state(localStorage.getItem('toc-visible') !== 'false');
 	let folderExplorerVisible = $state(false); // Don't restore on startup - only show when explicitly opened
@@ -573,6 +574,30 @@
 			});
 			unlisteners.push(unlistenFilePath);
 
+			const unlistenCopyName = await listen<string>('menu-file-copy-name', (event) => {
+				const name = event.payload.split(/[/\\]/).pop() || event.payload;
+				navigator.clipboard.writeText(name).catch(console.error);
+			});
+			unlisteners.push(unlistenCopyName);
+
+			const unlistenCopyPath = await listen<string>('menu-file-copy-path', (event) => {
+				navigator.clipboard.writeText(event.payload).catch(console.error);
+			});
+			unlisteners.push(unlistenCopyPath);
+
+			const unlistenFileTrash = await listen<string>('menu-file-trash', async (event) => {
+				const path = event.payload;
+				try {
+					await invoke('trash_file', { path });
+					const openTab = tabManager.tabs.find((t) => t.path === path);
+					if (openTab) tabManager.closeTab(openTab.id);
+					folderRefreshKey++;
+				} catch (e) {
+					console.error('Failed to trash file:', e);
+				}
+			});
+			unlisteners.push(unlistenFileTrash);
+
 			// Check for file passed via URL query param (for detached windows)
 			const urlParams = new URLSearchParams(window.location.search);
 			const fileParam = urlParams.get('file');
@@ -705,6 +730,7 @@
 			folderPath={currentFolder}
 			visible={folderExplorerVisible && !tocVisible}
 			onopenfile={loadMarkdown}
+			refreshKey={folderRefreshKey}
 		/>
 		<div
 			class="markdown-container"
@@ -727,6 +753,7 @@
 			folderPath={currentFolder}
 			visible={folderExplorerVisible && !!currentFolder}
 			onopenfile={loadMarkdown}
+			refreshKey={folderRefreshKey}
 		/>
 		<div class="home-container" class:sidebar-open={folderExplorerVisible && !!currentFolder}>
 			<HomePage {recentFiles} {recentFolders} onselectFile={selectFile} onselectFolder={selectFolder} onloadFile={loadMarkdown} onopenFolder={openFolder} onremoveRecentFile={removeRecentFile} onremoveRecentFolder={removeRecentFolder} onnewFile={handleNewFile} />

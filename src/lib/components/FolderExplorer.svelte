@@ -15,10 +15,12 @@
 		folderPath = '',
 		visible = true,
 		onopenfile,
+		refreshKey = 0,
 	} = $props<{
 		folderPath: string;
 		visible?: boolean;
 		onopenfile?: (path: string, options?: { newTab?: boolean }) => void;
+		refreshKey?: number;
 	}>();
 
 	let entries = $state<DirEntry[]>([]);
@@ -72,8 +74,9 @@
 		localStorage.setItem('folder-explorer-expanded', JSON.stringify([...expandedDirs]));
 	});
 
-	// Load root directory when folderPath changes
+	// Load root directory when folderPath or refreshKey changes
 	$effect(() => {
+		const _refresh = refreshKey;
 		if (folderPath) {
 			// Restore sort preference for this folder
 			const prefs = getSortPrefsMap();
@@ -128,6 +131,17 @@
 		}
 	}
 
+	function handleContextMenu(event: MouseEvent, entry: DirEntry) {
+		event.preventDefault();
+		event.stopPropagation();
+		invoke('show_context_menu', {
+			menuType: 'file_tree',
+			path: entry.path,
+			tabId: null,
+			hasSelection: false,
+		}).catch(console.error);
+	}
+
 	function handleFileClick(event: MouseEvent, entry: DirEntry) {
 		if (entry.is_dir) {
 			toggleDir(entry);
@@ -175,6 +189,7 @@
 			class:disabled={!entry.is_dir && !isMarkdown}
 			onclick={(event) => handleFileClick(event, entry)}
 			onauxclick={(event) => { if (event.button === 1) handleFileClick(event, entry); }}
+			oncontextmenu={(event) => handleContextMenu(event, entry)}
 			title={entry.path}
 		>
 			<span class="icon">

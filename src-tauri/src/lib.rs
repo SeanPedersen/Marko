@@ -105,6 +105,11 @@ fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
     fs::rename(old_path, new_path).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn trash_file(path: String) -> Result<(), String> {
+    trash::delete(&path).map_err(|e| e.to_string())
+}
+
 #[derive(Serialize)]
 struct DirEntry {
     name: String,
@@ -321,6 +326,26 @@ fn show_context_menu(
             let undo = tauri::menu::MenuItem::with_id(&app, "ctx_tab_undo", "Undo Close Tab", true, Some("Ctrl+Shift+T")).map_err(|e| e.to_string())?;
             menu.append(&undo).map_err(|e| e.to_string())?;
         },
+        "file_tree" => {
+            let reveal_label = if cfg!(target_os = "macos") { "Reveal in Finder" } else { "Show in Explorer" };
+            let reveal = tauri::menu::MenuItem::with_id(&app, "ctx_file_reveal", reveal_label, true, None::<&str>).map_err(|e| e.to_string())?;
+            menu.append(&reveal).map_err(|e| e.to_string())?;
+
+            let sep1 = tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+            menu.append(&sep1).map_err(|e| e.to_string())?;
+
+            let copy_name = tauri::menu::MenuItem::with_id(&app, "ctx_file_copy_name", "Copy Name", true, None::<&str>).map_err(|e| e.to_string())?;
+            menu.append(&copy_name).map_err(|e| e.to_string())?;
+
+            let copy_path = tauri::menu::MenuItem::with_id(&app, "ctx_file_copy_path", "Copy Path", true, None::<&str>).map_err(|e| e.to_string())?;
+            menu.append(&copy_path).map_err(|e| e.to_string())?;
+
+            let sep2 = tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+            menu.append(&sep2).map_err(|e| e.to_string())?;
+
+            let trash = tauri::menu::MenuItem::with_id(&app, "ctx_file_trash", "Move to Trash", true, None::<&str>).map_err(|e| e.to_string())?;
+            menu.append(&trash).map_err(|e| e.to_string())?;
+        },
         _ => {
             // Document / Default
             if has_selection {
@@ -470,6 +495,36 @@ pub fn run() {
                        }
                     }
                  }
+                 "ctx_file_reveal" => {
+                    let path_lock = state.active_path.lock().unwrap();
+                    if let Some(path) = path_lock.as_ref() {
+                        let _ = open_file_folder(path.clone());
+                    }
+                 }
+                 "ctx_file_copy_name" => {
+                    let path_lock = state.active_path.lock().unwrap();
+                    if let Some(path) = path_lock.as_ref() {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("menu-file-copy-name", path);
+                        }
+                    }
+                 }
+                 "ctx_file_copy_path" => {
+                    let path_lock = state.active_path.lock().unwrap();
+                    if let Some(path) = path_lock.as_ref() {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("menu-file-copy-path", path);
+                        }
+                    }
+                 }
+                 "ctx_file_trash" => {
+                    let path_lock = state.active_path.lock().unwrap();
+                    if let Some(path) = path_lock.as_ref() {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("menu-file-trash", path);
+                        }
+                    }
+                 }
                  _ => {}
              }
         })
@@ -554,6 +609,7 @@ pub fn run() {
             open_file_folder,
             open_file_folder,
             rename_file,
+            trash_file,
             watch_file,
             unwatch_file,
 
