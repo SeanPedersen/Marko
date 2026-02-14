@@ -143,19 +143,54 @@ class ImageWidget extends WidgetType {
 }
 
 class CheckboxWidget extends WidgetType {
-  constructor(readonly checked: boolean) {
+  private view: EditorView | null = null;
+  private from: number;
+  private to: number;
+
+  constructor(readonly checked: boolean, from: number, to: number) {
     super();
+    this.from = from;
+    this.to = to;
   }
 
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
+    this.view = view;
     const span = document.createElement('span');
     span.className = 'cm-live-checkbox';
     span.textContent = this.checked ? '\u2611' : '\u2610';
+    span.style.cursor = 'pointer';
+
+    span.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.toggleCheckbox();
+    });
+
     return span;
   }
 
+  ignoreEvent(event: Event): boolean {
+    // Ignore all events on the checkbox widget to prevent CodeMirror from moving cursor
+    return true;
+  }
+
+  private toggleCheckbox() {
+    if (!this.view) return;
+
+    const newChecked = !this.checked;
+    const newText = newChecked ? '[x]' : '[ ]';
+
+    this.view.dispatch({
+      changes: {
+        from: this.from,
+        to: this.to,
+        insert: newText
+      }
+    });
+  }
+
   eq(other: CheckboxWidget): boolean {
-    return this.checked === other.checked;
+    return this.checked === other.checked && this.from === other.from && this.to === other.to;
   }
 }
 
@@ -1299,13 +1334,11 @@ function buildDecorations(view: EditorView): DecorationSet {
       }
 
       case 'taskMarker': {
-        if (!isOnCursorLine) {
-          decorations.push(
-            Decoration.replace({
-              widget: new CheckboxWidget(el.checked ?? false),
-            }).range(el.from, el.to)
-          );
-        }
+        decorations.push(
+          Decoration.replace({
+            widget: new CheckboxWidget(el.checked ?? false, el.from, el.to),
+          }).range(el.from, el.to)
+        );
         break;
       }
 
@@ -1593,6 +1626,10 @@ export const livePreviewStyles = EditorView.baseTheme({
     width: '1.2em',
     marginRight: '0.3em',
     fontSize: '1.1em',
+    cursor: 'pointer',
+    '&:hover': {
+      opacity: 0.7,
+    },
   },
 
   // Horizontal rule
