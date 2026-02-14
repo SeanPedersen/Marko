@@ -977,15 +977,53 @@ function buildDecorations(view: EditorView): DecorationSet {
 export const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    mouseIsDown = false;
+    pendingUpdate = false;
+    editorView: EditorView;
 
     constructor(view: EditorView) {
+      this.editorView = view;
       this.decorations = buildDecorations(view);
+      this.onMouseDown = this.onMouseDown.bind(this);
+      this.onMouseUp = this.onMouseUp.bind(this);
+      view.scrollDOM.addEventListener('mousedown', this.onMouseDown);
+      document.addEventListener('mouseup', this.onMouseUp);
+    }
+
+    onMouseDown() {
+      this.mouseIsDown = true;
+      this.pendingUpdate = false;
+    }
+
+    onMouseUp() {
+      if (!this.mouseIsDown) return;
+      this.mouseIsDown = false;
+      if (this.pendingUpdate) {
+        this.pendingUpdate = false;
+        // Dispatch a no-op transaction to trigger an update cycle so
+        // CM picks up the new decorations through the normal path.
+        requestAnimationFrame(() => {
+          this.editorView.dispatch();
+        });
+      }
     }
 
     update(update: ViewUpdate) {
+      this.editorView = update.view;
       if (update.docChanged || update.selectionSet || update.viewportChanged) {
-        this.decorations = buildDecorations(update.view);
+        if (this.mouseIsDown && !update.docChanged) {
+          // Defer decoration rebuild to avoid layout shifts mid-click
+          this.pendingUpdate = true;
+        } else {
+          this.decorations = buildDecorations(update.view);
+          this.pendingUpdate = false;
+        }
       }
+    }
+
+    destroy() {
+      this.editorView.scrollDOM.removeEventListener('mousedown', this.onMouseDown);
+      document.removeEventListener('mouseup', this.onMouseUp);
     }
   },
   {

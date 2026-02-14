@@ -167,7 +167,7 @@
 		}
 	});
 
-	// Sync external value changes
+	// Sync external value changes (e.g. switching tabs/files)
 	$effect(() => {
 		if (!view) return;
 		const newValue = value;
@@ -175,19 +175,15 @@
 		// Skip if value matches internal state
 		if (newValue === internalValue) return;
 
-		// Replace content without triggering onChange
-		suppressUpdate = true;
-		const transaction = view.state.update({
-			changes: {
-				from: 0,
-				to: view.state.doc.length,
-				insert: newValue,
-			},
-			selection: { anchor: 0 },
-		});
-		view.dispatch(transaction);
+		// Use setState to cleanly replace the editor state.
+		// A transaction-based replacement can race with ongoing mouse
+		// interactions, causing the selection to map to the end of the
+		// new document (jump-to-bottom + select-all bug).
 		internalValue = newValue;
-		suppressUpdate = false;
+		view.setState(EditorState.create({
+			doc: newValue,
+			extensions: createExtensions(),
+		}));
 
 		// Scroll to top for new file content
 		view.scrollDOM.scrollTop = 0;
