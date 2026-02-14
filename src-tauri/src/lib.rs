@@ -980,9 +980,12 @@ pub fn run() {
         .run(|_app_handle, _event| {
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Opened { urls } = _event {
+                log::info!("[macOS file open] Received Opened event with {} URLs", urls.len());
                 if let Some(url) = urls.first() {
+                    log::info!("[macOS file open] URL: {}", url);
                     if let Ok(path_buf) = url.to_file_path() {
                         let path_str = path_buf.to_string_lossy().to_string();
+                        log::info!("[macOS file open] Resolved path: {}", path_str);
 
                         let state = _app_handle.state::<AppState>();
                         *state.startup_file.lock().unwrap() = Some(path_str.clone());
@@ -990,7 +993,11 @@ pub fn run() {
                         if let Some(window) = _app_handle.get_webview_window("main") {
                             let _ = window.emit("file-path", path_str);
                             let _ = window.set_focus();
+                        } else {
+                            log::info!("[macOS file open] Window not ready, path stored in startup_file for later retrieval");
                         }
+                    } else {
+                        log::warn!("[macOS file open] Failed to convert URL to file path: {}", url);
                     }
                 }
             }

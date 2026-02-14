@@ -803,11 +803,30 @@
 				handleFilePath(fileParam);
 			}
 
-			// Check for initial CLI args
+			// Check for initial CLI args or macOS file association paths
 			try {
 				const paths = await invoke('send_markdown_path') as string[];
 				if (paths.length > 0) {
 					handleFilePath(paths[0]);
+				} else {
+					// On macOS, the Opened event (file association) may arrive after
+					// the frontend initializes. Retry a few times to catch it.
+					let retries = 0;
+					const maxRetries = 5;
+					const retryInterval = setInterval(async () => {
+						retries++;
+						try {
+							const retryPaths = await invoke('send_markdown_path') as string[];
+							if (retryPaths.length > 0) {
+								clearInterval(retryInterval);
+								handleFilePath(retryPaths[0]);
+							} else if (retries >= maxRetries) {
+								clearInterval(retryInterval);
+							}
+						} catch {
+							clearInterval(retryInterval);
+						}
+					}, 300);
 				}
 			} catch (e) {
 				console.error('Failed to get startup paths:', e);
