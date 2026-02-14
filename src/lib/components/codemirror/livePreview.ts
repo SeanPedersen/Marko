@@ -5,7 +5,7 @@ import {
   WidgetType,
 } from '@codemirror/view';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { RangeSetBuilder } from '@codemirror/state';
+import { RangeSetBuilder, StateField } from '@codemirror/state';
 import type { Range } from '@codemirror/state';
 import { syntaxTree } from '@codemirror/language';
 import type { SyntaxNodeRef } from '@lezer/common';
@@ -239,6 +239,75 @@ class HorizontalRuleWidget extends WidgetType {
   }
 }
 
+class TableWidget extends WidgetType {
+  constructor(readonly rawText: string) {
+    super();
+  }
+
+  toDOM(): HTMLElement {
+    const container = document.createElement('div');
+    container.className = 'cm-live-table';
+    container.contentEditable = 'false';
+
+    const lines = this.rawText.split('\n').filter((l) => l.trim());
+    if (lines.length < 2) return container;
+
+    const parseRow = (row: string): string[] =>
+      row
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map((c) => c.trim());
+
+    const headerCells = parseRow(lines[0]);
+    const alignRow = parseRow(lines[1]);
+
+    const alignments: ('left' | 'center' | 'right' | null)[] = alignRow.map((cell) => {
+      const left = cell.startsWith(':');
+      const right = cell.endsWith(':');
+      if (left && right) return 'center';
+      if (right) return 'right';
+      if (left) return 'left';
+      return null;
+    });
+
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    for (let i = 0; i < headerCells.length; i++) {
+      const th = document.createElement('th');
+      th.textContent = headerCells[i];
+      if (alignments[i]) th.style.textAlign = alignments[i]!;
+      headerRow.appendChild(th);
+    }
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    if (lines.length > 2) {
+      const tbody = document.createElement('tbody');
+      for (let r = 2; r < lines.length; r++) {
+        const cells = parseRow(lines[r]);
+        const tr = document.createElement('tr');
+        for (let i = 0; i < headerCells.length; i++) {
+          const td = document.createElement('td');
+          td.textContent = cells[i] ?? '';
+          if (alignments[i]) td.style.textAlign = alignments[i]!;
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+    }
+
+    container.appendChild(table);
+    return container;
+  }
+
+  eq(other: TableWidget): boolean {
+    return this.rawText === other.rawText;
+  }
+}
+
 // Hide decoration - makes text invisible but keeps it in the document
 const hideDecoration = Decoration.mark({ class: 'cm-hide' });
 
@@ -288,6 +357,7 @@ interface ParsedElement {
   level?: number;
   checked?: boolean;
   indentLevel?: number;
+  endLine?: number;
   indentFrom?: number;
   indentTo?: number;
   isOrdered?: boolean;
@@ -722,6 +792,18 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
           break;
         }
 
+        case 'Table': {
+          const endLine = view.state.doc.lineAt(to).number;
+          elements.push({
+            type: 'table',
+            from,
+            to,
+            line,
+            endLine,
+          });
+          break;
+        }
+
         case 'URL':
         case 'Autolink': {
           const rawText = doc.sliceString(from, to);
@@ -802,6 +884,9 @@ function buildDecorations(view: EditorView): DecorationSet {
   const codeBlockLines = new Set<number>();
   const codeFenceLines = new Set<number>();
 
+  // Track table ranges that will be replaced (cursor outside)
+  const replacedTableRanges: { from: number; to: number }[] = [];
+
   for (const el of elements) {
     if (el.type === 'codeBlock') {
       const startLine = el.line;
@@ -813,11 +898,23 @@ function buildDecorations(view: EditorView): DecorationSet {
     if (el.type === 'codeFenceStart' || el.type === 'codeFenceEnd') {
       codeFenceLines.add(el.line);
     }
+    if (el.type === 'table') {
+      const tableEndLine = el.endLine ?? el.line;
+      const cursorInTable = cursorLine >= el.line && cursorLine <= tableEndLine;
+      if (!cursorInTable) {
+        replacedTableRanges.push({ from: el.from, to: el.to });
+      }
+    }
   }
 
   for (const el of elements) {
     // Skip all formatting for frontmatter lines
     if (frontmatterLines.has(el.line)) continue;
+
+    // Skip inline decorations inside tables that will be block-replaced
+    if (el.type !== 'table' && replacedTableRanges.some(r => el.from >= r.from && el.to <= r.to)) {
+      continue;
+    }
 
     const isOnCursorLine = el.line === cursorLine;
 
@@ -1067,6 +1164,11 @@ function buildDecorations(view: EditorView): DecorationSet {
         }
         break;
       }
+
+      case 'table':
+        // Handled by tableDecorationField (StateField) since block replacements
+        // spanning line breaks cannot be provided via ViewPlugin
+        break;
     }
   }
 
@@ -1136,6 +1238,40 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
     decorations: (v) => v.decorations,
   }
 );
+
+// StateField for table decorations (block replacements that span line breaks
+// cannot be provided via ViewPlugin — they require a StateField)
+const tableDecorationField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none;
+  },
+  update(_, tr) {
+    const decorations: Range<Decoration>[] = [];
+    const cursorPos = tr.state.selection.main.head;
+    const cursorLine = tr.state.doc.lineAt(cursorPos).number;
+
+    syntaxTree(tr.state).iterate({
+      enter(node: SyntaxNodeRef) {
+        if (node.name !== 'Table') return;
+        const startLine = tr.state.doc.lineAt(node.from).number;
+        const endLine = tr.state.doc.lineAt(node.to).number;
+        if (cursorLine >= startLine && cursorLine <= endLine) return;
+
+        const rawText = tr.state.doc.sliceString(node.from, node.to);
+        decorations.push(
+          Decoration.replace({
+            widget: new TableWidget(rawText),
+            block: true,
+          }).range(node.from, node.to)
+        );
+      },
+    });
+
+    decorations.sort((a, b) => a.from - b.from);
+    return Decoration.set(decorations);
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
 
 // Styles for live preview elements
 export const livePreviewStyles = EditorView.baseTheme({
@@ -1304,6 +1440,24 @@ export const livePreviewStyles = EditorView.baseTheme({
     width: '100%',
   },
 
+  // Tables
+  '.cm-live-table': {
+    fontFamily: 'inherit',
+    padding: '4px 0',
+  },
+  '.cm-live-table table': {
+    borderCollapse: 'collapse',
+    width: '100%',
+  },
+  '.cm-live-table th, .cm-live-table td': {
+    border: '1px solid var(--color-border-default)',
+    padding: '6px 12px',
+  },
+  '.cm-live-table th': {
+    backgroundColor: 'var(--color-canvas-subtle)',
+    fontWeight: '600',
+  },
+
   // Frontmatter - reset all syntax highlighting overrides
   '.cm-live-frontmatter-line span': {
     fontSize: 'inherit !important',
@@ -1315,5 +1469,5 @@ export const livePreviewStyles = EditorView.baseTheme({
 });
 
 export function livePreview() {
-  return [livePreviewPlugin, livePreviewStyles];
+  return [livePreviewPlugin, tableDecorationField, livePreviewStyles];
 }
