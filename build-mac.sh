@@ -23,12 +23,17 @@ done
 APP_NAME="marko"
 VERSION=$(node -p "require('./package.json').version")
 APP_BUNDLE="${APP_NAME}.app"
-BUNDLE_PATH="./src-tauri/target/release/bundle/macos/${APP_BUNDLE}"
-ZIP_PATH="./src-tauri/target/release/bundle/macos/${APP_NAME}_${VERSION}_aarch64.zip"
+BUNDLE_PATH="./src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_BUNDLE}"
+ZIP_PATH="./src-tauri/target/universal-apple-darwin/release/bundle/macos/${APP_NAME}_${VERSION}_universal.zip"
 
-# Build
-echo "Building ${APP_NAME} v${VERSION}..."
-npm run tauri build
+# Ensure both targets are installed
+echo "Checking Rust targets..."
+rustup target add x86_64-apple-darwin 2>/dev/null || true
+rustup target add aarch64-apple-darwin 2>/dev/null || true
+
+# Build universal binary
+echo "Building ${APP_NAME} v${VERSION} (universal)..."
+npm run tauri build -- --target universal-apple-darwin
 
 # Verify app exists
 if [ ! -d "${BUNDLE_PATH}" ]; then
