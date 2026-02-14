@@ -1079,7 +1079,7 @@
 			class="markdown-container"
 			class:sidebar-open={tocVisible || folderExplorerVisible}
 			class:sidebar-right={settings.sidebarPosition === 'right'}
-			style="zoom: {zoomLevel / 100}"
+			style={zoomLevel !== 100 ? `transform: scale(${zoomLevel / 100}); transform-origin: top left; width: ${10000 / zoomLevel}%; height: ${10000 / zoomLevel}%;` : ''}
 			role="presentation"
 		>
 			<EditorHeader
@@ -1095,7 +1095,6 @@
 				bind:this={editorRef}
 				value={tabManager.activeTab?.rawContent ?? ''}
 				{theme}
-				{zoomLevel}
 				readonly={false}
 				fileType={currentFileType}
 				onchange={handleEditorChange}
