@@ -1652,6 +1652,7 @@ export const livePreviewStyles = EditorView.baseTheme({
   '.cm-live-table th, .cm-live-table td': {
     border: '1px solid var(--color-border-default)',
     padding: '6px 12px',
+    outline: 'none', // Remove default browser focus outline
   },
   '.cm-live-table th': {
     backgroundColor: 'var(--color-canvas-subtle)',
