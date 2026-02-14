@@ -12,6 +12,8 @@
 	import type { FileIndex } from '$lib/utils/wikiLinks';
 	import type { Extension } from '@codemirror/state';
 
+
+
 	// Custom scrollPastEnd that only adds half viewport height
 	const scrollPastEndHalfPlugin = ViewPlugin.fromClass(
 		class {
@@ -69,6 +71,63 @@
 	const readonlyCompartment = new Compartment();
 	const themeCompartment = new Compartment();
 
+	// Store current zoom for mouse coordinate adjustment
+	// The parent container applies CSS zoom, which breaks CodeMirror's click handling
+	let currentZoom = 1;
+
+	// Extension to fix mouse click positions when parent has CSS zoom applied
+	function zoomClickFix(): Extension {
+		return EditorView.domEventHandlers({
+			mousedown(event, view) {
+				if (currentZoom === 1) return false;
+
+				// With CSS zoom on parent, event coordinates are in zoomed space
+				// but CodeMirror's internal measurements are unzoomed.
+				// We need to convert click position to unzoomed coordinates.
+
+				const rect = view.contentDOM.getBoundingClientRect();
+
+				// rect is in zoomed screen coordinates
+				// event.clientX/Y are in zoomed screen coordinates
+				// But we need to pass unzoomed coordinates to posAtCoords
+
+				// The rect's position and size are both affected by zoom
+				// To get the unzoomed position relative to content:
+				const relX = (event.clientX - rect.left) / currentZoom;
+				const relY = (event.clientY - rect.top) / currentZoom;
+
+				// For posAtCoords, we need screen coordinates that match
+				// CodeMirror's internal unzoomed coordinate system
+				const unzoomedRect = {
+					left: rect.left / currentZoom,
+					top: rect.top / currentZoom,
+				};
+
+				const pos = view.posAtCoords({
+					x: unzoomedRect.left + relX,
+					y: unzoomedRect.top + relY
+				});
+
+				if (pos === null) return false;
+
+				if (event.shiftKey) {
+					view.dispatch({
+						selection: { anchor: view.state.selection.main.anchor, head: pos },
+						userEvent: 'select.pointer'
+					});
+				} else {
+					view.dispatch({
+						selection: { anchor: pos },
+						userEvent: 'select.pointer'
+					});
+				}
+
+				view.focus();
+				return true;
+			}
+		});
+	}
+
 	function createExtensions() {
 		const extensions = [
 			// Basic editing
@@ -108,6 +167,9 @@
 
 			// Allow scrolling past the end (half viewport height)
 			scrollPastEndHalf(),
+
+			// Fix mouse click positions when zoomed
+			zoomClickFix(),
 		];
 
 		// Conditionally add markdown-specific features
@@ -211,6 +273,12 @@
 		updateFileIndex(view, fileIndex);
 	});
 
+	// Track zoom level for click coordinate adjustment
+	// The parent applies CSS zoom which breaks CodeMirror's click handling
+	$effect(() => {
+		currentZoom = zoomLevel / 100;
+	});
+
 	// Export function to scroll to a specific line (for TOC integration)
 	export function scrollToLine(lineNumber: number) {
 		if (!view) return;
@@ -264,7 +332,7 @@
 <div
 	bind:this={container}
 	class="codemirror-container"
-	style="font-size: {zoomLevel / 100}em; --editor-max-width: {editorWidth};"
+	style="--editor-max-width: {editorWidth};"
 ></div>
 
 <style>
