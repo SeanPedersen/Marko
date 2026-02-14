@@ -130,7 +130,6 @@ Theme colors defined in `MarkdownViewer.svelte`:
 ## Commands
 
 ```bash
-npm run build        # Production build
 npm run check        # TypeScript/Svelte type checking
 ```
 
