@@ -10,6 +10,7 @@
         tocVisible = false,
         ontoggleToc,
         showTocButton = false,
+        onopenFileLocation,
     } = $props<{
         filePath?: string;
         folderPath?: string;
@@ -21,6 +22,7 @@
         tocVisible?: boolean;
         ontoggleToc?: () => void;
         showTocButton?: boolean;
+        onopenFileLocation?: () => void;
     }>();
 
     // Extract display path: show relative path from folder, or just filename
@@ -108,6 +110,22 @@
                 </svg>
             </button>
         </div>
+
+        {#if onopenFileLocation}
+            <button
+                class="open-location-button"
+                onclick={onopenFileLocation}
+                title="Open file location"
+            >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                    ><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><polyline points="15 13 18 13 18 10"></polyline><line
+                            x1="14"
+                            y1="14"
+                            x2="18"
+                            y2="10"></line
+                        ></svg>
+            </button>
+        {/if}
 
         {#if displayPath}
             <div class="file-path">
@@ -235,5 +253,24 @@
     .path-filename {
         color: var(--color-fg-default);
         font-weight: 500;
+    }
+
+    .open-location-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border: none;
+        background: transparent;
+        border-radius: 4px;
+        color: var(--color-fg-muted);
+        cursor: pointer;
+        transition: background-color 0.1s, color 0.1s;
+    }
+
+    .open-location-button:hover {
+        background: var(--color-neutral-muted);
+        color: var(--color-fg-default);
     }
 </style>

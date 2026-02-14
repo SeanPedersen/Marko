@@ -1034,7 +1034,6 @@
 		{zoomLevel}
 		onselectFile={selectFile}
 		ontoggleHome={toggleHome}
-		ononpenFileLocation={openFileLocation}
 		onresetZoom={() => (zoomLevel = 100)}
 		{theme}
 		onSetTheme={(t) => (theme = t)}
@@ -1057,7 +1056,6 @@
 			{showHome}
 			onselectFile={selectFile}
 			ontoggleHome={toggleHome}
-			ononpenFileLocation={openFileLocation}
 			ondetach={handleDetach}
 			ontabclick={() => (showHome = false)}
 			{zoomLevel}
@@ -1109,6 +1107,7 @@
 				{tocVisible}
 				ontoggleToc={toggleToc}
 				showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType === 'markdown' && hasHeadings}
+				onopenFileLocation={openFileLocation}
 			/>
 			<CodeMirrorEditor
 				bind:this={editorRef}

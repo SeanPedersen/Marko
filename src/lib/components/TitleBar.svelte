@@ -15,7 +15,6 @@
 		showHome,
 		onselectFile,
 		ontoggleHome,
-		ononpenFileLocation,
 		ondetach,
 		ontabclick,
 		zoomLevel,
@@ -37,7 +36,6 @@
 		showHome: boolean;
 		onselectFile: () => void;
 		ontoggleHome: () => void;
-		ononpenFileLocation: () => void;
 		ondetach?: (tabId: string) => void;
 		ontabclick?: () => void;
 		zoomLevel?: number;
@@ -117,7 +115,6 @@
 		list.push('theme');
 
 		if (currentFile && !showHome) {
-			list.push('open_loc');
 			const ext = currentFile.split('.').pop()?.toLowerCase() || '';
 			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd'].includes(ext);
 
@@ -212,22 +209,6 @@
 						onmouseenter={(e) => showTooltip(e, 'Reset zoom')}
 						onmouseleave={hideTooltip}>
 						{zoomLevel}%
-					</button>
-				{:else if id === 'open_loc'}
-					<button
-						class="title-action-btn"
-						onclick={ononpenFileLocation}
-						aria-label="Open File Location"
-						onmouseenter={(e) => showTooltip(e, 'Open file location')}
-						onmouseleave={hideTooltip}
-						transition:fly={{ x: 10, duration: 200 }}>
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-							><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><polyline points="15 13 18 13 18 10"></polyline><line
-								x1="14"
-								y1="14"
-								x2="18"
-								y2="10"></line
-							></svg>
 					</button>
 				{:else if id === 'settings'}
 					<button
