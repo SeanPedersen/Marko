@@ -702,6 +702,23 @@ fn show_context_menu(
                 .map_err(|e| e.to_string())?;
                 menu.append(&open_folder).map_err(|e| e.to_string())?;
             }
+
+            #[cfg(debug_assertions)]
+            {
+                let sep =
+                    tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+                menu.append(&sep).map_err(|e| e.to_string())?;
+
+                let inspect = tauri::menu::MenuItem::with_id(
+                    &app,
+                    "ctx_inspect",
+                    "Inspect Element",
+                    true,
+                    None::<&str>,
+                )
+                .map_err(|e| e.to_string())?;
+                menu.append(&inspect).map_err(|e| e.to_string())?;
+            }
         }
     }
 
@@ -865,6 +882,11 @@ pub fn run() {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.emit("menu-file-trash", path);
                         }
+                    }
+                }
+                "ctx_inspect" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        window.open_devtools();
                     }
                 }
                 _ => {}
