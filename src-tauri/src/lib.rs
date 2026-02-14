@@ -1,14 +1,13 @@
 use comrak::{markdown_to_html, ComrakExtensionOptions, ComrakOptions};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+use regex::{Captures, Regex};
 use serde::Serialize;
+use std::borrow::Cow;
 use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, State};
 use tauri::menu::ContextMenu;
-use regex::{Regex, Captures};
-use std::borrow::Cow;
-
+use tauri::{AppHandle, Emitter, Manager, State};
 
 struct WatcherState {
     watcher: Mutex<Option<RecommendedWatcher>>,
@@ -18,10 +17,7 @@ struct FolderWatcherState {
     watcher: Mutex<Option<RecommendedWatcher>>,
 }
 
-
 mod setup;
-
-
 
 #[tauri::command]
 async fn show_window(window: tauri::Window) {
@@ -30,26 +26,32 @@ async fn show_window(window: tauri::Window) {
 
 fn process_obsidian_embeds(content: &str) -> Cow<'_, str> {
     let re = Regex::new(r"!\[\[(.*?)\]\]").unwrap();
-    
+
     re.replace_all(content, |caps: &Captures| {
         let inner = &caps[1];
         let mut parts = inner.split('|');
         let path = parts.next().unwrap_or("");
         let size = parts.next();
-        
+
         let path_escaped = path.replace(" ", "%20");
-        
+
         if let Some(size_str) = size {
             if size_str.contains('x') {
                 let mut dims = size_str.split('x');
                 let width = dims.next().unwrap_or("");
                 let height = dims.next().unwrap_or("");
-                format!("<img src=\"{}\" width=\"{}\" height=\"{}\" alt=\"{}\" />", path_escaped, width, height, path)
+                format!(
+                    "<img src=\"{}\" width=\"{}\" height=\"{}\" alt=\"{}\" />",
+                    path_escaped, width, height, path
+                )
             } else {
-                format!("<img src=\"{}\" width=\"{}\" alt=\"{}\" />", path_escaped, size_str, path)
+                format!(
+                    "<img src=\"{}\" width=\"{}\" alt=\"{}\" />",
+                    path_escaped, size_str, path
+                )
             }
         } else {
-             format!("<img src=\"{}\" alt=\"{}\" />", path_escaped, path)
+            format!("<img src=\"{}\" alt=\"{}\" />", path_escaped, path)
         }
     })
 }
@@ -57,7 +59,7 @@ fn process_obsidian_embeds(content: &str) -> Cow<'_, str> {
 #[tauri::command]
 fn convert_markdown(content: &str) -> String {
     let processed = process_obsidian_embeds(content);
-    
+
     let mut options = ComrakOptions {
         extension: ComrakExtensionOptions {
             strikethrough: true,
@@ -129,8 +131,6 @@ fn is_directory(path: String) -> bool {
     Path::new(clean_path).is_dir()
 }
 
-
-
 #[tauri::command]
 fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
     let dir_path = Path::new(&path);
@@ -168,19 +168,21 @@ fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
         .collect();
 
     // Sort: directories first, then files, both alphabetically
-    entries.sort_by(|a, b| {
-        match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
+    entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
 
     Ok(entries)
 }
 
 #[tauri::command]
-fn watch_file(handle: AppHandle, state: State<'_, WatcherState>, path: String) -> Result<(), String> {
+fn watch_file(
+    handle: AppHandle,
+    state: State<'_, WatcherState>,
+    path: String,
+) -> Result<(), String> {
     let mut watcher_lock = state.watcher.lock().unwrap();
 
     *watcher_lock = None;
@@ -215,7 +217,11 @@ fn unwatch_file(state: State<'_, WatcherState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn watch_folder(handle: AppHandle, state: State<'_, FolderWatcherState>, path: String) -> Result<(), String> {
+fn watch_folder(
+    handle: AppHandle,
+    state: State<'_, FolderWatcherState>,
+    path: String,
+) -> Result<(), String> {
     let mut watcher_lock = state.watcher.lock().unwrap();
     *watcher_lock = None;
 
@@ -262,7 +268,7 @@ fn send_markdown_path(state: State<'_, AppState>) -> Vec<String> {
             files.insert(0, startup_path.clone());
         }
     }
-    
+
     files
 }
 
@@ -276,17 +282,21 @@ fn save_theme(app: AppHandle, theme: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn get_app_mode() -> String {
-
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|arg| arg == "--uninstall") {
         return "uninstall".to_string();
     }
 
     let current_exe = std::env::current_exe().unwrap_or_default();
-    let exe_name = current_exe.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
-    
-    let is_installer_mode = args.iter().any(|arg| arg == "--install") || exe_name.contains("installer");
-    
+    let exe_name = current_exe
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_lowercase();
+
+    let is_installer_mode =
+        args.iter().any(|arg| arg == "--install") || exe_name.contains("installer");
+
     if setup::is_installed() {
         "app".to_string()
     } else {
@@ -302,11 +312,13 @@ async fn get_app_mode() -> String {
 fn is_win11() -> bool {
     #[cfg(target_os = "windows")]
     {
-        use winreg::RegKey;
         use winreg::enums::*;
+        use winreg::RegKey;
 
         let hklim = RegKey::predef(HKEY_LOCAL_MACHINE);
-        if let Ok(current_version) = hklim.open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion") {
+        if let Ok(current_version) =
+            hklim.open_subkey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion")
+        {
             if let Ok(current_build) = current_version.get_value::<String, _>("CurrentBuild") {
                 if let Ok(build_num) = current_build.parse::<u32>() {
                     return build_num >= 22000;
@@ -326,7 +338,8 @@ fn install_cli(_app: AppHandle) -> Result<String, String> {
         let cli_path = Path::new("/usr/local/bin/marko");
 
         // Create a shell script wrapper
-        let script_content = format!(r#"#!/bin/bash
+        let script_content = format!(
+            r#"#!/bin/bash
 # Marko CLI - opens files with Marko markdown editor
 if [ $# -eq 0 ]; then
     open -a "Marko"
@@ -345,7 +358,9 @@ else
         "{}" "$file" &
     done
 fi
-"#, app_path.display());
+"#,
+            app_path.display()
+        );
 
         // Try to write directly first, then fall back to using osascript for admin rights
         match fs::write(cli_path, &script_content) {
@@ -388,18 +403,23 @@ fi
         fs::create_dir_all(&cli_dir).map_err(|e| e.to_string())?;
 
         let bat_path = cli_dir.join("marko.cmd");
-        let script_content = format!(r#"@echo off
+        let script_content = format!(
+            r#"@echo off
 "{}" %*
-"#, app_path.display());
+"#,
+            app_path.display()
+        );
 
         fs::write(&bat_path, script_content).map_err(|e| e.to_string())?;
 
         // Add to user PATH if not already there
-        use winreg::RegKey;
         use winreg::enums::*;
+        use winreg::RegKey;
 
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let env = hkcu.open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE).map_err(|e| e.to_string())?;
+        let env = hkcu
+            .open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)
+            .map_err(|e| e.to_string())?;
         let current_path: String = env.get_value("Path").unwrap_or_default();
 
         let cli_dir_str = cli_dir.to_string_lossy().to_string();
@@ -409,12 +429,13 @@ fi
             } else {
                 format!("{};{}", current_path, cli_dir_str)
             };
-            env.set_value("Path", &new_path).map_err(|e| e.to_string())?;
+            env.set_value("Path", &new_path)
+                .map_err(|e| e.to_string())?;
 
             // Broadcast environment change
             unsafe {
-                use windows_sys::Win32::UI::WindowsAndMessaging::*;
                 use windows_sys::Win32::Foundation::*;
+                use windows_sys::Win32::UI::WindowsAndMessaging::*;
                 let env_str: Vec<u16> = "Environment\0".encode_utf16().collect();
                 SendMessageTimeoutW(
                     HWND_BROADCAST,
@@ -428,7 +449,10 @@ fi
             }
         }
 
-        Ok(format!("CLI installed to {}. Please restart your terminal.", bat_path.display()))
+        Ok(format!(
+            "CLI installed to {}. Please restart your terminal.",
+            bat_path.display()
+        ))
     }
 
     #[cfg(target_os = "linux")]
@@ -436,7 +460,8 @@ fi
         let app_path = std::env::current_exe().map_err(|e| e.to_string())?;
         let cli_path = Path::new("/usr/local/bin/marko");
 
-        let script_content = format!(r#"#!/bin/bash
+        let script_content = format!(
+            r#"#!/bin/bash
 # Marko CLI - opens files with Marko markdown editor
 if [ $# -eq 0 ]; then
     "{}" &
@@ -455,7 +480,10 @@ else
         "{}" "$file" &
     done
 fi
-"#, app_path.display(), app_path.display());
+"#,
+            app_path.display(),
+            app_path.display()
+        );
 
         // Try direct write first
         match fs::write(cli_path, &script_content) {
@@ -508,80 +536,171 @@ fn show_context_menu(
 
     match menu_type.as_str() {
         "tab" => {
-            let new_tab = tauri::menu::MenuItem::with_id(&app, "ctx_tab_new", "New Tab", true, Some("Ctrl+T")).map_err(|e| e.to_string())?;
+            let new_tab = tauri::menu::MenuItem::with_id(
+                &app,
+                "ctx_tab_new",
+                "New Tab",
+                true,
+                Some("Ctrl+T"),
+            )
+            .map_err(|e| e.to_string())?;
             menu.append(&new_tab).map_err(|e| e.to_string())?;
 
-            let undo = tauri::menu::MenuItem::with_id(&app, "ctx_tab_undo", "Undo Close Tab", true, Some("Ctrl+Shift+T")).map_err(|e| e.to_string())?;
+            let undo = tauri::menu::MenuItem::with_id(
+                &app,
+                "ctx_tab_undo",
+                "Undo Close Tab",
+                true,
+                Some("Ctrl+Shift+T"),
+            )
+            .map_err(|e| e.to_string())?;
             menu.append(&undo).map_err(|e| e.to_string())?;
 
-            let rename = tauri::menu::MenuItem::with_id(&app, "ctx_tab_rename", "Rename", true, None::<&str>).map_err(|e| e.to_string())?;
+            let rename = tauri::menu::MenuItem::with_id(
+                &app,
+                "ctx_tab_rename",
+                "Rename",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| e.to_string())?;
             menu.append(&rename).map_err(|e| e.to_string())?;
 
-            let sep = tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+            let sep =
+                tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
             menu.append(&sep).map_err(|e| e.to_string())?;
 
-            let close = tauri::menu::MenuItem::with_id(&app, "ctx_tab_close", "Close Tab", true, Some("Ctrl+W")).map_err(|e| e.to_string())?;
+            let close = tauri::menu::MenuItem::with_id(
+                &app,
+                "ctx_tab_close",
+                "Close Tab",
+                true,
+                Some("Ctrl+W"),
+            )
+            .map_err(|e| e.to_string())?;
             menu.append(&close).map_err(|e| e.to_string())?;
 
-            let close_others = tauri::menu::MenuItem::with_id(&app, "ctx_tab_close_others", "Close Other Tabs", true, None::<&str>).map_err(|e| e.to_string())?;
+            let close_others = tauri::menu::MenuItem::with_id(
+                &app,
+                "ctx_tab_close_others",
+                "Close Other Tabs",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| e.to_string())?;
             menu.append(&close_others).map_err(|e| e.to_string())?;
 
-            let close_right = tauri::menu::MenuItem::with_id(&app, "ctx_tab_close_right", "Close Tabs to Right", true, None::<&str>).map_err(|e| e.to_string())?;
+            let close_right = tauri::menu::MenuItem::with_id(
+                &app,
+                "ctx_tab_close_right",
+                "Close Tabs to Right",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| e.to_string())?;
             menu.append(&close_right).map_err(|e| e.to_string())?;
-        },
+        }
         "tab_bar" => {
-            let new_tab = tauri::menu::MenuItem::with_id(&app, "ctx_tab_new", "New Tab", true, Some("Ctrl+T")).map_err(|e| e.to_string())?;
+            let new_tab = tauri::menu::MenuItem::with_id(
+                &app,
+                "ctx_tab_new",
+                "New Tab",
+                true,
+                Some("Ctrl+T"),
+            )
+            .map_err(|e| e.to_string())?;
             menu.append(&new_tab).map_err(|e| e.to_string())?;
 
-            let undo = tauri::menu::MenuItem::with_id(&app, "ctx_tab_undo", "Undo Close Tab", true, Some("Ctrl+Shift+T")).map_err(|e| e.to_string())?;
+            let undo = tauri::menu::MenuItem::with_id(
+                &app,
+                "ctx_tab_undo",
+                "Undo Close Tab",
+                true,
+                Some("Ctrl+Shift+T"),
+            )
+            .map_err(|e| e.to_string())?;
             menu.append(&undo).map_err(|e| e.to_string())?;
-        },
+        }
         "file_tree" => {
-            let reveal_label = if cfg!(target_os = "macos") { "Reveal in Finder" } else { "Show in Explorer" };
-            let reveal = tauri::menu::MenuItem::with_id(&app, "ctx_file_reveal", reveal_label, true, None::<&str>).map_err(|e| e.to_string())?;
+            let reveal_label = if cfg!(target_os = "macos") {
+                "Reveal in Finder"
+            } else {
+                "Show in Explorer"
+            };
+            let reveal = tauri::menu::MenuItem::with_id(
+                &app,
+                "ctx_file_reveal",
+                reveal_label,
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| e.to_string())?;
             menu.append(&reveal).map_err(|e| e.to_string())?;
 
-            let sep1 = tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+            let sep1 =
+                tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
             menu.append(&sep1).map_err(|e| e.to_string())?;
 
-            let copy_name = tauri::menu::MenuItem::with_id(&app, "ctx_file_copy_name", "Copy Name", true, None::<&str>).map_err(|e| e.to_string())?;
+            let copy_name = tauri::menu::MenuItem::with_id(
+                &app,
+                "ctx_file_copy_name",
+                "Copy Name",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| e.to_string())?;
             menu.append(&copy_name).map_err(|e| e.to_string())?;
 
-            let copy_path = tauri::menu::MenuItem::with_id(&app, "ctx_file_copy_path", "Copy Path", true, None::<&str>).map_err(|e| e.to_string())?;
+            let copy_path = tauri::menu::MenuItem::with_id(
+                &app,
+                "ctx_file_copy_path",
+                "Copy Path",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| e.to_string())?;
             menu.append(&copy_path).map_err(|e| e.to_string())?;
 
-            let sep2 = tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+            let sep2 =
+                tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
             menu.append(&sep2).map_err(|e| e.to_string())?;
 
-            let trash = tauri::menu::MenuItem::with_id(&app, "ctx_file_trash", "Move to Trash", true, None::<&str>).map_err(|e| e.to_string())?;
+            let trash = tauri::menu::MenuItem::with_id(
+                &app,
+                "ctx_file_trash",
+                "Move to Trash",
+                true,
+                None::<&str>,
+            )
+            .map_err(|e| e.to_string())?;
             menu.append(&trash).map_err(|e| e.to_string())?;
-        },
+        }
         _ => {
             // Document / Default
             if has_selection {
-                let copy = tauri::menu::PredefinedMenuItem::copy(&app, Some("Copy")).map_err(|e| e.to_string())?;
+                let copy = tauri::menu::PredefinedMenuItem::copy(&app, Some("Copy"))
+                    .map_err(|e| e.to_string())?;
                 menu.append(&copy).map_err(|e| e.to_string())?;
             }
 
-            let select_all = tauri::menu::PredefinedMenuItem::select_all(&app, Some("Select All")).map_err(|e| e.to_string())?;
+            let select_all = tauri::menu::PredefinedMenuItem::select_all(&app, Some("Select All"))
+                .map_err(|e| e.to_string())?;
             menu.append(&select_all).map_err(|e| e.to_string())?;
 
             if let Some(_) = path {
-                let sep = tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+                let sep =
+                    tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
                 menu.append(&sep).map_err(|e| e.to_string())?;
 
-                let open_folder = tauri::menu::MenuItem::with_id(&app, "ctx_open_folder", "Open File Location", true, None::<&str>).map_err(|e| e.to_string())?;
+                let open_folder = tauri::menu::MenuItem::with_id(
+                    &app,
+                    "ctx_open_folder",
+                    "Open File Location",
+                    true,
+                    None::<&str>,
+                )
+                .map_err(|e| e.to_string())?;
                 menu.append(&open_folder).map_err(|e| e.to_string())?;
-
-                let edit = tauri::menu::MenuItem::with_id(&app, "ctx_edit", "Edit", true, None::<&str>).map_err(|e| e.to_string())?;
-                menu.append(&edit).map_err(|e| e.to_string())?;
-                
-                // Add separator before close
-                let sep2 = tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
-                menu.append(&sep2).map_err(|e| e.to_string())?;
-
-                let close = tauri::menu::MenuItem::with_id(&app, "ctx_close", "Close File", true, None::<&str>).map_err(|e| e.to_string())?;
-                menu.append(&close).map_err(|e| e.to_string())?;
             }
         }
     }
@@ -606,7 +725,6 @@ pub fn run() {
     }
 
     tauri::Builder::default()
-
         .manage(AppState {
             startup_file: Mutex::new(None),
         })
@@ -623,8 +741,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
-            let path_str = args.iter().skip(1).find(|a| !a.starts_with("-")).map(|a| a.as_str()).unwrap_or("");
-            
+            let path_str = args
+                .iter()
+                .skip(1)
+                .find(|a| !a.starts_with("-"))
+                .map(|a| a.as_str())
+                .unwrap_or("");
+
             if !path_str.is_empty() {
                 let path = std::path::Path::new(path_str);
                 let resolved_path = if path.is_absolute() {
@@ -633,23 +756,31 @@ pub fn run() {
                     let cwd_path = std::path::Path::new(&cwd);
                     cwd_path.join(path).display().to_string()
                 };
-                
-                let _ = app.get_webview_window("main").expect("no main window").emit("file-path", resolved_path);
+
+                let _ = app
+                    .get_webview_window("main")
+                    .expect("no main window")
+                    .emit("file-path", resolved_path);
             }
-            let _ = app.get_webview_window("main").expect("no main window").set_focus();
+            let _ = app
+                .get_webview_window("main")
+                .expect("no main window")
+                .set_focus();
         }))
         .plugin(tauri_plugin_prevent_default::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .on_menu_event(|app, event| {
-             let id = event.id().as_ref();
-             let state = app.state::<ContextMenuState>();
+            let id = event.id().as_ref();
+            let state = app.state::<ContextMenuState>();
 
-             match id {
-                 "ctx_open_folder" | "ctx_edit" | "ctx_close" => {
+            match id {
+                "ctx_open_folder" | "ctx_edit" | "ctx_close" => {
                     let path_lock = state.active_path.lock().unwrap();
                     if let Some(path) = path_lock.as_ref() {
                         match id {
-                            "ctx_open_folder" => { let _ = open_file_folder(path.clone()); }
+                            "ctx_open_folder" => {
+                                let _ = open_file_folder(path.clone());
+                            }
                             "ctx_edit" => {
                                 if let Some(window) = app.get_webview_window("main") {
                                     let _ = window.emit("menu-edit-file", ());
@@ -663,109 +794,123 @@ pub fn run() {
                             _ => {}
                         }
                     }
-                 }
-                 "ctx_tab_rename" => {
+                }
+                "ctx_tab_rename" => {
                     let tab_lock = state.active_tab_id.lock().unwrap();
                     if let Some(tab_id) = tab_lock.as_ref() {
-                       if let Some(window) = app.get_webview_window("main") {
-                           let _ = window.emit("menu-tab-rename", tab_id);
-                       }
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("menu-tab-rename", tab_id);
+                        }
                     }
-                 }
-                 "ctx_tab_new" => {
-                     if let Some(window) = app.get_webview_window("main") {
-                         let _ = window.emit("menu-tab-new", ());
-                     }
-                 }
-                 "ctx_tab_undo" => {
-                     if let Some(window) = app.get_webview_window("main") {
-                         let _ = window.emit("menu-tab-undo", ());
-                     }
-                 }
-                 "ctx_tab_close" => {
-                     let tab_lock = state.active_tab_id.lock().unwrap();
-                     if let Some(tab_id) = tab_lock.as_ref() {
+                }
+                "ctx_tab_new" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.emit("menu-tab-new", ());
+                    }
+                }
+                "ctx_tab_undo" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.emit("menu-tab-undo", ());
+                    }
+                }
+                "ctx_tab_close" => {
+                    let tab_lock = state.active_tab_id.lock().unwrap();
+                    if let Some(tab_id) = tab_lock.as_ref() {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.emit("menu-tab-close", tab_id);
                         }
-                     }
-                 }
-                 "ctx_tab_close_others" => {
+                    }
+                }
+                "ctx_tab_close_others" => {
                     let tab_lock = state.active_tab_id.lock().unwrap();
                     if let Some(tab_id) = tab_lock.as_ref() {
-                       if let Some(window) = app.get_webview_window("main") {
-                           let _ = window.emit("menu-tab-close-others", tab_id);
-                       }
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("menu-tab-close-others", tab_id);
+                        }
                     }
-                 }
-                 "ctx_tab_close_right" => {
+                }
+                "ctx_tab_close_right" => {
                     let tab_lock = state.active_tab_id.lock().unwrap();
                     if let Some(tab_id) = tab_lock.as_ref() {
-                       if let Some(window) = app.get_webview_window("main") {
-                           let _ = window.emit("menu-tab-close-right", tab_id);
-                       }
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("menu-tab-close-right", tab_id);
+                        }
                     }
-                 }
-                 "ctx_file_reveal" => {
+                }
+                "ctx_file_reveal" => {
                     let path_lock = state.active_path.lock().unwrap();
                     if let Some(path) = path_lock.as_ref() {
                         let _ = open_file_folder(path.clone());
                     }
-                 }
-                 "ctx_file_copy_name" => {
+                }
+                "ctx_file_copy_name" => {
                     let path_lock = state.active_path.lock().unwrap();
                     if let Some(path) = path_lock.as_ref() {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.emit("menu-file-copy-name", path);
                         }
                     }
-                 }
-                 "ctx_file_copy_path" => {
+                }
+                "ctx_file_copy_path" => {
                     let path_lock = state.active_path.lock().unwrap();
                     if let Some(path) = path_lock.as_ref() {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.emit("menu-file-copy-path", path);
                         }
                     }
-                 }
-                 "ctx_file_trash" => {
+                }
+                "ctx_file_trash" => {
                     let path_lock = state.active_path.lock().unwrap();
                     if let Some(path) = path_lock.as_ref() {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.emit("menu-file-trash", path);
                         }
                     }
-                 }
-                 _ => {}
-             }
+                }
+                _ => {}
+            }
         })
         .setup(|app| {
             let args: Vec<String> = std::env::args().collect();
 
             let current_exe = std::env::current_exe().unwrap_or_default();
-            let exe_name = current_exe.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
-            let is_installer_mode = args.iter().any(|arg| arg == "--install") || exe_name.contains("installer");
+            let exe_name = current_exe
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_lowercase();
+            let is_installer_mode =
+                args.iter().any(|arg| arg == "--install") || exe_name.contains("installer");
 
-            let label = if is_installer_mode { "installer" } else { "main" };
+            let label = if is_installer_mode {
+                "installer"
+            } else {
+                "main"
+            };
 
-            let _window = tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::App("index.html".into()))
-                .title("Marko")
-                .inner_size(900.0, 650.0)
-                .min_inner_size(400.0, 300.0)
-                .visible(false)
-                .resizable(true)
-                .decorations(false)
-                .shadow(false)
-                .center()
-                .visible(false)
-                .build()?;
-                
+            let _window = tauri::WebviewWindowBuilder::new(
+                app,
+                label,
+                tauri::WebviewUrl::App("index.html".into()),
+            )
+            .title("Marko")
+            .inner_size(900.0, 650.0)
+            .min_inner_size(400.0, 300.0)
+            .visible(false)
+            .resizable(true)
+            .decorations(false)
+            .shadow(false)
+            .center()
+            .visible(false)
+            .build()?;
+
             let config_dir = app.path().app_config_dir()?;
             let theme_path = config_dir.join("theme.txt");
-            let theme_pref = fs::read_to_string(theme_path).unwrap_or_else(|_| "system".to_string());
+            let theme_pref =
+                fs::read_to_string(theme_path).unwrap_or_else(|_| "system".to_string());
 
             let window = app.get_webview_window(label).unwrap();
-            
+
             let bg_color = match theme_pref.as_str() {
                 "dark" => Some(tauri::window::Color(24, 24, 24, 255)),
                 "light" => Some(tauri::window::Color(253, 253, 253, 255)),
@@ -780,11 +925,10 @@ pub fn run() {
                     }
                 }
             };
-            
+
             let _ = window.set_background_color(bg_color);
 
             let _ = _window.set_shadow(true);
-
 
             let window = app.get_webview_window(label).unwrap();
 
@@ -796,7 +940,10 @@ pub fn run() {
 
             // If installer, force size (this will be saved to installer-state, not main-state)
             if is_installer_mode {
-                let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: 450.0, height: 550.0 }));
+                let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize {
+                    width: 450.0,
+                    height: 550.0,
+                }));
                 let _ = window.center();
             }
 
@@ -810,7 +957,6 @@ pub fn run() {
             save_file_content,
             read_directory,
             is_directory,
-
             get_app_mode,
             setup::install_app,
             setup::uninstall_app,
@@ -824,7 +970,6 @@ pub fn run() {
             unwatch_file,
             watch_folder,
             unwatch_folder,
-
             show_context_menu,
             show_window,
             save_theme,
@@ -833,19 +978,19 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, _event| {
-#[cfg(target_os = "macos")]
+            #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Opened { urls } = _event {
                 if let Some(url) = urls.first() {
                     if let Ok(path_buf) = url.to_file_path() {
-                         let path_str = path_buf.to_string_lossy().to_string();
-                         
-                         let state = _app_handle.state::<AppState>();
-                         *state.startup_file.lock().unwrap() = Some(path_str.clone());
-                         
-                         if let Some(window) = _app_handle.get_webview_window("main") {
-                             let _ = window.emit("file-path", path_str);
-                             let _ = window.set_focus();
-                         }
+                        let path_str = path_buf.to_string_lossy().to_string();
+
+                        let state = _app_handle.state::<AppState>();
+                        *state.startup_file.lock().unwrap() = Some(path_str.clone());
+
+                        if let Some(window) = _app_handle.get_webview_window("main") {
+                            let _ = window.emit("file-path", path_str);
+                            let _ = window.set_focus();
+                        }
                     }
                 }
             }
