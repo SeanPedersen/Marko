@@ -28,8 +28,10 @@ src/
 │   ├── components/
 │   │   ├── codemirror/
 │   │   │   ├── livePreview.ts        # Obsidian-style live preview (hides syntax when cursor away)
+│   │   │   ├── wikiLinkCompletion.ts # Wiki-link autocomplete extension for [[...]] syntax
 │   │   │   └── theme.ts             # CodeMirror theme using CSS variables
 │   │   ├── CodeMirrorEditor.svelte   # Editor wrapper (CodeMirror 6 instance)
+│   │   ├── EditorHeader.svelte       # Obsidian-style header with back/forward nav and file path
 │   │   ├── TableOfContents.svelte    # TOC sidebar (220px, parses headings)
 │   │   ├── FolderExplorer.svelte     # File tree sidebar (220px, recursive dir listing)
 │   │   ├── TitleBar.svelte           # Window title bar (traffic lights, sidebar toggles, tabs, theme, window controls)
@@ -45,7 +47,8 @@ src/
 │   └── utils/
 │       ├── debounce.ts               # Typed debounce with call()/cancel()
 │       ├── parseHeadings.ts          # Extract headings from markdown (with line numbers)
-│       └── frontmatter.ts            # YAML frontmatter parser
+│       ├── frontmatter.ts            # YAML frontmatter parser
+│       └── wikiLinks.ts              # Wiki-link utilities (file index, resolution, fuzzy matching)
 ```
 
 ## Key Components
@@ -55,18 +58,30 @@ src/
 - Auto-save: debounced (1s) via `debounce` utility, controlled by `settings.autoSave`
 - Sidebar layout: TOC and FolderExplorer overlay the editor; editor reflows only when viewport is narrow (uses `clamp()` on `left` to account for 720px content max-width + 2rem padding)
 - TOC button visibility depends on `hasHeadings` derived (only shown when document has headings)
+- Wiki-links: builds file index from folder contents, handles `marko:wiki-link` click events, resolves links and creates missing files
 
 ### CodeMirror Editor (`src/lib/components/CodeMirrorEditor.svelte`)
-- Props: `value`, `readonly`, `theme`, `onchange`, `zoomLevel`, `fileType`, `editorWidth`
+- Props: `value`, `readonly`, `theme`, `onchange`, `zoomLevel`, `fileType`, `editorWidth`, `fileIndex`
 - Exports: `scrollToLine(lineNumber)`, `findHeadingLine(text, level, occurrence)`
 - Uses `EditorView.lineWrapping` for automatic line wrapping
 - Content layout: `.cm-scroller` has `padding: 2rem`, `.cm-content` has `max-width` set via `--editor-max-width` CSS variable
+- Wiki-link autocomplete via `wikiLinkCompletion()` extension
 
 ### Live Preview (`src/lib/components/codemirror/livePreview.ts`)
 - Hides markdown syntax (**, ##, [](), etc.) when cursor is NOT on that line
 - Reveals syntax when cursor enters the line
 - Applies visual styling via CodeMirror decorations
+- Supports wiki-links: `[[filename]]` or `[[filename|display text]]` syntax
 - **Important**: Avoid using CSS margins on line decorations — they break click position calculations. Use `line-height` for spacing instead.
+
+### Wiki-Links (`src/lib/utils/wikiLinks.ts` + `wikiLinkCompletion.ts`)
+- Obsidian-style internal linking between markdown files
+- Syntax: `[[target]]` or `[[target|display text]]`
+- Resolution: case-insensitive search by basename or filename across entire folder tree
+- Autocomplete: shows file suggestions when typing `[[` (fuzzy matching)
+- Missing file handling: prompts user to create new file when clicking non-existent link
+- `FileIndex` type indexes all markdown files by basename and filename for fast lookup
+- `resolveWikiLink()` returns `found | not-found | ambiguous` status with path or candidates
 
 ### Table of Contents (`src/lib/components/TableOfContents.svelte`)
 - Fixed width: 220px, overlays editor (does not push content)

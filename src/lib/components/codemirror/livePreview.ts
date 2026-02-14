@@ -159,6 +159,49 @@ class CheckboxWidget extends WidgetType {
   }
 }
 
+class WikiLinkWidget extends WidgetType {
+  constructor(
+    readonly target: string,
+    readonly display: string
+  ) {
+    super();
+  }
+
+  toDOM(): HTMLElement {
+    const span = document.createElement('span');
+    span.className = 'cm-wiki-link';
+    span.textContent = this.display;
+
+    // Left-click: navigate in current tab
+    span.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      span.dispatchEvent(new CustomEvent('marko:wiki-link', {
+        bubbles: true,
+        detail: { target: this.target, newTab: false }
+      }));
+    });
+
+    // Middle-click: open in new tab
+    span.addEventListener('auxclick', (e) => {
+      if (e.button === 1) { // Middle mouse button
+        e.preventDefault();
+        e.stopPropagation();
+        span.dispatchEvent(new CustomEvent('marko:wiki-link', {
+          bubbles: true,
+          detail: { target: this.target, newTab: true }
+        }));
+      }
+    });
+
+    return span;
+  }
+
+  eq(other: WikiLinkWidget): boolean {
+    return this.target === other.target && this.display === other.display;
+  }
+}
+
 class BulletWidget extends WidgetType {
   constructor(
     readonly isOrdered: boolean,
@@ -249,6 +292,7 @@ interface ParsedElement {
   indentTo?: number;
   isOrdered?: boolean;
   orderNumber?: number;
+  target?: string; // For wiki-links: the link target
 }
 
 function getLineNumber(view: EditorView, pos: number): number {
@@ -344,6 +388,53 @@ function findPlainUrls(view: EditorView, existingElements: ParsedElement[]): Par
           url: href,
         });
       }
+    }
+  }
+
+  return elements;
+}
+
+// Function to detect wiki-links [[target]] or [[target|display]]
+function findWikiLinks(view: EditorView, existingElements: ParsedElement[]): ParsedElement[] {
+  const elements: ParsedElement[] = [];
+  const doc = view.state.doc;
+  // Match [[target]] or [[target|display text]]
+  const wikiLinkRegex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+
+  // Build set of code block lines to skip
+  const codeBlockLines = new Set<number>();
+  for (const el of existingElements) {
+    if (el.type === 'codeBlock') {
+      const startLine = el.line;
+      const endLine = view.state.doc.lineAt(el.to).number;
+      for (let i = startLine; i <= endLine; i++) {
+        codeBlockLines.add(i);
+      }
+    }
+  }
+
+  for (let lineNum = 1; lineNum <= doc.lines; lineNum++) {
+    // Skip code block lines
+    if (codeBlockLines.has(lineNum)) continue;
+
+    const line = doc.line(lineNum);
+    const lineText = line.text;
+    let match;
+
+    while ((match = wikiLinkRegex.exec(lineText)) !== null) {
+      const target = match[1].trim();
+      const display = match[2]?.trim() || target;
+      const startPos = line.from + match.index;
+      const endPos = startPos + match[0].length;
+
+      elements.push({
+        type: 'wikiLink',
+        from: startPos,
+        to: endPos,
+        line: lineNum,
+        text: display,
+        target: target,
+      });
     }
   }
 
@@ -665,6 +756,10 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
   const plainUrls = findPlainUrls(view, elements);
   elements.push(...plainUrls);
 
+  // Add wiki-link detection
+  const wikiLinks = findWikiLinks(view, elements);
+  elements.push(...wikiLinks);
+
   return elements;
 }
 
@@ -961,6 +1056,17 @@ function buildDecorations(view: EditorView): DecorationSet {
         }
         break;
       }
+
+      case 'wikiLink': {
+        if (!isOnCursorLine && el.text && el.target) {
+          decorations.push(
+            Decoration.replace({
+              widget: new WikiLinkWidget(el.target, el.text),
+            }).range(el.from, el.to)
+          );
+        }
+        break;
+      }
     }
   }
 
@@ -1105,6 +1211,16 @@ export const livePreviewStyles = EditorView.baseTheme({
     cursor: 'pointer',
     '&:hover': {
       textDecoration: 'underline',
+    },
+  },
+
+  // Wiki-links [[target]] or [[target|display]]
+  '.cm-wiki-link': {
+    color: 'var(--color-accent-fg, #0969da)',
+    cursor: 'pointer',
+    borderBottom: '1px dashed currentColor',
+    '&:hover': {
+      borderBottomStyle: 'solid',
     },
   },
 

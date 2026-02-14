@@ -8,6 +8,8 @@
 	import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language';
 	import { createTheme } from './codemirror/theme.js';
 	import { livePreview } from './codemirror/livePreview.js';
+	import { wikiLinkCompletion, fileIndexFacet, fileIndexCompartment, updateFileIndex } from './codemirror/wikiLinkCompletion.js';
+	import type { FileIndex } from '$lib/utils/wikiLinks';
 	import type { Extension } from '@codemirror/state';
 
 	// Custom scrollPastEnd that only adds half viewport height
@@ -46,6 +48,7 @@
 		zoomLevel = 100,
 		fileType = 'markdown', // 'markdown' or 'text'
 		editorWidth = '720px',
+		fileIndex = { entries: [], byBasename: new Map(), byFilename: new Map() } as FileIndex,
 	} = $props<{
 		value?: string;
 		readonly?: boolean;
@@ -54,6 +57,7 @@
 		zoomLevel?: number;
 		fileType?: 'markdown' | 'text';
 		editorWidth?: string;
+		fileIndex?: FileIndex;
 	}>();
 
 	let container: HTMLDivElement;
@@ -120,6 +124,10 @@
 
 				// Live preview (Obsidian-style)
 				livePreview(),
+
+				// Wiki-link autocomplete
+				wikiLinkCompletion(),
+				fileIndexCompartment.of(fileIndexFacet.of(fileIndex)),
 			);
 		}
 
@@ -197,6 +205,12 @@
 		});
 	});
 
+	// Update file index for wiki-link completion
+	$effect(() => {
+		if (!view || fileType !== 'markdown') return;
+		updateFileIndex(view, fileIndex);
+	});
+
 	// Export function to scroll to a specific line (for TOC integration)
 	export function scrollToLine(lineNumber: number) {
 		if (!view) return;
@@ -257,6 +271,8 @@
 	.codemirror-container {
 		width: 100%;
 		height: 100%;
+		flex: 1;
+		min-height: 0;
 		box-sizing: border-box;
 		overflow: hidden;
 	}

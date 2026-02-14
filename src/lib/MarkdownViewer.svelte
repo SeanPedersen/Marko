@@ -10,6 +10,7 @@
 	import TableOfContents from './components/TableOfContents.svelte';
 	import FolderExplorer from './components/FolderExplorer.svelte';
 	import Modal from './components/Modal.svelte';
+	import EditorHeader from './components/EditorHeader.svelte';
 
 	import HomePage from './components/HomePage.svelte';
 	import SettingsModal from './components/SettingsModal.svelte';
@@ -17,6 +18,7 @@
 	import { settings, EDITOR_WIDTH_VALUES } from './stores/settings.svelte.js';
 	import { debounce } from './utils/debounce.js';
 	import { parseHeadings } from './utils/parseHeadings.js';
+	import { buildFileIndex, resolveWikiLink, type FileIndex } from './utils/wikiLinks.js';
 
 	let mode = $state<'loading' | 'app' | 'installer' | 'uninstall'>('loading');
 
@@ -36,6 +38,8 @@
 	let scrollTop = $derived(tabManager.activeTab?.scrollTop ?? 0);
 	let isScrolled = $derived(scrollTop > 0);
 	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Marko');
+	let canGoBack = $derived(tabManager.activeTabId ? tabManager.canGoBack(tabManager.activeTabId) : false);
+	let canGoForward = $derived(tabManager.activeTabId ? tabManager.canGoForward(tabManager.activeTabId) : false);
 
 	let showHome = $state(false);
 	let folderRefreshKey = $state(0);
@@ -44,6 +48,14 @@
 	let folderExplorerVisible = $state(false); // Don't restore on startup - only show when explicitly opened
 	let currentFolder = $state(localStorage.getItem('current-folder') || '');
 	let settingsVisible = $state(false);
+
+	// Wiki-links: track all markdown files in the current folder
+	let allMarkdownFiles = $state<string[]>([]);
+	let fileIndex = $derived<FileIndex>(
+		currentFolder
+			? buildFileIndex(allMarkdownFiles, currentFolder)
+			: { entries: [], byBasename: new Map(), byFilename: new Map() }
+	);
 
 	// Theme State
 	let theme = $state<'system' | 'dark' | 'light'>('system');
@@ -411,6 +423,27 @@
 		}
 	}
 
+	// Collect all markdown files in a folder recursively (for wiki-link autocomplete)
+	async function collectMarkdownFiles(folder: string): Promise<string[]> {
+		const files: string[] = [];
+		try {
+			const entries = await invoke('read_directory', { path: folder }) as { name: string; path: string; is_dir: boolean }[];
+			for (const entry of entries) {
+				if (entry.is_dir) {
+					// Skip hidden directories
+					if (!entry.name.startsWith('.')) {
+						files.push(...await collectMarkdownFiles(entry.path));
+					}
+				} else if (entry.name.endsWith('.md') || entry.name.endsWith('.markdown') || entry.name.endsWith('.mdown') || entry.name.endsWith('.mkd')) {
+					files.push(entry.path);
+				}
+			}
+		} catch (e) {
+			// Directory might not exist or be readable
+		}
+		return files;
+	}
+
 	async function selectFile() {
 		const selected = await open({
 			multiple: false,
@@ -596,21 +629,29 @@
 		}
 	}
 
+	function handleGoBack() {
+		if (tabManager.activeTabId) {
+			const path = tabManager.goBack(tabManager.activeTabId);
+			if (path) loadMarkdown(path, { skipTabManagement: true });
+		}
+	}
+
+	function handleGoForward() {
+		if (tabManager.activeTabId) {
+			const path = tabManager.goForward(tabManager.activeTabId);
+			if (path) loadMarkdown(path, { skipTabManagement: true });
+		}
+	}
+
 	function handleMouseUp(e: MouseEvent) {
 		if (e.button === 3) {
 			// Back
 			e.preventDefault();
-			if (tabManager.activeTabId) {
-				const path = tabManager.goBack(tabManager.activeTabId);
-				if (path) loadMarkdown(path, { skipTabManagement: true });
-			}
+			handleGoBack();
 		} else if (e.button === 4) {
 			// Forward
 			e.preventDefault();
-			if (tabManager.activeTabId) {
-				const path = tabManager.goForward(tabManager.activeTabId);
-				if (path) loadMarkdown(path, { skipTabManagement: true });
-			}
+			handleGoForward();
 		}
 	}
 
@@ -629,6 +670,40 @@
 		loadRecentFolders();
 
 		let unlisteners: (() => void)[] = [];
+
+		// Handle wiki-link click events
+		const handleWikiLink = async (e: Event) => {
+			const detail = (e as CustomEvent<{ target: string; newTab?: boolean }>).detail;
+			if (!detail?.target) return;
+
+			const result = resolveWikiLink(detail.target, fileIndex, currentFile, currentFolder);
+			const openInNewTab = detail.newTab ?? false;
+
+			if (result.status === 'found' && result.path) {
+				await loadMarkdown(result.path, { navigate: !openInNewTab, newTab: openInNewTab });
+			} else if (result.status === 'not-found' && result.suggestedPath) {
+				const answer = await askCustom(`Create "${detail.target}.md"?`, {
+					title: 'File Not Found',
+					kind: 'info',
+					showSave: false,
+				});
+				if (answer === 'discard') { // "Confirm" button maps to 'discard'
+					try {
+						await invoke('save_file_content', { path: result.suggestedPath, content: `# ${detail.target}\n\n` });
+						folderRefreshKey++;
+						await loadMarkdown(result.suggestedPath, { navigate: !openInNewTab, newTab: openInNewTab });
+					} catch (err) {
+						console.error('Failed to create file:', err);
+					}
+				}
+			} else if (result.status === 'ambiguous' && result.candidates && result.candidates.length > 0) {
+				// For now, pick the first candidate
+				await loadMarkdown(result.candidates[0].path, { navigate: !openInNewTab, newTab: openInNewTab });
+			}
+		};
+
+		document.addEventListener('marko:wiki-link', handleWikiLink);
+		unlisteners.push(() => document.removeEventListener('marko:wiki-link', handleWikiLink));
 
 		invoke('show_window').catch(console.error);
 
@@ -763,6 +838,19 @@
 			invoke('watch_folder', { path: currentFolder }).catch(console.error);
 		} else {
 			invoke('unwatch_folder').catch(console.error);
+		}
+	});
+
+	// Collect markdown files for wiki-link autocomplete when folder changes or refreshes
+	$effect(() => {
+		const folder = currentFolder;
+		const _ = folderRefreshKey; // Also react to folder refresh
+		if (folder) {
+			collectMarkdownFiles(folder).then(files => {
+				allMarkdownFiles = files;
+			});
+		} else {
+			allMarkdownFiles = [];
 		}
 	});
 
@@ -994,6 +1082,15 @@
 			style="zoom: {zoomLevel / 100}"
 			role="presentation"
 		>
+			<EditorHeader
+				filePath={currentFile}
+				folderPath={currentFolder}
+				{canGoBack}
+				{canGoForward}
+				ongoback={handleGoBack}
+				ongoforward={handleGoForward}
+				editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
+			/>
 			<CodeMirrorEditor
 				bind:this={editorRef}
 				value={tabManager.activeTab?.rawContent ?? ''}
@@ -1003,6 +1100,7 @@
 				fileType={currentFileType}
 				onchange={handleEditorChange}
 				editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
+				{fileIndex}
 			/>
 		</div>
 	{:else}
@@ -1093,6 +1191,8 @@
 		right: 0;
 		bottom: 0;
 		overflow: hidden;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.markdown-container.sidebar-open {

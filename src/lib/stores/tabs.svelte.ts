@@ -41,7 +41,7 @@ class TabManager {
 			isDirty: false,
 			isEditing: true,
 			isRenaming: false,
-			history: [content],
+			history: [path], // Store paths, not content
 			historyIndex: 0,
 			scrollPercentage: 0,
 			anchorLine: 0,
@@ -68,8 +68,8 @@ class TabManager {
 			isDirty: false,
 			isEditing: true,
 			isRenaming: false,
-			history: [content],
-			historyIndex: 0,
+			history: [], // Empty path means no history yet
+			historyIndex: -1,
 			scrollPercentage: 0,
 			anchorLine: 0,
 			editorViewState: null,
@@ -115,7 +115,7 @@ class TabManager {
 			isEditing: false,
 			isRenaming: false,
 			history: [],
-			historyIndex: 0,
+			historyIndex: -1,
 			scrollPercentage: 0,
 			anchorLine: 0,
 			editorViewState: null,
@@ -236,8 +236,8 @@ class TabManager {
 			tab.path = path;
 			tab.title = path.split(/[/\\]/).pop() || 'Untitled';
 			tab.isDirty = false;
-			// If we update path (e.g. save untitled), strictly speaking it replaces the current history entry
-			if (tab.history.length > 0) {
+			// If we update path (e.g. save untitled), update or initialize history
+			if (tab.history.length > 0 && tab.historyIndex >= 0) {
 				tab.history[tab.historyIndex] = path;
 			} else {
 				tab.history = [path];

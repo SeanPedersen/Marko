@@ -40,6 +40,79 @@ const baseTheme = EditorView.theme({
   '.cm-line': {
     padding: '0 4px',
   },
+
+  // Autocomplete tooltip styling
+  '.cm-tooltip': {
+    backgroundColor: 'var(--color-canvas-default)',
+    border: '1px solid var(--color-border-default)',
+    borderRadius: '8px',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+    overflow: 'hidden',
+  },
+  '.cm-tooltip.cm-tooltip-autocomplete': {
+    minWidth: '200px',
+    maxWidth: '400px',
+  },
+  '.cm-tooltip-autocomplete > ul': {
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontSize: '13px',
+    padding: '4px',
+    margin: '0',
+    maxHeight: '300px',
+  },
+  '.cm-tooltip-autocomplete > ul > li': {
+    padding: '6px 10px',
+    borderRadius: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    cursor: 'pointer',
+  },
+  '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+    backgroundColor: 'var(--color-accent-fg)',
+    color: '#ffffff',
+  },
+  '.cm-completionLabel': {
+    flex: '1',
+    fontWeight: '500',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  '.cm-completionDetail': {
+    fontSize: '11px',
+    color: 'var(--color-fg-muted)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: '180px',
+    textAlign: 'right',
+  },
+  '.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail': {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  '.cm-completionMatchedText': {
+    textDecoration: 'none',
+    fontWeight: '700',
+  },
+  '.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionMatchedText': {
+    color: '#ffffff',
+  },
+  // Completion icon (file type)
+  '.cm-completionIcon': {
+    fontSize: '14px',
+    opacity: '0.7',
+    marginRight: '6px',
+    width: '16px',
+    textAlign: 'center',
+  },
+  '.cm-completionIcon-file::after': {
+    content: '"\\1F4C4"', // File emoji
+  },
+  '.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionIcon': {
+    opacity: '1',
+  },
 });
 
 // Syntax highlighting for markdown
