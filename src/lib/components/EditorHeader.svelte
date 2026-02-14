@@ -7,6 +7,9 @@
         ongoback,
         ongoforward,
         editorWidth = "720px",
+        tocVisible = false,
+        ontoggleToc,
+        showTocButton = false,
     } = $props<{
         filePath?: string;
         folderPath?: string;
@@ -15,6 +18,9 @@
         ongoback?: () => void;
         ongoforward?: () => void;
         editorWidth?: string;
+        tocVisible?: boolean;
+        ontoggleToc?: () => void;
+        showTocButton?: boolean;
     }>();
 
     // Extract display path: show relative path from folder, or just filename
@@ -55,6 +61,17 @@
 
 <div class="editor-header">
     <div class="header-content" style="--editor-max-width: {editorWidth};">
+        {#if showTocButton}
+            <button
+                class="toc-button {tocVisible ? 'active' : ''}"
+                onclick={ontoggleToc}
+                title="Toggle Table of Contents"
+            >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <path d="M2 3h12M2 7h8M2 11h10"/>
+                </svg>
+            </button>
+        {/if}
         <div class="nav-buttons">
             <button
                 class="nav-button"
@@ -129,6 +146,32 @@
     .nav-buttons {
         display: flex;
         gap: 2px;
+    }
+
+    .toc-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border: none;
+        background: transparent;
+        border-radius: 4px;
+        color: var(--color-fg-muted);
+        cursor: pointer;
+        transition:
+            background-color 0.1s,
+            color 0.1s;
+    }
+
+    .toc-button:hover {
+        background: var(--color-neutral-muted);
+        color: var(--color-fg-default);
+    }
+
+    .toc-button.active {
+        background: var(--color-canvas-subtle);
+        color: var(--color-accent-fg);
     }
 
     .nav-button {

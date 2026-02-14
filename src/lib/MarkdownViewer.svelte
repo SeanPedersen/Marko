@@ -1071,9 +1071,6 @@
 			onnewTab={handleNewFile}
 			{theme}
 			onSetTheme={(t) => (theme = t)}
-			{tocVisible}
-			ontoggleToc={toggleToc}
-			showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType === 'markdown' && hasHeadings}
 			{folderExplorerVisible}
 			ontoggleFolderExplorer={toggleFolderExplorer}
 			showFolderExplorerButton={!!currentFolder}
@@ -1109,6 +1106,9 @@
 				ongoback={handleGoBack}
 				ongoforward={handleGoForward}
 				editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
+				{tocVisible}
+				ontoggleToc={toggleToc}
+				showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType === 'markdown' && hasHeadings}
 			/>
 			<CodeMirrorEditor
 				bind:this={editorRef}
