@@ -5,12 +5,17 @@ A simple, lightweight WYSIWYG Markdown editor for Windows, macOS, and Linux.
 
 ## Features
 
-- Tabbed interface
 - WYSIWYG Markdown inline editor (CodeMirror)
-- Auto-reload
-- Free and open-source
+- Open and view folders (file tree in sidebar)
+- Tabbed interface
+- Obsidian like file linking syntax: [[file_name]]
 - Lightweight native UI
+- Free and open-source
 - No telemetry or bloat
+
+## Install
+
+Available on the AUR: [marko-git](https://aur.archlinux.org/packages/marko-git)
 
 ## Changelog
 

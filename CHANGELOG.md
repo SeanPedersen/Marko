@@ -1,16 +1,14 @@
-# Changelog
+# Releases
 
-### Unreleased
+## 4.20
 
 - Rename to Marko
+- Support folder opening (view file tree)
 - Replaced Monaco editor with Milkdown WYSIWYG Markdown editor
-- Removed split view functionality
+  - Unified editing and viewing in a single WYSIWYG interface
 - Removed Vim mode
-- Unified editing and viewing in a single WYSIWYG interface
 - Simplified UI by removing edit/view toggle and split controls
-
-
-### Releases
+- Add Obsidian style file linking
 
 ## v2.4.3
 - Added Vim mode
