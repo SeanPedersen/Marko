@@ -226,33 +226,41 @@
     .file-path {
         display: flex;
         align-items: center;
-        gap: 0;
-        font-size: 13px;
+        gap: 2px;
+        font-family: "Monaco", "Menlo", "Ubuntu Mono", "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+        font-size: 12px;
         color: var(--color-fg-muted);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         flex: 1;
         min-width: 0;
+        line-height: 1.2;
+        letter-spacing: 0.025em;
     }
 
     .path-root {
-        color: var(--color-fg-muted);
-        font-weight: 500;
+        color: var(--color-accent-fg);
+        font-weight: 600;
+        opacity: 0.9;
     }
 
     .path-dir {
         color: var(--color-fg-muted);
+        opacity: 0.8;
     }
 
     .path-separator {
-        color: var(--color-fg-muted);
-        opacity: 0.5;
+        color: var(--color-border-default);
+        opacity: 0.6;
+        margin: 0 1px;
+        font-weight: 400;
     }
 
     .path-filename {
         color: var(--color-fg-default);
-        font-weight: 500;
+        font-weight: 600;
+        opacity: 0.95;
     }
 
     .open-location-button {
