@@ -44,16 +44,26 @@
                 // Split into directory path and filename
                 const relParts = relativePath.split(/[/\\]/);
                 if (relParts.length > 1) {
-                    const dir = relParts.slice(0, -1).join(" / ");
-                    return { root, dir, filename };
+                    // Collapse directory names to first character, but keep full filename
+                    const dirParts = relParts.slice(0, -1);
+                    const collapsedDir = dirParts.map((part: string, index: number) => {
+                        // Keep the last directory in the relative path full
+                        return index === dirParts.length - 1 ? part : part.charAt(0);
+                    }).join(" / ");
+                    return { root, dir: collapsedDir, filename };
                 }
                 return { root, dir: "", filename };
             }
 
             // Otherwise show full absolute path minus filename
             if (parts.length > 1) {
-                const dir = parts.slice(0, -1).join(" / ");
-                return { root: "", dir, filename };
+                const dirParts = parts.slice(0, -1);
+                // Collapse all directory names to first character
+                const collapsedDir = dirParts.map((part: string, index: number) => {
+                    // Keep the last directory in the absolute path full
+                    return index === dirParts.length - 1 ? part : part.charAt(0);
+                }).join(" / ");
+                return { root: "", dir: collapsedDir, filename };
             }
 
             return { root: "", dir: "", filename };
