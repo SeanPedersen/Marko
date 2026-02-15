@@ -260,11 +260,6 @@
 		folderExplorerVisible = true;
 		localStorage.setItem('folder-explorer-visible', 'true');
 		saveRecentFolder(path);
-		// Hide ToC when opening folder explorer
-		if (tocVisible) {
-			tocVisible = false;
-			localStorage.setItem('toc-visible', 'false');
-		}
 	}
 
 	async function canCloseTab(tabId: string): Promise<boolean> {
@@ -335,21 +330,11 @@
 	function toggleToc() {
 		tocVisible = !tocVisible;
 		localStorage.setItem('toc-visible', String(tocVisible));
-		// Hide folder explorer when showing ToC (mutually exclusive)
-		if (tocVisible && folderExplorerVisible) {
-			folderExplorerVisible = false;
-			localStorage.setItem('folder-explorer-visible', 'false');
-		}
 	}
 
 	function toggleFolderExplorer() {
 		folderExplorerVisible = !folderExplorerVisible;
 		localStorage.setItem('folder-explorer-visible', String(folderExplorerVisible));
-		// Hide ToC when showing folder explorer (mutually exclusive)
-		if (folderExplorerVisible && tocVisible) {
-			tocVisible = false;
-			localStorage.setItem('toc-visible', 'false');
-		}
 	}
 
 	function toggleSettings() {
@@ -1129,13 +1114,14 @@
 	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
 		<TableOfContents
 			rawContent={tabManager.activeTab?.rawContent ?? ''}
-			visible={tocVisible && !folderExplorerVisible && currentFileType === 'markdown'}
+			visible={tocVisible && currentFileType === 'markdown'}
 			onscrollto={handleTocScroll}
 			sidebarPosition={settings.sidebarPosition}
+			editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
 		/>
 		<FolderExplorer
 			folderPath={currentFolder}
-			visible={folderExplorerVisible && !tocVisible}
+			visible={folderExplorerVisible}
 			onopenfile={loadMarkdown}
 			onfileschanged={handleFilesChanged}
 			refreshKey={folderRefreshKey}
@@ -1143,7 +1129,7 @@
 		/>
 		<div
 			class="markdown-container"
-			class:sidebar-open={tocVisible || folderExplorerVisible}
+			class:sidebar-open={folderExplorerVisible}
 			class:sidebar-right={settings.sidebarPosition === 'right'}
 			style={zoomLevel !== 100 ? `transform: scale(${zoomLevel / 100}); transform-origin: top left; width: ${10000 / zoomLevel}%; height: ${10000 / zoomLevel}%;` : ''}
 			role="presentation"

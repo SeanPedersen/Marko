@@ -6,11 +6,13 @@
 		visible = true,
 		onscrollto,
 		sidebarPosition = 'left',
+		editorWidth = '720px',
 	} = $props<{
 		rawContent: string;
 		visible?: boolean;
 		onscrollto?: (event: CustomEvent<{ lineNumber: number }>) => void;
 		sidebarPosition?: 'left' | 'right';
+		editorWidth?: string;
 	}>();
 
 	let headings = $derived(parseHeadings(rawContent));
@@ -58,7 +60,7 @@
 </script>
 
 {#if hasHeadings && visible}
-	<nav class="toc-sidebar {sidebarPosition === 'right' ? 'position-right' : ''}" aria-label="Table of contents">
+	<nav class="toc-sidebar {sidebarPosition === 'right' ? 'position-right' : ''}" style="--editor-max-width: {editorWidth};" aria-label="Table of contents">
 		<ul class="toc-list">
 			{#each headings as heading, i}
 				{#if !isHidden(i)}
@@ -99,46 +101,29 @@
 <style>
 	.toc-sidebar {
 		position: fixed;
-		top: 36px;
-		left: 0;
+		top: 69px;
 		bottom: 0;
-		width: 220px;
-		background: var(--color-canvas-default);
-		border-right: 1px solid var(--color-border-default);
+		width: 260px;
+		right: calc(50% + var(--editor-max-width, 720px) / 2 + 16px);
 		overflow-y: auto;
 		overflow-x: hidden;
 		z-index: 50;
 		font-family: var(--win-font);
 		padding-top: 8px;
-		animation: slideIn 0.15s ease-out;
+		animation: fadeIn 0.15s ease-out;
 	}
 
 	.toc-sidebar.position-right {
-		left: auto;
-		right: 0;
-		border-right: none;
-		border-left: 1px solid var(--color-border-default);
-		animation: slideInRight 0.15s ease-out;
+		right: auto;
+		left: calc(50% + var(--editor-max-width, 720px) / 2 + 16px);
+		animation: fadeIn 0.15s ease-out;
 	}
 
-	@keyframes slideIn {
+	@keyframes fadeIn {
 		from {
-			transform: translateX(-100%);
 			opacity: 0;
 		}
 		to {
-			transform: translateX(0);
-			opacity: 1;
-		}
-	}
-
-	@keyframes slideInRight {
-		from {
-			transform: translateX(100%);
-			opacity: 0;
-		}
-		to {
-			transform: translateX(0);
 			opacity: 1;
 		}
 	}
@@ -191,7 +176,7 @@
 		display: block;
 		flex: 1;
 		min-width: 0;
-		padding: 4px 8px 4px 4px;
+		padding: 5px 12px 5px 4px;
 		border: none;
 		background: none;
 		color: var(--color-fg-muted);
@@ -199,9 +184,8 @@
 		line-height: 1.4;
 		text-align: left;
 		cursor: pointer;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+		white-space: normal;
+		word-break: break-word;
 		transition: color 0.1s;
 	}
 
