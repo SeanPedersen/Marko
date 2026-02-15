@@ -83,6 +83,18 @@ src/
 - `FileIndex` type indexes all markdown files by basename and filename for fast lookup
 - `resolveWikiLink()` returns `found | not-found | ambiguous` status with path or candidates
 
+### Git Integration
+- **Backend**: Three Rust commands using `git2` crate in `src-tauri/src/lib.rs`:
+  - `get_git_status(path)` — returns map of absolute file paths → status strings for an entire repo
+  - `get_file_git_status(path)` — returns git status of a single file (or null if clean/not in repo)
+  - `git_commit_file(path, message)` — stages and commits a single file
+  - `git_sync(path)` — runs `git pull --ff-only` then `git push` via CLI
+  - `get_git_ahead_behind(path)` — returns `{ ahead, behind }` commit counts vs remote
+- **FolderExplorer**: Fetches git status on load/refresh, shows colored letter badges (M/A/U/D/C) with filename tinting; sync button (pull+push) with ahead/behind counters
+- **EditorHeader**: Shows current file's git status badge + commit button with inline message input
+- **MarkdownViewer**: Wires git status fetching (on file change + after save) and commit handler
+- Status values: `modified`, `staged`, `staged_modified`, `untracked`, `deleted`, `renamed`, `conflicted`
+
 ### Table of Contents (`src/lib/components/TableOfContents.svelte`)
 - Fixed width: 220px, overlays editor (does not push content)
 - Only renders when `hasHeadings && visible`

@@ -36,6 +36,11 @@
 	let searchOpen = $state(false);
 	let searchQuery = $state('');
 	let searchInputEl = $state<HTMLInputElement | null>(null);
+	let gitStatuses = $state<Map<string, string>>(new Map());
+	let isSyncing = $state(false);
+	let isGitRepo = $state(false);
+	let gitAhead = $state(0);
+	let gitBehind = $state(0);
 
 	function getSortPrefsMap(): Record<string, SortMode> {
 		try {
@@ -146,6 +151,103 @@
 			knownFiles = new Set();
 		}
 	});
+
+	// Fetch git status when folder or refreshKey changes
+	$effect(() => {
+		const _refresh = refreshKey;
+		if (folderPath) {
+			invoke('get_git_status', { path: folderPath }).then((result) => {
+				gitStatuses = new Map(Object.entries(result as Record<string, string>));
+				isGitRepo = true;
+				fetchAheadBehind();
+			}).catch(() => {
+				gitStatuses = new Map();
+				isGitRepo = false;
+				gitAhead = 0;
+				gitBehind = 0;
+			});
+		} else {
+			gitStatuses = new Map();
+			isGitRepo = false;
+			gitAhead = 0;
+			gitBehind = 0;
+		}
+	});
+
+	function fetchAheadBehind() {
+		if (!folderPath) return;
+		invoke('get_git_ahead_behind', { path: folderPath }).then((result) => {
+			const ab = result as { ahead: number; behind: number } | null;
+			gitAhead = ab?.ahead ?? 0;
+			gitBehind = ab?.behind ?? 0;
+		}).catch(() => {
+			gitAhead = 0;
+			gitBehind = 0;
+		});
+	}
+
+	async function handleSync() {
+		if (isSyncing || !folderPath) return;
+		isSyncing = true;
+		try {
+			await invoke('git_sync', { path: folderPath });
+		} catch (e) {
+			console.error('Git sync failed:', e);
+		} finally {
+			isSyncing = false;
+			fetchAheadBehind();
+		}
+	}
+
+	const STATUS_PRIORITY: Record<string, number> = {
+		conflicted: 5,
+		modified: 4,
+		staged_modified: 4,
+		staged: 3,
+		untracked: 2,
+		deleted: 1,
+		renamed: 1,
+	};
+
+	function getDirStatus(dirPath: string): string | undefined {
+		let best: string | undefined;
+		let bestPriority = 0;
+		for (const [filePath, status] of gitStatuses) {
+			if (filePath.startsWith(dirPath + '/')) {
+				const p = STATUS_PRIORITY[status] ?? 0;
+				if (p > bestPriority) {
+					bestPriority = p;
+					best = status;
+				}
+			}
+		}
+		return best;
+	}
+
+	function getEntryStatus(entry: DirEntry): string | undefined {
+		if (entry.is_dir) return getDirStatus(entry.path);
+		return gitStatuses.get(entry.path);
+	}
+
+	function statusBadge(status: string): { letter: string; cssClass: string } {
+		switch (status) {
+			case 'modified':
+			case 'staged_modified':
+				return { letter: 'M', cssClass: 'git-modified' };
+			case 'staged':
+				return { letter: 'A', cssClass: 'git-staged' };
+			case 'untracked':
+				return { letter: 'U', cssClass: 'git-untracked' };
+			case 'deleted':
+				return { letter: 'D', cssClass: 'git-deleted' };
+			case 'conflicted':
+				return { letter: 'C', cssClass: 'git-conflicted' };
+			case 'renamed':
+				return { letter: 'R', cssClass: 'git-staged' };
+			default:
+				return { letter: '?', cssClass: '' };
+		}
+	}
 
 	async function loadDirectory(path: string): Promise<DirEntry[]> {
 		try {
@@ -313,9 +415,11 @@
 	{@const icon = getFileIcon(entry)}
 	{@const isMarkdown = !entry.is_dir && ['md', 'markdown', 'mdown', 'mkd'].includes(entry.name.split('.').pop()?.toLowerCase() || '')}
 	{@const isLoading = loadingDirs.has(entry.path)}
+	{@const entryGitStatus = getEntryStatus(entry)}
+	{@const badge = entryGitStatus ? statusBadge(entryGitStatus) : null}
 	<li class="explorer-item" style="padding-left: {depth * 12 + 8}px">
 		<button
-			class="explorer-link"
+			class="explorer-link {badge ? badge.cssClass : ''}"
 			class:is-dir={entry.is_dir}
 			class:is-markdown={isMarkdown}
 			class:disabled={!entry.is_dir && !isMarkdown}
@@ -351,6 +455,9 @@
 				{/if}
 			</span>
 			<span class="name">{entry.name}</span>
+			{#if badge}
+				<span class="git-badge {badge.cssClass}">{badge.letter}</span>
+			{/if}
 			{#if entry.is_dir}
 				<span class="chevron" class:expanded={isExpanded(entry.path)}>
 					<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -397,6 +504,36 @@
 					</button>
 				</div>
 			{:else}
+				{#if isGitRepo}
+					<button
+						class="header-btn sync-btn"
+						onclick={handleSync}
+						disabled={isSyncing}
+						title={isSyncing ? 'Syncing...' : 'Git pull & push'}
+						aria-label="Git sync"
+					>
+						{#if gitBehind > 0}
+							<span class="ahead-behind behind" title="{gitBehind} behind remote">
+								<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M12 5v14" /><path d="m19 12-7 7-7-7" />
+								</svg>
+								{gitBehind}
+							</span>
+						{/if}
+						{#if gitAhead > 0}
+							<span class="ahead-behind ahead" title="{gitAhead} ahead of remote">
+								<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+									<path d="M12 19V5" /><path d="m5 12 7-7 7 7" />
+								</svg>
+								{gitAhead}
+							</span>
+						{/if}
+						<svg class:spinning={isSyncing} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M21.5 2v6h-6" /><path d="M2.5 22v-6h6" />
+							<path d="M2.5 11.5a10 10 0 0 1 18.4-4.5" /><path d="M21.5 12.5a10 10 0 0 1-18.4 4.5" />
+						</svg>
+					</button>
+				{/if}
 				<span class="header-text" title={folderPath}>{getFolderName(folderPath)}</span>
 				<button
 					class="header-btn"
@@ -675,6 +812,58 @@
 		text-overflow: ellipsis;
 		flex: 1;
 	}
+
+	.sync-btn {
+		gap: 3px;
+	}
+
+	.sync-btn:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+
+	.spinning {
+		animation: spin 1s linear infinite;
+	}
+
+	.ahead-behind {
+		display: flex;
+		align-items: center;
+		gap: 1px;
+		font-size: 10px;
+		font-weight: 600;
+		font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+		line-height: 1;
+	}
+
+	.ahead-behind.ahead {
+		color: #3fb950;
+	}
+
+	.ahead-behind.behind {
+		color: #d29922;
+	}
+
+	.git-badge {
+		font-size: 10px;
+		font-weight: 700;
+		line-height: 1;
+		flex-shrink: 0;
+		margin-left: auto;
+		font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+	}
+
+	.git-badge.git-modified { color: #d29922; }
+	.git-badge.git-staged { color: #3fb950; }
+	.git-badge.git-untracked { color: #3fb950; }
+	.git-badge.git-deleted { color: #f85149; }
+	.git-badge.git-conflicted { color: #f85149; }
+
+	.explorer-link.git-modified > .name { color: #d29922; }
+	.explorer-link.git-staged > .name { color: #3fb950; }
+	.explorer-link.git-untracked > .name { color: #3fb950; }
+	.explorer-link.git-deleted > .name { color: #f85149; }
+	.explorer-link.git-conflicted > .name { color: #f85149; }
 
 	.chevron {
 		display: flex;

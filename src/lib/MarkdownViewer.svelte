@@ -49,6 +49,9 @@
 	let currentFolder = $state(localStorage.getItem('current-folder') || '');
 	let settingsVisible = $state(false);
 
+	// Git status for current file
+	let currentFileGitStatus = $state<string | null>(null);
+
 	// Wiki-links: track all markdown files in the current folder
 	let allMarkdownFiles = $state<string[]>([]);
 	let fileIndex = $derived<FileIndex>(
@@ -318,6 +321,10 @@
 			}
 			tab.isDirty = false;
 			tab.isDeleted = false;
+			// Refresh git status after save
+			invoke('get_file_git_status', { path: targetPath }).then((result) => {
+				currentFileGitStatus = result as string | null;
+			}).catch(() => {});
 			return true;
 		} catch (e) {
 			console.error('Failed to save file', e);
@@ -873,6 +880,51 @@
 		}
 	});
 
+	// Fetch git status of the current file when it changes or after save
+	$effect(() => {
+		const file = currentFile;
+		if (file) {
+			invoke('get_file_git_status', { path: file }).then((result) => {
+				currentFileGitStatus = (result as string | null);
+			}).catch(() => {
+				currentFileGitStatus = null;
+			});
+		} else {
+			currentFileGitStatus = null;
+		}
+	});
+
+	async function handleGitCommit(message: string) {
+		if (!currentFile) return;
+		try {
+			await invoke('git_commit_file', { path: currentFile, message });
+			const result = await invoke('get_file_git_status', { path: currentFile });
+			currentFileGitStatus = result as string | null;
+			folderRefreshKey++;
+		} catch (e) {
+			console.error('Git commit failed:', e);
+		}
+	}
+
+	async function handleGitRevert() {
+		if (!currentFile) return;
+		try {
+			await invoke('git_revert_file', { path: currentFile });
+			// Reload file content from disk
+			const content = await invoke('read_file_content', { path: currentFile }) as string;
+			if (tabManager.activeTabId) {
+				tabManager.setTabRawContent(tabManager.activeTabId, content);
+				const tab = tabManager.activeTab;
+				if (tab) tab.isDirty = false;
+			}
+			const result = await invoke('get_file_git_status', { path: currentFile });
+			currentFileGitStatus = result as string | null;
+			folderRefreshKey++;
+		} catch (e) {
+			console.error('Git revert failed:', e);
+		}
+	}
+
 	const AUTO_SAVE_DELAY_MS = 300;
 	const debouncedSave = debounce(() => saveContent(), AUTO_SAVE_DELAY_MS);
 
@@ -1108,6 +1160,9 @@
 				ontoggleToc={toggleToc}
 				showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType === 'markdown' && hasHeadings}
 				onopenFileLocation={openFileLocation}
+				gitStatus={currentFileGitStatus}
+				oncommit={handleGitCommit}
+				onrevert={handleGitRevert}
 			/>
 			<CodeMirrorEditor
 				bind:this={editorRef}

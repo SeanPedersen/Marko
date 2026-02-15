@@ -1,8 +1,10 @@
 use comrak::{markdown_to_html, ComrakExtensionOptions, ComrakOptions};
+use git2::{Repository, StatusOptions};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use regex::{Captures, Regex};
 use serde::Serialize;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
@@ -515,6 +517,222 @@ fi
     }
 }
 
+fn git_status_to_string(status: git2::Status) -> Option<&'static str> {
+    if status.is_conflicted() {
+        Some("conflicted")
+    } else if status.contains(git2::Status::INDEX_NEW | git2::Status::WT_MODIFIED) {
+        Some("staged_modified")
+    } else if status.intersects(
+        git2::Status::INDEX_MODIFIED | git2::Status::INDEX_NEW | git2::Status::INDEX_RENAMED,
+    ) && !status.intersects(git2::Status::WT_MODIFIED | git2::Status::WT_DELETED) {
+        Some("staged")
+    } else if status.intersects(git2::Status::WT_MODIFIED | git2::Status::INDEX_MODIFIED) {
+        Some("modified")
+    } else if status.is_wt_new() {
+        Some("untracked")
+    } else if status.intersects(git2::Status::WT_DELETED | git2::Status::INDEX_DELETED) {
+        Some("deleted")
+    } else if status.is_wt_renamed() || status.contains(git2::Status::INDEX_RENAMED) {
+        Some("renamed")
+    } else {
+        None
+    }
+}
+
+#[tauri::command]
+fn get_git_status(path: String) -> Result<HashMap<String, String>, String> {
+    let repo = match Repository::discover(&path) {
+        Ok(r) => r,
+        Err(_) => return Err("not_a_git_repo".to_string()),
+    };
+
+    let workdir = repo
+        .workdir()
+        .ok_or("Bare repository")?
+        .to_path_buf();
+
+    let mut opts = StatusOptions::new();
+    opts.include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .include_ignored(false);
+
+    let statuses = repo.statuses(Some(&mut opts)).map_err(|e| e.to_string())?;
+
+    let mut result = HashMap::new();
+    for entry in statuses.iter() {
+        if let Some(rel_path) = entry.path() {
+            if let Some(status_str) = git_status_to_string(entry.status()) {
+                let abs_path = workdir.join(rel_path);
+                result.insert(abs_path.to_string_lossy().to_string(), status_str.to_string());
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+#[tauri::command]
+fn get_file_git_status(path: String) -> Result<Option<String>, String> {
+    let file_path = Path::new(&path);
+    let repo = match Repository::discover(file_path.parent().unwrap_or(file_path)) {
+        Ok(r) => r,
+        Err(_) => return Ok(None),
+    };
+
+    let workdir = repo.workdir().ok_or("Bare repository")?.to_path_buf();
+    let rel_path = file_path
+        .strip_prefix(&workdir)
+        .map_err(|e| e.to_string())?;
+
+    let status = repo
+        .status_file(rel_path)
+        .map_err(|e| e.to_string())?;
+
+    Ok(git_status_to_string(status).map(|s| s.to_string()))
+}
+
+#[tauri::command]
+fn git_commit_file(path: String, message: String) -> Result<(), String> {
+    let file_path = Path::new(&path);
+    let repo = Repository::discover(file_path.parent().unwrap_or(file_path))
+        .map_err(|e| e.to_string())?;
+
+    let workdir = repo.workdir().ok_or("Bare repository")?.to_path_buf();
+    let rel_path = file_path
+        .strip_prefix(&workdir)
+        .map_err(|e| e.to_string())?;
+
+    let mut index = repo.index().map_err(|e| e.to_string())?;
+    index
+        .add_path(rel_path)
+        .map_err(|e| e.to_string())?;
+    index.write().map_err(|e| e.to_string())?;
+
+    let tree_oid = index.write_tree().map_err(|e| e.to_string())?;
+    let tree = repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
+
+    let sig = repo.signature().map_err(|e| e.to_string())?;
+
+    let parent = repo
+        .head()
+        .ok()
+        .and_then(|h| h.peel_to_commit().ok());
+
+    let parents: Vec<&git2::Commit> = parent.iter().collect();
+
+    repo.commit(Some("HEAD"), &sig, &sig, &message, &tree, &parents)
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn git_revert_file(path: String) -> Result<(), String> {
+    let file_path = Path::new(&path);
+    let repo = Repository::discover(file_path.parent().unwrap_or(file_path))
+        .map_err(|e| e.to_string())?;
+
+    let workdir = repo.workdir().ok_or("Bare repository")?.to_path_buf();
+    let rel_path = file_path
+        .strip_prefix(&workdir)
+        .map_err(|e| e.to_string())?;
+
+    // Check if the file is untracked (new file not yet in HEAD)
+    let status = repo.status_file(rel_path).map_err(|e| e.to_string())?;
+    if status.is_wt_new() {
+        return Err("Cannot revert an untracked file".to_string());
+    }
+
+    // Checkout the file from HEAD to discard working tree changes
+    repo.checkout_head(Some(
+        git2::build::CheckoutBuilder::new()
+            .force()
+            .path(rel_path),
+    ))
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct GitAheadBehind {
+    ahead: usize,
+    behind: usize,
+}
+
+#[tauri::command]
+fn get_git_ahead_behind(path: String) -> Result<Option<GitAheadBehind>, String> {
+    let repo = match Repository::discover(&path) {
+        Ok(r) => r,
+        Err(_) => return Ok(None),
+    };
+
+    let head = match repo.head() {
+        Ok(h) => h,
+        Err(_) => return Ok(None),
+    };
+
+    let local_oid = match head.target() {
+        Some(oid) => oid,
+        None => return Ok(None),
+    };
+
+    let branch_name = match head.shorthand() {
+        Some(name) => name.to_string(),
+        None => return Ok(None),
+    };
+
+    let upstream_name = format!("refs/remotes/origin/{}", branch_name);
+    let upstream_ref = match repo.find_reference(&upstream_name) {
+        Ok(r) => r,
+        Err(_) => return Ok(Some(GitAheadBehind { ahead: 0, behind: 0 })),
+    };
+
+    let upstream_oid = match upstream_ref.target() {
+        Some(oid) => oid,
+        None => return Ok(None),
+    };
+
+    let (ahead, behind) = repo
+        .graph_ahead_behind(local_oid, upstream_oid)
+        .map_err(|e| e.to_string())?;
+
+    Ok(Some(GitAheadBehind { ahead, behind }))
+}
+
+#[tauri::command]
+async fn git_sync(path: String) -> Result<String, String> {
+    let repo = Repository::discover(&path).map_err(|_| "Not a git repository".to_string())?;
+    let workdir = repo
+        .workdir()
+        .ok_or("Bare repository")?
+        .to_path_buf();
+
+    let pull = std::process::Command::new("git")
+        .args(["pull", "--ff-only"])
+        .current_dir(&workdir)
+        .output()
+        .map_err(|e| format!("Failed to run git pull: {}", e))?;
+
+    if !pull.status.success() {
+        let stderr = String::from_utf8_lossy(&pull.stderr);
+        return Err(format!("git pull failed: {}", stderr));
+    }
+
+    let push = std::process::Command::new("git")
+        .args(["push"])
+        .current_dir(&workdir)
+        .output()
+        .map_err(|e| format!("Failed to run git push: {}", e))?;
+
+    if !push.status.success() {
+        let stderr = String::from_utf8_lossy(&push.stderr);
+        return Err(format!("git push failed: {}", stderr));
+    }
+
+    Ok("Sync complete".to_string())
+}
+
 #[tauri::command]
 fn show_context_menu(
     app: AppHandle,
@@ -1001,7 +1219,13 @@ pub fn run() {
             show_context_menu,
             show_window,
             save_theme,
-            install_cli
+            install_cli,
+            get_git_status,
+            get_file_git_status,
+            git_commit_file,
+            git_sync,
+            get_git_ahead_behind,
+            git_revert_file
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
