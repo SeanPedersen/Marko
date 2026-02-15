@@ -639,6 +639,8 @@ interface ParsedElement {
   isOrdered?: boolean;
   orderNumber?: number;
   target?: string; // For wiki-links: the link target
+  parentFrom?: number; // For end markers: full element range
+  parentTo?: number;
 }
 
 function getLineNumber(view: EditorView, pos: number): number {
@@ -908,6 +910,8 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
             line,
             markerFrom: to - marker.length,
             markerTo: to,
+            parentFrom: from,
+            parentTo: to,
           });
           break;
         }
@@ -932,6 +936,8 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
             line,
             markerFrom: to - 1,
             markerTo: to,
+            parentFrom: from,
+            parentTo: to,
           });
           break;
         }
@@ -955,6 +961,8 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
             line,
             markerFrom: to - 2,
             markerTo: to,
+            parentFrom: from,
+            parentTo: to,
           });
           break;
         }
@@ -978,6 +986,8 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
             line,
             markerFrom: to - backticks.length,
             markerTo: to,
+            parentFrom: from,
+            parentTo: to,
           });
           break;
         }
@@ -1249,6 +1259,10 @@ function buildDecorations(view: EditorView): DecorationSet {
     }
   }
 
+  // Helper: check if cursor is inside an element's character range
+  const cursorInside = (from: number, to: number) =>
+    cursorPos >= from && cursorPos <= to;
+
   for (const el of elements) {
     // Skip all formatting for frontmatter lines
     if (frontmatterLines.has(el.line)) continue;
@@ -1258,7 +1272,14 @@ function buildDecorations(view: EditorView): DecorationSet {
       continue;
     }
 
+    // Line-level elements use line-based cursor check (structural markers)
     const isOnCursorLine = el.line === cursorLine;
+    // Inline elements use precise range-based cursor check
+    const cursorInElement = cursorInside(el.from, el.to);
+    // End markers check cursor against the full parent element range
+    const cursorInParent = el.parentFrom !== undefined && el.parentTo !== undefined
+      ? cursorInside(el.parentFrom, el.parentTo)
+      : cursorInElement;
 
     switch (el.type) {
       case 'heading': {
@@ -1268,7 +1289,7 @@ function buildDecorations(view: EditorView): DecorationSet {
           decorations.push(headingDecorations[el.level - 1].range(lineObj.from));
         }
 
-        // Hide the # markers when cursor is not on this line
+        // Hide the # markers when cursor is not on this line (line-level element)
         if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined) {
           decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
         }
@@ -1285,15 +1306,15 @@ function buildDecorations(view: EditorView): DecorationSet {
           }
         }
 
-        // Hide markers when not on cursor line
-        if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined) {
+        // Hide markers when cursor is not inside this element
+        if (!cursorInElement && el.markerFrom !== undefined && el.markerTo !== undefined) {
           decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
         }
         break;
       }
 
       case 'boldEnd': {
-        if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined) {
+        if (!cursorInParent && el.markerFrom !== undefined && el.markerTo !== undefined) {
           decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
         }
         break;
@@ -1308,14 +1329,14 @@ function buildDecorations(view: EditorView): DecorationSet {
           }
         }
 
-        if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined) {
+        if (!cursorInElement && el.markerFrom !== undefined && el.markerTo !== undefined) {
           decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
         }
         break;
       }
 
       case 'italicEnd': {
-        if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined) {
+        if (!cursorInParent && el.markerFrom !== undefined && el.markerTo !== undefined) {
           decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
         }
         break;
@@ -1330,14 +1351,14 @@ function buildDecorations(view: EditorView): DecorationSet {
           }
         }
 
-        if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined) {
+        if (!cursorInElement && el.markerFrom !== undefined && el.markerTo !== undefined) {
           decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
         }
         break;
       }
 
       case 'strikethroughEnd': {
-        if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined) {
+        if (!cursorInParent && el.markerFrom !== undefined && el.markerTo !== undefined) {
           decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
         }
         break;
@@ -1353,21 +1374,21 @@ function buildDecorations(view: EditorView): DecorationSet {
           }
         }
 
-        if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined) {
+        if (!cursorInElement && el.markerFrom !== undefined && el.markerTo !== undefined) {
           decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
         }
         break;
       }
 
       case 'inlineCodeEnd': {
-        if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined) {
+        if (!cursorInParent && el.markerFrom !== undefined && el.markerTo !== undefined) {
           decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
         }
         break;
       }
 
       case 'link': {
-        if (!isOnCursorLine && el.text !== undefined && el.url !== undefined) {
+        if (!cursorInElement && el.text !== undefined && el.url !== undefined) {
           decorations.push(
             Decoration.replace({
               widget: new LinkWidget(el.text, el.url, true),
@@ -1378,7 +1399,7 @@ function buildDecorations(view: EditorView): DecorationSet {
       }
 
       case 'url': {
-        if (!isOnCursorLine && el.text !== undefined && el.url !== undefined) {
+        if (!cursorInElement && el.text !== undefined && el.url !== undefined) {
           decorations.push(
             Decoration.replace({
               widget: new LinkWidget(el.text, el.url, false),
@@ -1395,7 +1416,7 @@ function buildDecorations(view: EditorView): DecorationSet {
       }
 
       case 'image': {
-        if (!isOnCursorLine && el.text !== undefined && el.url !== undefined) {
+        if (!cursorInElement && el.text !== undefined && el.url !== undefined) {
           decorations.push(
             Decoration.replace({
               widget: new ImageWidget(el.text, el.url),
@@ -1411,7 +1432,7 @@ function buildDecorations(view: EditorView): DecorationSet {
         const lineObj = view.state.doc.lineAt(el.from);
         decorations.push(codeBlockLineDecoration.range(lineObj.from));
 
-        // Hide fence when cursor is not on this line
+        // Hide fence when cursor is not on this line (line-level element)
         if (!isOnCursorLine) {
           decorations.push(hideDecoration.range(el.from, el.to));
         }
@@ -1436,7 +1457,7 @@ function buildDecorations(view: EditorView): DecorationSet {
         const lineObj = view.state.doc.lineAt(el.from);
         decorations.push(blockquoteLineDecoration.range(lineObj.from));
 
-        // Hide the > marker when not on cursor line
+        // Hide the > marker when not on cursor line (line-level element)
         if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined) {
           decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
         }
@@ -1457,7 +1478,7 @@ function buildDecorations(view: EditorView): DecorationSet {
 
         if (el.markerFrom !== undefined && el.markerTo !== undefined) {
           if (isOnCursorLine) {
-            // Style the marker but keep it visible for editing
+            // Style the marker but keep it visible for editing (line-level element)
             decorations.push(listMarkerDecoration.range(el.markerFrom, el.markerTo));
           } else {
             // Replace marker with styled bullet
@@ -1495,7 +1516,7 @@ function buildDecorations(view: EditorView): DecorationSet {
       }
 
       case 'wikiLink': {
-        if (!isOnCursorLine && el.text && el.target) {
+        if (!cursorInElement && el.text && el.target) {
           decorations.push(
             Decoration.replace({
               widget: new WikiLinkWidget(el.target, el.text),
@@ -1506,7 +1527,7 @@ function buildDecorations(view: EditorView): DecorationSet {
       }
 
       case 'math': {
-        if (!isOnCursorLine && el.text) {
+        if (!cursorInElement && el.text) {
           decorations.push(
             Decoration.replace({
               widget: new MathWidget(el.text),
