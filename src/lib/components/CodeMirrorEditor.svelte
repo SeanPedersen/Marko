@@ -194,7 +194,11 @@
 			extensions: createExtensions(),
 		}));
 
-		// Scroll to top for new file content
+		// Place cursor at start and scroll to top for new file content
+		view.focus();
+		view.dispatch({
+			selection: { anchor: 0 },
+		});
 		view.scrollDOM.scrollTop = 0;
 	});
 
