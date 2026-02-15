@@ -33,6 +33,9 @@
 	let knownFiles = new Set<string>();
 	let loadingDirs = $state<Set<string>>(new Set());
 	let sortMode = $state<SortMode>('az');
+	let searchOpen = $state(false);
+	let searchQuery = $state('');
+	let searchInputEl = $state<HTMLInputElement | null>(null);
 
 	function getSortPrefsMap(): Record<string, SortMode> {
 		try {
@@ -201,7 +204,7 @@
 
 	function getFileIcon(entry: DirEntry): string {
 		if (entry.is_dir) {
-			return expandedDirs.has(entry.path) ? 'folder-open' : 'folder';
+			return isExpanded(entry.path) ? 'folder-open' : 'folder';
 		}
 		const ext = entry.name.split('.').pop()?.toLowerCase() || '';
 		if (['md', 'markdown', 'mdown', 'mkd'].includes(ext)) {
@@ -218,6 +221,91 @@
 
 	function getFolderName(path: string): string {
 		return path.split(/[/\\]/).pop() || path;
+	}
+
+	function toggleSearch() {
+		searchOpen = !searchOpen;
+		if (searchOpen) {
+			// Focus after the transition starts
+			requestAnimationFrame(() => searchInputEl?.focus());
+		} else {
+			searchQuery = '';
+		}
+	}
+
+	function handleSearchKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape') {
+			searchOpen = false;
+			searchQuery = '';
+		}
+	}
+
+	// Eagerly load all subdirectories when search opens for deep filtering
+	async function loadAllDirs(items: DirEntry[]) {
+		const toLoad: DirEntry[] = [];
+		for (const entry of items) {
+			if (entry.is_dir && !dirContents.has(entry.path)) {
+				toLoad.push(entry);
+			}
+		}
+		if (toLoad.length === 0) return;
+		const results = await Promise.all(toLoad.map(async (e) => ({ path: e.path, children: await loadDirectory(e.path) })));
+		for (const { path, children } of results) {
+			dirContents.set(path, children);
+		}
+		dirContents = new Map(dirContents);
+		// Recurse into newly loaded children
+		const allChildren = results.flatMap(r => r.children);
+		await loadAllDirs(allChildren);
+	}
+
+	$effect(() => {
+		if (searchOpen && entries.length > 0) {
+			loadAllDirs(entries);
+		}
+	});
+
+	function matchesSearch(entry: DirEntry): boolean {
+		if (!searchQuery) return true;
+		const query = searchQuery.toLowerCase();
+		if (entry.name.toLowerCase().includes(query)) return true;
+		if (entry.is_dir) {
+			return hasMatchingDescendant(entry.path, query);
+		}
+		return false;
+	}
+
+	function hasMatchingDescendant(dirPath: string, query: string): boolean {
+		const children = dirContents.get(dirPath);
+		if (!children) return false;
+		for (const child of children) {
+			if (child.name.toLowerCase().includes(query)) return true;
+			if (child.is_dir && hasMatchingDescendant(child.path, query)) return true;
+		}
+		return false;
+	}
+
+	// Auto-expand directories that contain matches when searching
+	let searchExpandedDirs = $derived.by(() => {
+		if (!searchQuery) return new Set<string>();
+		const dirs = new Set<string>();
+		const query = searchQuery.toLowerCase();
+		function walk(items: DirEntry[]) {
+			for (const entry of items) {
+				if (entry.is_dir && hasMatchingDescendant(entry.path, query)) {
+					dirs.add(entry.path);
+					const children = dirContents.get(entry.path);
+					if (children) walk(children);
+				}
+			}
+		}
+		walk(entries);
+		return dirs;
+	});
+
+	function isExpanded(path: string): boolean {
+		if (searchQuery) return searchExpandedDirs.has(path);
+		return expandedDirs.has(path);
 	}
 </script>
 
@@ -264,7 +352,7 @@
 			</span>
 			<span class="name">{entry.name}</span>
 			{#if entry.is_dir}
-				<span class="chevron" class:expanded={expandedDirs.has(entry.path)}>
+				<span class="chevron" class:expanded={isExpanded(entry.path)}>
 					<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<polyline points="9 18 15 12 9 6" />
 					</svg>
@@ -272,8 +360,8 @@
 			{/if}
 		</button>
 	</li>
-	{#if entry.is_dir && expandedDirs.has(entry.path)}
-		{@const children = sortEntries(dirContents.get(entry.path) || [])}
+	{#if entry.is_dir && isExpanded(entry.path)}
+		{@const children = sortEntries(dirContents.get(entry.path) || []).filter(matchesSearch)}
 		{#each children as child}
 			{@render renderEntry(child, depth + 1)}
 		{/each}
@@ -288,33 +376,65 @@
 {#if visible && folderPath}
 	<nav class="explorer-sidebar {sidebarPosition === 'right' ? 'position-right' : ''}" aria-label="File explorer">
 		<div class="explorer-header">
-			<span class="header-text" title={folderPath}>{getFolderName(folderPath)}</span>
-			<button
-				class="sort-toggle"
-				onclick={toggleSort}
-				title={sortMode === 'az' ? 'Sorted A–Z (click for recent)' : 'Sorted by recent (click for A–Z)'}
-				aria-label="Toggle sort mode"
-			>
-				{#if sortMode === 'az'}
-					<svg width="22" height="14" viewBox="0 0 34 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M3 17L7 5l4 12" /><path d="M4.5 13h5" />
-						<path d="M27 6v12" /><path d="M23 14l4 4 4-4" />
+			{#if searchOpen}
+				<div class="search-bar">
+					<svg class="search-bar-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
 					</svg>
-				{:else}
-					<svg width="22" height="14" viewBox="0 0 34 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<circle cx="9" cy="13" r="7" /><path d="M9 9v4l2.5 2.5" />
-						<path d="M28 18V6" /><path d="M24 10l4-4 4 4" />
+					<input
+						bind:this={searchInputEl}
+						bind:value={searchQuery}
+						onkeydown={handleSearchKeydown}
+						class="search-input"
+						type="text"
+						placeholder="Filter files..."
+						spellcheck="false"
+					/>
+					<button class="search-close" onclick={toggleSearch} aria-label="Close search">
+						<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+							<path d="M18 6 6 18" /><path d="m6 6 12 12" />
+						</svg>
+					</button>
+				</div>
+			{:else}
+				<span class="header-text" title={folderPath}>{getFolderName(folderPath)}</span>
+				<button
+					class="header-btn"
+					onclick={toggleSearch}
+					title="Search files"
+					aria-label="Search files"
+				>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
 					</svg>
-				{/if}
-			</button>
+				</button>
+				<button
+					class="header-btn"
+					onclick={toggleSort}
+					title={sortMode === 'az' ? 'Sorted A–Z (click for recent)' : 'Sorted by recent (click for A–Z)'}
+					aria-label="Toggle sort mode"
+				>
+					{#if sortMode === 'az'}
+						<svg width="22" height="14" viewBox="0 0 34 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M3 17L7 5l4 12" /><path d="M4.5 13h5" />
+							<path d="M27 6v12" /><path d="M23 14l4 4 4-4" />
+						</svg>
+					{:else}
+						<svg width="22" height="14" viewBox="0 0 34 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<circle cx="9" cy="13" r="7" /><path d="M9 9v4l2.5 2.5" />
+							<path d="M28 18V6" /><path d="M24 10l4-4 4 4" />
+						</svg>
+					{/if}
+				</button>
+			{/if}
 		</div>
 		<ul class="explorer-list">
-			{#each sortEntries(entries) as entry}
+			{#each sortEntries(entries).filter(matchesSearch) as entry}
 				{@render renderEntry(entry, 0)}
 			{/each}
-			{#if entries.length === 0}
+			{#if sortEntries(entries).filter(matchesSearch).length === 0}
 				<li class="explorer-item empty">
-					<span class="empty-text">No files found</span>
+					<span class="empty-text">{searchQuery ? 'No matches' : 'No files found'}</span>
 				</li>
 			{/if}
 		</ul>
@@ -387,7 +507,7 @@
 		flex: 1;
 	}
 
-	.sort-toggle {
+	.header-btn {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -403,7 +523,76 @@
 		transition: color 0.1s, background 0.1s;
 	}
 
-	.sort-toggle:hover {
+	.header-btn:hover {
+		color: var(--color-fg-default);
+		background: var(--color-neutral-muted);
+	}
+
+	.search-bar {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		flex: 1;
+		min-width: 0;
+		background: var(--color-canvas-subtle);
+		border: 1px solid var(--color-border-default);
+		border-radius: 4px;
+		padding: 2px 6px;
+		animation: searchExpand 0.15s ease-out;
+	}
+
+	@keyframes searchExpand {
+		from {
+			opacity: 0;
+			transform: scaleX(0.8);
+			transform-origin: right;
+		}
+		to {
+			opacity: 1;
+			transform: scaleX(1);
+			transform-origin: right;
+		}
+	}
+
+	.search-bar-icon {
+		flex-shrink: 0;
+		color: var(--color-fg-muted);
+	}
+
+	.search-input {
+		flex: 1;
+		min-width: 0;
+		border: none;
+		background: none;
+		color: var(--color-fg-default);
+		font-size: 11px;
+		font-family: inherit;
+		outline: none;
+		padding: 2px 0;
+	}
+
+	.search-input::placeholder {
+		color: var(--color-fg-muted);
+		opacity: 0.6;
+	}
+
+	.search-close {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 18px;
+		height: 18px;
+		padding: 0;
+		border: none;
+		border-radius: 3px;
+		background: none;
+		color: var(--color-fg-muted);
+		cursor: pointer;
+		transition: color 0.1s, background 0.1s;
+	}
+
+	.search-close:hover {
 		color: var(--color-fg-default);
 		background: var(--color-neutral-muted);
 	}
