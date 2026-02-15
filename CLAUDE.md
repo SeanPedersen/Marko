@@ -31,7 +31,7 @@ src/
 │   │   │   ├── wikiLinkCompletion.ts # Wiki-link autocomplete extension for [[...]] syntax
 │   │   │   └── theme.ts             # CodeMirror theme using CSS variables
 │   │   ├── CodeMirrorEditor.svelte   # Editor wrapper (CodeMirror 6 instance)
-│   │   ├── EditorHeader.svelte       # Obsidian-style header with back/forward nav and file path
+│   │   ├── EditorHeader.svelte       # Obsidian-style header with back/forward nav and collapsed breadcrumb path
 │   │   ├── TableOfContents.svelte    # TOC sidebar (220px, parses headings)
 │   │   ├── FolderExplorer.svelte     # File tree sidebar (220px, recursive dir listing)
 │   │   ├── TitleBar.svelte           # Window title bar (traffic lights, sidebar toggles, tabs, theme, window controls)
@@ -95,6 +95,7 @@ src/
 - Opens markdown files on click; mutually exclusive with TOC
 - Tracks `knownFiles` to detect file additions/removals and notify parent via `onfileschanged`
 - Supports `sidebarPosition` prop for left/right positioning
+- **Search**: search icon in header expands into a filter input (animated); filters files by name across all subdirectories, auto-expands matching parent dirs; close with X or Escape
 - **Important**: `knownFiles` is reset when `folderPath` changes to prevent false "deleted" diffs when switching folders
 
 ### TitleBar (`src/lib/components/TitleBar.svelte`)
@@ -126,6 +127,12 @@ Theme colors defined in `MarkdownViewer.svelte`:
 - `--color-border-default` — borders
 - `--color-accent-fg` — accent/link color
 - `--color-neutral-muted` — neutral highlights
+
+## Dev Tooling
+
+- **MCP Bridge**: `tauri-plugin-mcp-bridge` is registered in debug builds only (`#[cfg(debug_assertions)]`), enabling automation via WebSocket on port 9223
+- **`withGlobalTauri: true`** is set in `tauri.conf.json` (required for MCP bridge communication)
+- Run `npx tauri dev` to start the app with MCP bridge active
 
 ## Commands
 
