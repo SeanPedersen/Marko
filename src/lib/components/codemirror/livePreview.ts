@@ -12,6 +12,57 @@ import type { SyntaxNodeRef } from '@lezer/common';
 import { render } from 'katex';
 import 'katex/dist/katex.min.css';
 
+// Render inline markdown (bold, italic, strikethrough, code) into an element
+function renderInlineMarkdown(el: HTMLElement, text: string): void {
+  // Process inline formatting tokens in order
+  const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`(.+?)`)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Append text before the match
+    if (match.index > lastIndex) {
+      el.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+    }
+
+    const span = document.createElement('span');
+    if (match[2]) {
+      // ***bold italic***
+      span.style.fontWeight = 'bold';
+      span.style.fontStyle = 'italic';
+      span.textContent = match[2];
+    } else if (match[3]) {
+      // **bold**
+      span.style.fontWeight = 'bold';
+      span.textContent = match[3];
+    } else if (match[4]) {
+      // *italic*
+      span.style.fontStyle = 'italic';
+      span.textContent = match[4];
+    } else if (match[5]) {
+      // ~~strikethrough~~
+      span.style.textDecoration = 'line-through';
+      span.textContent = match[5];
+    } else if (match[6]) {
+      // `code`
+      span.className = 'cm-live-inline-code';
+      span.textContent = match[6];
+    }
+    el.appendChild(span);
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Append remaining text
+  if (lastIndex < text.length) {
+    el.appendChild(document.createTextNode(text.slice(lastIndex)));
+  }
+
+  // If nothing was parsed (no formatting), just set text content
+  if (lastIndex === 0) {
+    el.textContent = text;
+  }
+}
+
 // Widget classes for rendering formatted content
 class FormattedWidget extends WidgetType {
   constructor(
@@ -57,7 +108,7 @@ class LinkWidget extends WidgetType {
     const span = document.createElement('span');
     this.span = span;
     span.className = 'cm-live-link';
-    span.textContent = this.text;
+    renderInlineMarkdown(span, this.text);
     span.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
