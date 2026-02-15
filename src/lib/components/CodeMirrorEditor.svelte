@@ -220,14 +220,12 @@
 		if (lineNumber < 1 || lineNumber > doc.lines) return;
 
 		const line = doc.line(lineNumber);
-		const previousSelection = view.state.selection;
+		// Focus first so the subsequent dispatch doesn't trigger a
+		// separate focus-induced scroll-to-cursor
+		view.focus();
 		view.dispatch({
 			selection: { anchor: line.from },
 			effects: EditorView.scrollIntoView(line.from, { y: 'start' }),
-		});
-		requestAnimationFrame(() => {
-			if (!view) return;
-			view.dispatch({ selection: previousSelection });
 		});
 	}
 
