@@ -870,6 +870,23 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
           break;
         }
 
+        case 'SetextHeading1':
+        case 'SetextHeading2': {
+          const level = name === 'SetextHeading1' ? 1 : 2;
+          // Setext headings: text on first line, === or --- on second line
+          const endLineObj = doc.lineAt(to);
+          elements.push({
+            type: 'heading',
+            from,
+            to,
+            line,
+            markerFrom: endLineObj.from,
+            markerTo: endLineObj.to,
+            level,
+          });
+          break;
+        }
+
         case 'StrongEmphasis': {
           // **text** or __text__
           const text = doc.sliceString(from, to);
@@ -1792,6 +1809,24 @@ export const livePreviewStyles = EditorView.baseTheme({
   '.cm-live-table th': {
     backgroundColor: 'var(--color-canvas-subtle)',
     fontWeight: '600',
+  },
+
+  // Frontmatter lines — reset any heading/formatting applied by the parser
+  '.cm-live-frontmatter-line': {
+    fontSize: '1em !important',
+    fontWeight: 'normal !important',
+    lineHeight: '1.5 !important',
+    color: 'var(--color-fg-muted) !important',
+    fontFamily: '"Monaco", "Menlo", "Ubuntu Mono", monospace',
+    textDecoration: 'none !important',
+  },
+  '.cm-live-frontmatter-line span': {
+    fontSize: 'inherit !important',
+    fontWeight: 'inherit !important',
+    lineHeight: 'inherit !important',
+    color: 'inherit !important',
+    fontFamily: 'inherit !important',
+    textDecoration: 'none !important',
   },
 
   // Math equations
