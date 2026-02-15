@@ -40,6 +40,7 @@ trash = "5"
 chrono = "0.4"
 env_logger = "0.11.8"
 log = "0.4.29"
+tauri-plugin-mcp-bridge = "0.8"
 
 
 [target.'cfg(windows)'.dependencies]

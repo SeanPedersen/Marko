@@ -17,6 +17,7 @@
     "core:window:allow-unmaximize",
     "core:window:allow-show",
     "core:window:allow-hide",
-    "core:window:allow-destroy"
+    "core:window:allow-destroy",
+    "mcp-bridge:default"
   ]
 }

@@ -741,7 +741,7 @@ pub fn run() {
         );
     }
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .manage(AppState {
             startup_file: Mutex::new(None),
         })
@@ -785,8 +785,14 @@ pub fn run() {
                 .set_focus();
         }))
         .plugin(tauri_plugin_prevent_default::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
-        .on_menu_event(|app, event| {
+        .plugin(tauri_plugin_window_state::Builder::default().build());
+
+    #[cfg(debug_assertions)]
+    {
+        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    }
+
+    builder.on_menu_event(|app, event| {
             let id = event.id().as_ref();
             let state = app.state::<ContextMenuState>();
 
