@@ -23,8 +23,30 @@ export function parseHeadings(markdown: string): Heading[] {
 	const slugCounts = new Map<string, number>();
 	const lines = markdown.split('\n');
 
+	let fenceChar = '';
+	let fenceLen = 0;
+
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i];
+		const fenceMatch = line.trim().match(/^(`{3,}|~{3,})/);
+
+		if (fenceMatch) {
+			const char = fenceMatch[1][0];
+			const len = fenceMatch[1].length;
+
+			if (!fenceLen) {
+				// Opening fence
+				fenceChar = char;
+				fenceLen = len;
+			} else if (char === fenceChar && len >= fenceLen) {
+				// Closing fence (same char, equal or greater length)
+				fenceChar = '';
+				fenceLen = 0;
+			}
+			continue;
+		}
+		if (fenceLen) continue;
+
 		const match = line.trim().match(HEADING_REGEX);
 		if (!match) continue;
 
