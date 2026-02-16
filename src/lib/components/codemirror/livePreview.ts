@@ -870,7 +870,7 @@ function findWikiLinks(view: EditorView, existingElements: ParsedElement[]): Par
   return elements;
 }
 
-// Function to detect math blocks $$...$$
+// Function to detect block math $$...$$
 function findMathBlocks(view: EditorView, existingElements: ParsedElement[]): ParsedElement[] {
   const elements: ParsedElement[] = [];
   const doc = view.state.doc;
@@ -904,6 +904,75 @@ function findMathBlocks(view: EditorView, existingElements: ParsedElement[]): Pa
 
       elements.push({
         type: 'math',
+        from: startPos,
+        to: endPos,
+        line: lineNum,
+        text: latex,
+      });
+    }
+  }
+
+  return elements;
+}
+
+// Function to detect inline math $...$
+function findInlineMath(view: EditorView, existingElements: ParsedElement[]): ParsedElement[] {
+  const elements: ParsedElement[] = [];
+  const doc = view.state.doc;
+
+  // Build set of code block lines to skip
+  const codeBlockLines = new Set<number>();
+  for (const el of existingElements) {
+    if (el.type === 'codeBlock') {
+      const startLine = el.line;
+      const endLine = view.state.doc.lineAt(el.to).number;
+      for (let i = startLine; i <= endLine; i++) {
+        codeBlockLines.add(i);
+      }
+    }
+  }
+
+  // Build set of inline code ranges to skip
+  const inlineCodeRanges: { from: number; to: number }[] = [];
+  for (const el of existingElements) {
+    if (el.type === 'inlineCode') {
+      inlineCodeRanges.push({ from: el.from, to: el.to });
+    }
+  }
+
+  for (let lineNum = 1; lineNum <= doc.lines; lineNum++) {
+    // Skip code block lines
+    if (codeBlockLines.has(lineNum)) continue;
+
+    const line = doc.line(lineNum);
+    const lineText = line.text;
+
+    // Match $...$ but not $$...$$ (inline math only)
+    // Look for $ followed by non-whitespace, then content, then non-whitespace followed by $
+    const inlineMathRegex = /\$(?!\$)([^\s$](?:[^$]*[^\s$])?)\$/g;
+    let match;
+
+    while ((match = inlineMathRegex.exec(lineText)) !== null) {
+      const startPos = line.from + match.index;
+      const endPos = startPos + match[0].length;
+
+      // Skip if escaped
+      if (isEscaped(doc, startPos)) continue;
+
+      // Skip if inside inline code
+      let inCode = false;
+      for (const range of inlineCodeRanges) {
+        if (startPos >= range.from && endPos <= range.to) {
+          inCode = true;
+          break;
+        }
+      }
+      if (inCode) continue;
+
+      const latex = match[1];
+
+      elements.push({
+        type: 'inlineMath',
         from: startPos,
         to: endPos,
         line: lineNum,
@@ -1315,6 +1384,10 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
   const mathBlocks = findMathBlocks(view, elements);
   elements.push(...mathBlocks);
 
+  // Add inline math detection
+  const inlineMath = findInlineMath(view, elements);
+  elements.push(...inlineMath);
+
   return elements;
 }
 
@@ -1675,7 +1748,8 @@ function buildDecorations(view: EditorView): DecorationSet {
         break;
       }
 
-      case 'math': {
+      case 'math':
+      case 'inlineMath': {
         if (!cursorInElement && el.text) {
           decorations.push(
             Decoration.replace({
