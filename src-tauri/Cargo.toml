@@ -42,6 +42,7 @@ git2 = { version = "0.19", default-features = false, features = ["vendored-libgi
 env_logger = "0.11.8"
 log = "0.4.29"
 tauri-plugin-mcp-bridge = "0.8"
+urlencoding = "2"
 
 
 [target.'cfg(windows)'.dependencies]

@@ -1235,21 +1235,43 @@ pub fn run() {
                 log::info!("[macOS file open] Received Opened event with {} URLs", urls.len());
                 if let Some(url) = urls.first() {
                     log::info!("[macOS file open] URL: {}", url);
-                    if let Ok(path_buf) = url.to_file_path() {
-                        let path_str = path_buf.to_string_lossy().to_string();
-                        log::info!("[macOS file open] Resolved path: {}", path_str);
 
-                        let state = _app_handle.state::<AppState>();
-                        *state.startup_file.lock().unwrap() = Some(path_str.clone());
-
-                        if let Some(window) = _app_handle.get_webview_window("main") {
-                            let _ = window.emit("file-path", path_str);
-                            let _ = window.set_focus();
-                        } else {
-                            log::info!("[macOS file open] Window not ready, path stored in startup_file for later retrieval");
-                        }
+                    // Try to convert URL to file path
+                    let path_str = if let Ok(path_buf) = url.to_file_path() {
+                        path_buf.to_string_lossy().to_string()
                     } else {
-                        log::warn!("[macOS file open] Failed to convert URL to file path: {}", url);
+                        // Fallback: manually decode URL path for URLs with special characters
+                        log::info!("[macOS file open] Standard conversion failed, trying manual decode");
+                        let url_str = url.as_str();
+                        if url_str.starts_with("file://") {
+                            // Remove file:// prefix and decode percent-encoding
+                            let path_part = &url_str[7..]; // Skip "file://"
+                            match urlencoding::decode(path_part) {
+                                Ok(decoded) => {
+                                    log::info!("[macOS file open] Manually decoded path: {}", decoded);
+                                    decoded.to_string()
+                                }
+                                Err(e) => {
+                                    log::error!("[macOS file open] Failed to decode URL path: {}", e);
+                                    return;
+                                }
+                            }
+                        } else {
+                            log::error!("[macOS file open] URL doesn't start with file://: {}", url_str);
+                            return;
+                        }
+                    };
+
+                    log::info!("[macOS file open] Resolved path: {}", path_str);
+
+                    let state = _app_handle.state::<AppState>();
+                    *state.startup_file.lock().unwrap() = Some(path_str.clone());
+
+                    if let Some(window) = _app_handle.get_webview_window("main") {
+                        let _ = window.emit("file-path", path_str);
+                        let _ = window.set_focus();
+                    } else {
+                        log::info!("[macOS file open] Window not ready, path stored in startup_file for later retrieval");
                     }
                 }
             }
