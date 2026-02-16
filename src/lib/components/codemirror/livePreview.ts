@@ -11,6 +11,8 @@ import { syntaxTree } from '@codemirror/language';
 import type { SyntaxNodeRef } from '@lezer/common';
 import { render } from 'katex';
 import 'katex/dist/katex.min.css';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/atom-one-dark.css';
 
 // Render inline markdown (bold, italic, strikethrough, code) into an element
 function renderInlineMarkdown(el: HTMLElement, text: string): void {
@@ -400,6 +402,154 @@ class HorizontalRuleWidget extends WidgetType {
   }
 }
 
+class CodeBlockWidget extends WidgetType {
+  private view: EditorView | null = null;
+  private from: number;
+  private to: number;
+  private fenceStart: number;
+  private fenceEnd: number;
+
+  constructor(
+    readonly code: string,
+    readonly language: string,
+    from: number,
+    to: number,
+    fenceStart: number,
+    fenceEnd: number
+  ) {
+    super();
+    this.from = from;
+    this.to = to;
+    this.fenceStart = fenceStart;
+    this.fenceEnd = fenceEnd;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    this.view = view;
+    const container = document.createElement('div');
+    container.className = 'cm-live-code-block-widget';
+
+    const pre = document.createElement('pre');
+    const codeEl = document.createElement('code');
+    codeEl.contentEditable = 'true';
+    codeEl.spellcheck = false;
+
+    if (this.language) {
+      codeEl.className = `language-${this.language}`;
+      try {
+        const highlighted = hljs.highlight(this.code, {
+          language: this.language,
+          ignoreIllegals: true,
+        });
+        codeEl.innerHTML = highlighted.value;
+      } catch (error) {
+        codeEl.textContent = this.code;
+      }
+    } else {
+      codeEl.textContent = this.code;
+    }
+
+    // Track changes but don't sync until blur
+    let hasChanges = false;
+    codeEl.addEventListener('input', () => {
+      hasChanges = true;
+    });
+
+    // Sync changes back to document when done editing
+    codeEl.addEventListener('blur', () => {
+      if (hasChanges) {
+        const newCode = codeEl.textContent || '';
+        this.updateDocument(newCode);
+        hasChanges = false;
+      }
+    });
+
+    // Handle keyboard shortcuts
+    codeEl.addEventListener('keydown', (e) => {
+      // Stop all events from reaching CodeMirror
+      e.stopPropagation();
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        // Save changes before exiting
+        if (hasChanges) {
+          const newCode = codeEl.textContent || '';
+          this.updateDocument(newCode);
+          hasChanges = false;
+        }
+        codeEl.blur();
+        view.focus();
+        return;
+      }
+
+      // Handle Tab - insert 2 spaces
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(document.createTextNode('  '));
+          range.collapse(false);
+        }
+        return;
+      }
+
+      // Handle Enter - insert newline (allow default contentEditable behavior)
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(document.createTextNode('\n'));
+          range.collapse(false);
+        }
+        return;
+      }
+    });
+
+    // Prevent CodeMirror cursor from appearing on clicks
+    container.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+    });
+
+    pre.appendChild(codeEl);
+    container.appendChild(pre);
+    return container;
+  }
+
+  ignoreEvent(event: Event): boolean {
+    // Ignore all events to prevent CodeMirror from moving its cursor
+    return true;
+  }
+
+  private updateDocument(newCode: string) {
+    if (!this.view) return;
+
+    // Reconstruct the full code block with fences
+    const fence = '```' + this.language;
+    const newBlock = `${fence}\n${newCode}\n${'```'}`;
+
+    this.view.dispatch({
+      changes: {
+        from: this.from,
+        to: this.to,
+        insert: newBlock,
+      },
+    });
+  }
+
+  eq(other: CodeBlockWidget): boolean {
+    return (
+      this.code === other.code &&
+      this.language === other.language &&
+      this.from === other.from &&
+      this.to === other.to
+    );
+  }
+}
+
 class TableWidget extends WidgetType {
   private view: EditorView | null = null;
   private boundHandlers: (() => void) | null = null;
@@ -692,6 +842,7 @@ interface ParsedElement {
   target?: string; // For wiki-links: the link target
   parentFrom?: number; // For end markers: full element range
   parentTo?: number;
+  language?: string; // For code blocks: the language identifier
 }
 
 function getLineNumber(view: EditorView, pos: number): number {
@@ -948,8 +1099,8 @@ function findInlineMath(view: EditorView, existingElements: ParsedElement[]): Pa
     const lineText = line.text;
 
     // Match $...$ but not $$...$$ (inline math only)
-    // Look for $ followed by non-whitespace, then content, then non-whitespace followed by $
-    const inlineMathRegex = /\$(?!\$)([^\s$](?:[^$]*[^\s$])?)\$/g;
+    // Look for $ followed by non-whitespace, then content, then $
+    const inlineMathRegex = /\$(?!\$)([^\s$][^$]*?)\$/g;
     let match;
 
     while ((match = inlineMathRegex.exec(lineText)) !== null) {
@@ -1202,11 +1353,18 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
         case 'FencedCode': {
           const startLine = getLineNumber(view, from);
           const endLine = getLineNumber(view, to);
+
+          // Extract language from the opening fence line (e.g., ```javascript)
+          const firstLineText = doc.lineAt(from).text;
+          const langMatch = firstLineText.match(/^```(\w+)?/);
+          const language = langMatch?.[1] || '';
+
           elements.push({
             type: 'codeBlock',
             from,
             to,
             line: startLine,
+            language,
           });
           // Mark fence lines
           elements.push({
@@ -1834,6 +1992,60 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
   }
 );
 
+// StateField for code block decorations (block replacements that span line breaks
+// cannot be provided via ViewPlugin — they require a StateField)
+const codeBlockDecorationField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none;
+  },
+  update(_, tr) {
+    const decorations: Range<Decoration>[] = [];
+
+    syntaxTree(tr.state).iterate({
+      enter(node: SyntaxNodeRef) {
+        if (node.name !== 'FencedCode') return;
+
+        const startLine = tr.state.doc.lineAt(node.from).number;
+        const endLine = tr.state.doc.lineAt(node.to).number;
+
+        // Extract language from the opening fence line (e.g., ```javascript)
+        const firstLineText = tr.state.doc.lineAt(node.from).text;
+        const langMatch = firstLineText.match(/^```(\w+)?/);
+        const language = langMatch?.[1] || '';
+
+        // Extract code content (excluding fence lines)
+        const firstLineEnd = tr.state.doc.line(startLine).to;
+        const lastLineStart = tr.state.doc.line(endLine).from;
+        const codeStart = firstLineEnd + 1;
+        const codeEnd = lastLineStart > codeStart ? lastLineStart - 1 : codeStart;
+
+        let code = '';
+        if (codeEnd > codeStart) {
+          code = tr.state.doc.sliceString(codeStart, codeEnd);
+        }
+
+        decorations.push(
+          Decoration.replace({
+            widget: new CodeBlockWidget(
+              code,
+              language,
+              node.from,
+              node.to,
+              node.from,
+              tr.state.doc.line(endLine).to
+            ),
+            block: true,
+          }).range(node.from, node.to)
+        );
+      },
+    });
+
+    decorations.sort((a, b) => a.from - b.from);
+    return Decoration.set(decorations);
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
 // StateField for table decorations (block replacements that span line breaks
 // cannot be provided via ViewPlugin — they require a StateField)
 const tableDecorationField = StateField.define<DecorationSet>({
@@ -1842,13 +2054,13 @@ const tableDecorationField = StateField.define<DecorationSet>({
   },
   update(_, tr) {
     const decorations: Range<Decoration>[] = [];
-    
+
     // For editable tables, always show the widget so users can click and edit cells
     // Raw markdown editing can be done by selecting the table text explicitly
     syntaxTree(tr.state).iterate({
       enter(node: SyntaxNodeRef) {
         if (node.name !== 'Table') return;
-        
+
         const rawText = tr.state.doc.sliceString(node.from, node.to);
         decorations.push(
           Decoration.replace({
@@ -2086,8 +2298,28 @@ export const livePreviewStyles = EditorView.baseTheme({
   '.cm-live-math .katex': {
     fontSize: '1.1em',
   },
+
+  // Code block widget (syntax highlighted with Atom One Dark theme)
+  '.cm-live-code-block-widget': {
+    fontFamily: '"Monaco", "Menlo", "Ubuntu Mono", monospace',
+    fontSize: '0.9em',
+    margin: '0',
+  },
+  '.cm-live-code-block-widget pre': {
+    margin: '0',
+    padding: '12px 16px',
+    borderRadius: '6px',
+    overflow: 'auto',
+    backgroundColor: '#282c34',
+  },
+  '.cm-live-code-block-widget code': {
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+    backgroundColor: 'transparent',
+    outline: 'none',
+  },
 });
 
 export function livePreview() {
-  return [livePreviewPlugin, tableDecorationField, livePreviewStyles];
+  return [livePreviewPlugin, codeBlockDecorationField, tableDecorationField, livePreviewStyles];
 }
