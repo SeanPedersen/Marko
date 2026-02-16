@@ -804,6 +804,19 @@ function findPlainUrls(view: EditorView, existingElements: ParsedElement[]): Par
   return elements;
 }
 
+// Check if a bracket at given position is escaped with backslash
+function isEscaped(doc: any, pos: number): boolean {
+  if (pos === 0) return false;
+  let backslashes = 0;
+  let checkPos = pos - 1;
+  while (checkPos >= 0 && doc.sliceString(checkPos, checkPos + 1) === '\\') {
+    backslashes++;
+    checkPos--;
+  }
+  // If odd number of backslashes, the character is escaped
+  return backslashes % 2 === 1;
+}
+
 // Function to detect wiki-links [[target]] or [[target|display]]
 function findWikiLinks(view: EditorView, existingElements: ParsedElement[]): ParsedElement[] {
   const elements: ParsedElement[] = [];
@@ -832,9 +845,15 @@ function findWikiLinks(view: EditorView, existingElements: ParsedElement[]): Par
     let match;
 
     while ((match = wikiLinkRegex.exec(lineText)) !== null) {
+      const startPos = line.from + match.index;
+
+      // Skip if the opening bracket is escaped
+      if (isEscaped(doc, startPos)) {
+        continue;
+      }
+
       const target = match[1].trim();
       const display = match[2]?.trim() || target;
-      const startPos = line.from + match.index;
       const endPos = startPos + match[0].length;
 
       elements.push({
@@ -1056,34 +1075,57 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
 
         case 'Link': {
           // [text](url) — url may contain balanced parentheses
+          // Handle multi-line links and validate structure
           const text = doc.sliceString(from, to);
-          const match = text.match(/^\[([^\]]*)\]\((.*)\)$/s);
+
+          // More robust regex that handles newlines in link text
+          // Match [text](url) where text can contain newlines but not unescaped ]
+          const match = text.match(/^\[([^\]]*(?:\\\][^\]]*)*)\]\((.*?)\)$/s);
+
           if (match) {
-            elements.push({
-              type: 'link',
-              from,
-              to,
-              line,
-              text: match[1],
-              url: match[2],
-            });
+            const linkText = match[1].trim();
+            const linkUrl = match[2].trim();
+
+            // Validate that the link is reasonable (e.g., not spanning too many lines)
+            const newlineCount = (linkText.match(/\n/g) || []).length;
+            if (newlineCount <= 5) { // Allow up to 5 line breaks in link text
+              elements.push({
+                type: 'link',
+                from,
+                to,
+                line,
+                text: linkText,
+                url: linkUrl,
+              });
+            }
           }
           break;
         }
 
         case 'Image': {
           // ![alt](url) — url may contain balanced parentheses
+          // Handle multi-line alt text and validate structure
           const text = doc.sliceString(from, to);
-          const match = text.match(/^!\[([^\]]*)\]\((.*)\)$/s);
+
+          // More robust regex that handles newlines in alt text
+          const match = text.match(/^!\[([^\]]*(?:\\\][^\]]*)*)\]\((.*?)\)$/s);
+
           if (match) {
-            elements.push({
-              type: 'image',
-              from,
-              to,
-              line,
-              text: match[1],
-              url: match[2],
-            });
+            const altText = match[1].trim();
+            const imageUrl = match[2].trim();
+
+            // Validate that the alt text is reasonable
+            const newlineCount = (altText.match(/\n/g) || []).length;
+            if (newlineCount <= 5) { // Allow up to 5 line breaks in alt text
+              elements.push({
+                type: 'image',
+                from,
+                to,
+                line,
+                text: altText,
+                url: imageUrl,
+              });
+            }
           }
           break;
         }
@@ -1294,7 +1336,15 @@ function getFrontmatterRange(view: EditorView): { startLine: number; endLine: nu
 function buildDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const decorations: Range<Decoration>[] = [];
-  const elements = parseMarkdownElements(view);
+
+  // Wrap in try-catch to prevent entire editor from breaking if parser fails
+  let elements: ParsedElement[] = [];
+  try {
+    elements = parseMarkdownElements(view);
+  } catch (error) {
+    console.error('Error parsing markdown elements:', error);
+    return Decoration.none;
+  }
 
   // Get cursor line
   const cursorPos = view.state.selection.main.head;
@@ -1468,22 +1518,32 @@ function buildDecorations(view: EditorView): DecorationSet {
 
       case 'link': {
         if (!cursorInElement && el.text !== undefined && el.url !== undefined) {
-          decorations.push(
-            Decoration.replace({
-              widget: new LinkWidget(el.text, el.url, true),
-            }).range(el.from, el.to)
-          );
+          // Skip multi-line links (ViewPlugin cannot create decorations that span line breaks)
+          const startLine = view.state.doc.lineAt(el.from).number;
+          const endLine = view.state.doc.lineAt(el.to).number;
+          if (startLine === endLine) {
+            decorations.push(
+              Decoration.replace({
+                widget: new LinkWidget(el.text, el.url, true),
+              }).range(el.from, el.to)
+            );
+          }
         }
         break;
       }
 
       case 'url': {
         if (!cursorInElement && el.text !== undefined && el.url !== undefined) {
-          decorations.push(
-            Decoration.replace({
-              widget: new LinkWidget(el.text, el.url, false),
-            }).range(el.from, el.to)
-          );
+          // Skip multi-line URLs (ViewPlugin cannot create decorations that span line breaks)
+          const startLine = view.state.doc.lineAt(el.from).number;
+          const endLine = view.state.doc.lineAt(el.to).number;
+          if (startLine === endLine) {
+            decorations.push(
+              Decoration.replace({
+                widget: new LinkWidget(el.text, el.url, false),
+              }).range(el.from, el.to)
+            );
+          }
         }
         break;
       }
@@ -1496,11 +1556,16 @@ function buildDecorations(view: EditorView): DecorationSet {
 
       case 'image': {
         if (!cursorInElement && el.text !== undefined && el.url !== undefined) {
-          decorations.push(
-            Decoration.replace({
-              widget: new ImageWidget(el.text, el.url),
-            }).range(el.from, el.to)
-          );
+          // Skip multi-line images (ViewPlugin cannot create decorations that span line breaks)
+          const startLine = view.state.doc.lineAt(el.from).number;
+          const endLine = view.state.doc.lineAt(el.to).number;
+          if (startLine === endLine) {
+            decorations.push(
+              Decoration.replace({
+                widget: new ImageWidget(el.text, el.url),
+              }).range(el.from, el.to)
+            );
+          }
         }
         break;
       }
@@ -1596,11 +1661,16 @@ function buildDecorations(view: EditorView): DecorationSet {
 
       case 'wikiLink': {
         if (!cursorInElement && el.text && el.target) {
-          decorations.push(
-            Decoration.replace({
-              widget: new WikiLinkWidget(el.target, el.text),
-            }).range(el.from, el.to)
-          );
+          // Skip multi-line wiki-links (ViewPlugin cannot create decorations that span line breaks)
+          const startLine = view.state.doc.lineAt(el.from).number;
+          const endLine = view.state.doc.lineAt(el.to).number;
+          if (startLine === endLine) {
+            decorations.push(
+              Decoration.replace({
+                widget: new WikiLinkWidget(el.target, el.text),
+              }).range(el.from, el.to)
+            );
+          }
         }
         break;
       }
