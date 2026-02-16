@@ -731,11 +731,22 @@ function findPlainUrls(view: EditorView, existingElements: ParsedElement[]): Par
   // Match URLs with protocol, www. prefix, or bare domains (word.tld)
   const urlRegex = /(?:https?:\/\/|www\.)[^\s<>"{}|\\^`\[\]]+|(?<![.@/\\\w])(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(?:\/[^\s<>"{}|\\^`\[\]]*)?/g;
 
-  // Create a set of ranges that are already covered by existing elements (excluding list items)
+  // Create a set of ranges that are already covered by existing elements (excluding list items, inline formatting, and URLs)
   const coveredRanges = new Set<string>();
   for (const el of existingElements) {
-    // Don't consider list items as covering content for URL detection
-    if (el.type !== 'listItem') {
+    // Don't consider list items, inline formatting, or existing URLs as covering content for URL detection
+    // This allows findPlainUrls to find complete URLs even if Lezer's URL node stops early
+    if (el.type !== 'listItem' &&
+        el.type !== 'bold' &&
+        el.type !== 'boldEnd' &&
+        el.type !== 'italic' &&
+        el.type !== 'italicEnd' &&
+        el.type !== 'strikethrough' &&
+        el.type !== 'strikethroughEnd' &&
+        el.type !== 'inlineCode' &&
+        el.type !== 'inlineCodeEnd' &&
+        el.type !== 'url' &&
+        el.type !== 'emailUrl') {
       for (let i = el.from; i < el.to; i++) {
         coveredRanges.add(`${el.line}-${i}`);
       }
@@ -1235,6 +1246,23 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
 
   // Add plain URL detection for URLs not caught by the parser
   const plainUrls = findPlainUrls(view, elements);
+
+  // Deduplicate: remove any existing url/emailUrl elements that are subsumed by plainUrls
+  for (const plainUrl of plainUrls) {
+    const overlappingIndices = elements
+      .map((el, i) =>
+        (el.type === 'url' || el.type === 'emailUrl') &&
+        el.from >= plainUrl.from &&
+        el.to <= plainUrl.to ? i : -1
+      )
+      .filter(i => i !== -1);
+
+    // Remove overlapped elements in reverse order to maintain indices
+    for (let i = overlappingIndices.length - 1; i >= 0; i--) {
+      elements.splice(overlappingIndices[i], 1);
+    }
+  }
+
   elements.push(...plainUrls);
 
   // Add wiki-link detection
