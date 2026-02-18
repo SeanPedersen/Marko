@@ -408,6 +408,7 @@ class CodeBlockWidget extends WidgetType {
   private to: number;
   private fenceStart: number;
   private fenceEnd: number;
+  private isDestroyed = false;
 
   constructor(
     readonly code: string,
@@ -451,13 +452,16 @@ class CodeBlockWidget extends WidgetType {
 
     // Track changes but don't sync until blur
     let hasChanges = false;
-    codeEl.addEventListener('input', () => {
+    codeEl.addEventListener('input', (e) => {
+      // Stop input events from bubbling to CM's contentDOM — on some platforms
+      // CM processes these as document input and inserts text outside the block
+      e.stopPropagation();
       hasChanges = true;
     });
 
     // Sync changes back to document when done editing
     codeEl.addEventListener('blur', () => {
-      if (hasChanges) {
+      if (hasChanges && !this.isDestroyed) {
         const newCode = codeEl.textContent || '';
         this.updateDocument(newCode);
         hasChanges = false;
@@ -509,6 +513,11 @@ class CodeBlockWidget extends WidgetType {
       }
     });
 
+    // Stop remaining event types from reaching CM
+    codeEl.addEventListener('keyup', (e) => e.stopPropagation());
+    codeEl.addEventListener('compositionstart', (e) => e.stopPropagation());
+    codeEl.addEventListener('compositionend', (e) => e.stopPropagation());
+
     // Prevent CodeMirror cursor from appearing on clicks
     container.addEventListener('mousedown', (e) => {
       e.stopPropagation();
@@ -524,8 +533,15 @@ class CodeBlockWidget extends WidgetType {
     return true;
   }
 
+  destroy(): void {
+    // Nulling view prevents any pending blur handler from dispatching
+    // with stale from/to positions after this widget has been replaced
+    this.isDestroyed = true;
+    this.view = null;
+  }
+
   private updateDocument(newCode: string) {
-    if (!this.view) return;
+    if (!this.view || this.isDestroyed) return;
 
     // Reconstruct the full code block with fences
     const fence = '```' + this.language;
