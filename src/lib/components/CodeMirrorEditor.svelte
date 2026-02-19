@@ -262,6 +262,33 @@
 	function escapeRegex(str: string): string {
 		return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 	}
+
+	// Export function to wrap current selection as a code block or blockquote
+	export function wrapSelection(type: 'code_block' | 'quote') {
+		if (!view) return;
+
+		const state = view.state;
+		const selection = state.selection.main;
+		if (selection.empty) return;
+
+		const selectedText = state.sliceDoc(selection.from, selection.to);
+
+		let replacement: string;
+		if (type === 'code_block') {
+			replacement = '```\n' + selectedText + '\n```';
+		} else {
+			replacement = selectedText
+				.split('\n')
+				.map((line) => '> ' + line)
+				.join('\n');
+		}
+
+		view.dispatch({
+			changes: { from: selection.from, to: selection.to, insert: replacement },
+			selection: { anchor: selection.from, head: selection.from + replacement.length },
+		});
+		view.focus();
+	}
 </script>
 
 <div

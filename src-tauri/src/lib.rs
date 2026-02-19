@@ -899,6 +899,30 @@ fn show_context_menu(
                 let copy = tauri::menu::PredefinedMenuItem::copy(&app, Some("Copy"))
                     .map_err(|e| e.to_string())?;
                 menu.append(&copy).map_err(|e| e.to_string())?;
+
+                let sep_fmt =
+                    tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+                menu.append(&sep_fmt).map_err(|e| e.to_string())?;
+
+                let code_block = tauri::menu::MenuItem::with_id(
+                    &app,
+                    "ctx_doc_code_block",
+                    "Add Code Block",
+                    true,
+                    None::<&str>,
+                )
+                .map_err(|e| e.to_string())?;
+                menu.append(&code_block).map_err(|e| e.to_string())?;
+
+                let quote = tauri::menu::MenuItem::with_id(
+                    &app,
+                    "ctx_doc_quote",
+                    "Add Quote",
+                    true,
+                    None::<&str>,
+                )
+                .map_err(|e| e.to_string())?;
+                menu.append(&quote).map_err(|e| e.to_string())?;
             }
 
             let select_all = tauri::menu::PredefinedMenuItem::select_all(&app, Some("Select All"))
@@ -1106,6 +1130,16 @@ pub fn run() {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.emit("menu-file-trash", path);
                         }
+                    }
+                }
+                "ctx_doc_code_block" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.emit("menu-doc-code-block", ());
+                    }
+                }
+                "ctx_doc_quote" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.emit("menu-doc-quote", ());
                     }
                 }
                 "ctx_inspect" => {

@@ -739,6 +739,17 @@
 			});
 			unlisteners.push(unlistenFileTrash);
 
+			// Document format context menu events
+			const unlistenDocCodeBlock = await listen('menu-doc-code-block', () => {
+				editorRef?.wrapSelection('code_block');
+			});
+			unlisteners.push(unlistenDocCodeBlock);
+
+			const unlistenDocQuote = await listen('menu-doc-quote', () => {
+				editorRef?.wrapSelection('quote');
+			});
+			unlisteners.push(unlistenDocQuote);
+
 			// Tab context menu events
 			const unlistenTabNew = await listen('menu-tab-new', () => {
 				handleNewFile();
