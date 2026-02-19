@@ -1691,69 +1691,15 @@ function buildDecorations(view: EditorView): DecorationSet {
 export const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
-    mouseIsDown = false;
-    pendingUpdate = false;
-    editorView: EditorView;
-    rebuildTimeout: number | null = null;
 
     constructor(view: EditorView) {
-      this.editorView = view;
       this.decorations = buildDecorations(view);
-      this.onMouseDown = this.onMouseDown.bind(this);
-      this.onMouseUp = this.onMouseUp.bind(this);
-      // Use capture phase to ensure our handler runs before CodeMirror's
-      view.scrollDOM.addEventListener('mousedown', this.onMouseDown, true);
-      document.addEventListener('mouseup', this.onMouseUp);
-    }
-
-    onMouseDown() {
-      this.mouseIsDown = true;
-      this.pendingUpdate = false;
-      // Clear any pending rebuild
-      if (this.rebuildTimeout !== null) {
-        clearTimeout(this.rebuildTimeout);
-        this.rebuildTimeout = null;
-      }
-    }
-
-    onMouseUp() {
-      if (!this.mouseIsDown) return;
-      this.mouseIsDown = false;
-
-      // Give CodeMirror a brief moment to finish click processing,
-      // then rebuild decorations to reveal syntax on the clicked line
-      this.rebuildTimeout = window.setTimeout(() => {
-        this.rebuildTimeout = null;
-        this.decorations = buildDecorations(this.editorView);
-        // Force a repaint by dispatching a state effect
-        this.editorView.dispatch({
-          effects: []
-        });
-      }, 5);
     }
 
     update(update: ViewUpdate) {
-      this.editorView = update.view;
       if (update.docChanged || update.selectionSet || update.viewportChanged) {
-        if (this.mouseIsDown && !update.docChanged) {
-          // Defer decoration rebuild to avoid layout shifts mid-click
-          this.pendingUpdate = true;
-        } else if (!this.mouseIsDown) {
-          // Only rebuild if mouse is not down (not during click processing)
-          this.decorations = buildDecorations(update.view);
-          this.pendingUpdate = false;
-        }
+        this.decorations = buildDecorations(update.view);
       }
-    }
-
-    destroy() {
-      // Clean up timeout
-      if (this.rebuildTimeout !== null) {
-        clearTimeout(this.rebuildTimeout);
-        this.rebuildTimeout = null;
-      }
-      this.editorView.scrollDOM.removeEventListener('mousedown', this.onMouseDown, true);
-      document.removeEventListener('mouseup', this.onMouseUp);
     }
   },
   {
