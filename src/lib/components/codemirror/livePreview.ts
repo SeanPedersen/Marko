@@ -2054,6 +2054,9 @@ export const livePreviewStyles = EditorView.baseTheme({
     fontFamily: '"Monaco", "Menlo", "Ubuntu Mono", monospace',
     fontSize: '0.9em',
   },
+  '.cm-live-code-block-line.cm-activeLine': {
+    backgroundColor: 'var(--color-canvas-subtle)',
+  },
 
   // Syntax highlighting inside code blocks (tok-* classes from classHighlighter)
   '.cm-live-code-block-line .tok-keyword': { color: '#c678dd' },
