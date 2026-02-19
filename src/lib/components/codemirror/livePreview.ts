@@ -435,19 +435,11 @@ class HorizontalRuleWidget extends WidgetType {
 }
 
 class TableWidget extends WidgetType {
-  private view: EditorView | null = null;
-  private boundHandlers: (() => void) | null = null;
-  private from: number;
-  private to: number;
-
-  constructor(readonly rawText: string, from: number, to: number) {
+  constructor(readonly rawText: string, readonly from: number, readonly to: number) {
     super();
-    this.from = from;
-    this.to = to;
   }
 
   toDOM(view: EditorView): HTMLElement {
-    this.view = view;
     const container = document.createElement('div');
     container.className = 'cm-live-table';
 
@@ -478,8 +470,7 @@ class TableWidget extends WidgetType {
     const headerRow = document.createElement('tr');
     for (let i = 0; i < headerCells.length; i++) {
       const th = document.createElement('th');
-      th.textContent = headerCells[i];
-      th.contentEditable = 'true';
+      renderInlineMarkdown(th, headerCells[i]);
       if (alignments[i]) th.style.textAlign = alignments[i]!;
       headerRow.appendChild(th);
     }
@@ -493,8 +484,7 @@ class TableWidget extends WidgetType {
         const tr = document.createElement('tr');
         for (let i = 0; i < headerCells.length; i++) {
           const td = document.createElement('td');
-          td.textContent = cells[i] ?? '';
-          td.contentEditable = 'true';
+          renderInlineMarkdown(td, cells[i] ?? '');
           if (alignments[i]) td.style.textAlign = alignments[i]!;
           tr.appendChild(td);
         }
@@ -503,165 +493,20 @@ class TableWidget extends WidgetType {
       table.appendChild(tbody);
     }
 
-    // Add event listeners for cell editing
-    const handleCellInput = (e: Event) => {
-      // Just track that content has changed - we'll sync on blur
-      const cell = e.target as HTMLElement;
-      cell.dataset.changed = 'true';
-    };
-
-    const handleCellFocus = (e: Event) => {
-      // Mark cell as being edited
-      const cell = e.target as HTMLElement;
-      cell.dataset.editing = 'true';
-    };
-
-    const handleCellBlur = (e: Event) => {
-      const cell = e.target as HTMLElement;
-      if (cell.dataset.changed === 'true') {
-        this.syncTableToMarkdown();
-      }
-      delete cell.dataset.editing;
-      delete cell.dataset.changed;
-    };
-
-    const handleCellKeyDown = (e: Event) => {
-      const ke = e as KeyboardEvent;
-      const cell = ke.target as HTMLTableCellElement;
-      const currentRow = cell.closest('tr') as HTMLTableRowElement;
-      const table = currentRow.closest('table') as HTMLTableElement;
-      const allRows = Array.from(table.querySelectorAll('tr'));
-      const currentRowIndex = allRows.indexOf(currentRow);
-      const cellsInRow = Array.from(currentRow.querySelectorAll('th, td'));
-      const currentCellIndex = cellsInRow.indexOf(cell);
-
-      switch (ke.key) {
-        case 'Tab':
-          ke.preventDefault();
-          if (ke.shiftKey) {
-            // Move to previous cell
-            if (currentCellIndex > 0) {
-              (cellsInRow[currentCellIndex - 1] as HTMLElement).focus();
-            } else if (currentRowIndex > 0) {
-              // Move to last cell of previous row
-              const prevRow = allRows[currentRowIndex - 1];
-              const prevCells = Array.from(prevRow.querySelectorAll('th, td'));
-              (prevCells[prevCells.length - 1] as HTMLElement).focus();
-            }
-          } else {
-            // Move to next cell
-            if (currentCellIndex < cellsInRow.length - 1) {
-              (cellsInRow[currentCellIndex + 1] as HTMLElement).focus();
-            } else if (currentRowIndex < allRows.length - 1) {
-              // Move to first cell of next row
-              const nextRow = allRows[currentRowIndex + 1];
-              const nextCells = Array.from(nextRow.querySelectorAll('th, td'));
-              (nextCells[0] as HTMLElement).focus();
-            }
-          }
-          break;
-
-        case 'Enter':
-          ke.preventDefault();
-          // Move to same column in next row
-          if (currentRowIndex < allRows.length - 1) {
-            const nextRow = allRows[currentRowIndex + 1];
-            const nextCells = Array.from(nextRow.querySelectorAll('th, td'));
-            if (currentCellIndex < nextCells.length) {
-              (nextCells[currentCellIndex] as HTMLElement).focus();
-            }
-          }
-          break;
-
-        case 'Escape':
-          ke.preventDefault();
-          cell.blur();
-          break;
-      }
-    };
-
-    // Add listeners to all cells
-    const cells = table.querySelectorAll('th, td');
-    cells.forEach(cell => {
-      cell.addEventListener('input', handleCellInput);
-      cell.addEventListener('focus', handleCellFocus);
-      cell.addEventListener('blur', handleCellBlur);
-      cell.addEventListener('keydown', handleCellKeyDown);
+    // Clicking the table moves cursor into the raw markdown
+    container.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      view.dispatch({ selection: { anchor: this.from } });
+      view.focus();
     });
-
-    // Store cleanup function
-    this.boundHandlers = () => {
-      cells.forEach(cell => {
-        cell.removeEventListener('input', handleCellInput);
-        cell.removeEventListener('focus', handleCellFocus);
-        cell.removeEventListener('blur', handleCellBlur);
-        cell.removeEventListener('keydown', handleCellKeyDown);
-      });
-    };
 
     container.appendChild(table);
     return container;
   }
 
   ignoreEvent(event: Event): boolean {
-    // Ignore all events on the table widget to prevent CodeMirror from moving cursor
-    // Cell editing is handled entirely within the widget
-    return true;
-  }
-
-  private syncTableToMarkdown() {
-    if (!this.view) return;
-
-    const table = this.view.dom.querySelector('.cm-live-table table') as HTMLTableElement;
-    if (!table) return;
-
-    const rows: string[] = [];
-    
-    // Get header row
-    const headerRow = table.querySelector('thead tr');
-    if (headerRow) {
-      const headerCells = Array.from(headerRow.querySelectorAll('th')).map(th => th.textContent || '');
-      rows.push('| ' + headerCells.join(' | ') + ' |');
-      
-      // Add alignment row (simplified - could be enhanced to detect actual alignments)
-      rows.push('| ' + headerCells.map(() => '---').join(' | ') + ' |');
-    }
-
-    // Get body rows
-    const bodyRows = table.querySelectorAll('tbody tr');
-    bodyRows.forEach(tr => {
-      const cells = Array.from(tr.querySelectorAll('td')).map(td => td.textContent || '');
-      rows.push('| ' + cells.join(' | ') + ' |');
-    });
-
-    const newMarkdown = rows.join('\n');
-    
-    // Dispatch transaction to update the document
-    this.view.dispatch({
-      changes: {
-        from: this.from,
-        to: this.to,
-        insert: newMarkdown
-      }
-    });
-  }
-
-  updateDOM(dom: HTMLElement, view: EditorView): boolean {
-    // If the raw text hasn't changed, no need to update
-    if (this.rawText === view.state.doc.sliceString(this.from, this.to)) {
-      this.view = view; // Update view reference
-      return true; // DOM is still valid
-    }
-
-    // If content changed externally, we need to recreate
-    return false; // Signal that DOM needs to be recreated
-  }
-
-  destroy(): void {
-    if (this.boundHandlers) {
-      this.boundHandlers();
-      this.boundHandlers = null;
-    }
+    // Allow mousedown to propagate so our listener can place the cursor
+    return event.type !== 'mousedown';
   }
 
   eq(other: TableWidget): boolean {
@@ -1923,13 +1768,18 @@ const tableDecorationField = StateField.define<DecorationSet>({
     return Decoration.none;
   },
   update(prev, tr) {
-    if (!tr.docChanged) return prev.map(tr.changes);
+    const selectionChanged = !tr.newSelection.eq(tr.startState.selection);
+    if (!tr.docChanged && !selectionChanged) return prev.map(tr.changes);
 
+    const cursorPos = tr.state.selection.main.head;
     const decorations: Range<Decoration>[] = [];
 
     syntaxTree(tr.state).iterate({
       enter(node: SyntaxNodeRef) {
         if (node.name !== 'Table') return;
+
+        const cursorInTable = cursorPos >= node.from && cursorPos <= node.to;
+        if (cursorInTable) return;
 
         const rawText = tr.state.doc.sliceString(node.from, node.to);
         decorations.push(
@@ -2157,6 +2007,7 @@ export const livePreviewStyles = EditorView.baseTheme({
   '.cm-live-table': {
     fontFamily: 'inherit',
     padding: '4px 0',
+    cursor: 'text',
   },
   '.cm-live-table table': {
     borderCollapse: 'collapse',
