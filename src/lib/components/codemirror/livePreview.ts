@@ -9,11 +9,43 @@ import { RangeSetBuilder, StateField } from '@codemirror/state';
 import type { Range } from '@codemirror/state';
 import { syntaxTree } from '@codemirror/language';
 import type { SyntaxNodeRef } from '@lezer/common';
+import { LanguageDescription } from '@codemirror/language';
+import { languages } from '@codemirror/language-data';
+import { highlightTree, classHighlighter } from '@lezer/highlight';
 import { render } from 'katex';
 import 'katex/dist/katex.min.css';
-import hljs from 'highlight.js';
-import 'highlight.js/styles/atom-one-dark.css';
 
+// Cache of loaded language parsers: name → parser (null while loading or unavailable)
+const languageCache = new Map<string, ReturnType<LanguageDescription['load']> extends Promise<infer T> ? T : never>();
+const languageLoading = new Set<string>();
+
+function getLanguageDescription(name: string): LanguageDescription | null {
+  if (!name) return null;
+  return LanguageDescription.matchLanguageName(languages, name, true) ?? null;
+}
+
+// Load a language async and return its parser synchronously if already cached
+function getLoadedParser(name: string, view: EditorView): import('@lezer/common').Parser | null {
+  if (languageCache.has(name)) {
+    return (languageCache.get(name) as any)?.language?.parser ?? null;
+  }
+  if (languageLoading.has(name)) return null;
+
+  const desc = getLanguageDescription(name);
+  if (!desc) return null;
+
+  languageLoading.add(name);
+  desc.load().then((support) => {
+    languageCache.set(name, support as any);
+    languageLoading.delete(name);
+    // Trigger decoration rebuild now that language is loaded
+    view.dispatch({ effects: [] });
+  }).catch(() => {
+    languageLoading.delete(name);
+  });
+
+  return null;
+}
 // Render inline markdown (bold, italic, strikethrough, code) into an element
 function renderInlineMarkdown(el: HTMLElement, text: string): void {
   // Process inline formatting tokens in order
@@ -399,170 +431,6 @@ class HorizontalRuleWidget extends WidgetType {
 
   eq(): boolean {
     return true;
-  }
-}
-
-class CodeBlockWidget extends WidgetType {
-  private view: EditorView | null = null;
-  private from: number;
-  private to: number;
-  private fenceStart: number;
-  private fenceEnd: number;
-  private isDestroyed = false;
-
-  constructor(
-    readonly code: string,
-    readonly language: string,
-    from: number,
-    to: number,
-    fenceStart: number,
-    fenceEnd: number
-  ) {
-    super();
-    this.from = from;
-    this.to = to;
-    this.fenceStart = fenceStart;
-    this.fenceEnd = fenceEnd;
-  }
-
-  toDOM(view: EditorView): HTMLElement {
-    this.view = view;
-    const container = document.createElement('div');
-    container.className = 'cm-live-code-block-widget';
-
-    const pre = document.createElement('pre');
-    const codeEl = document.createElement('code');
-    codeEl.contentEditable = 'true';
-    codeEl.spellcheck = false;
-
-    if (this.language) {
-      codeEl.className = `language-${this.language}`;
-      try {
-        const highlighted = hljs.highlight(this.code, {
-          language: this.language,
-          ignoreIllegals: true,
-        });
-        codeEl.innerHTML = highlighted.value;
-      } catch (error) {
-        codeEl.textContent = this.code;
-      }
-    } else {
-      codeEl.textContent = this.code;
-    }
-
-    // Track changes but don't sync until blur
-    let hasChanges = false;
-    codeEl.addEventListener('input', (e) => {
-      // Stop input events from bubbling to CM's contentDOM — on some platforms
-      // CM processes these as document input and inserts text outside the block
-      e.stopPropagation();
-      hasChanges = true;
-    });
-
-    // Sync changes back to document when done editing
-    codeEl.addEventListener('blur', () => {
-      if (hasChanges && !this.isDestroyed) {
-        const newCode = codeEl.textContent || '';
-        this.updateDocument(newCode);
-        hasChanges = false;
-      }
-    });
-
-    // Handle keyboard shortcuts
-    codeEl.addEventListener('keydown', (e) => {
-      // Stop all events from reaching CodeMirror
-      e.stopPropagation();
-
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        // Save changes before exiting
-        if (hasChanges) {
-          const newCode = codeEl.textContent || '';
-          this.updateDocument(newCode);
-          hasChanges = false;
-        }
-        codeEl.blur();
-        view.focus();
-        return;
-      }
-
-      // Handle Tab - insert 2 spaces
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          range.insertNode(document.createTextNode('  '));
-          range.collapse(false);
-        }
-        return;
-      }
-
-      // Handle Enter - insert newline (allow default contentEditable behavior)
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          range.deleteContents();
-          range.insertNode(document.createTextNode('\n'));
-          range.collapse(false);
-        }
-        return;
-      }
-    });
-
-    // Stop remaining event types from reaching CM
-    codeEl.addEventListener('keyup', (e) => e.stopPropagation());
-    codeEl.addEventListener('compositionstart', (e) => e.stopPropagation());
-    codeEl.addEventListener('compositionend', (e) => e.stopPropagation());
-
-    // Prevent CodeMirror cursor from appearing on clicks
-    container.addEventListener('mousedown', (e) => {
-      e.stopPropagation();
-    });
-
-    pre.appendChild(codeEl);
-    container.appendChild(pre);
-    return container;
-  }
-
-  ignoreEvent(event: Event): boolean {
-    // Ignore all events to prevent CodeMirror from moving its cursor
-    return true;
-  }
-
-  destroy(): void {
-    // Nulling view prevents any pending blur handler from dispatching
-    // with stale from/to positions after this widget has been replaced
-    this.isDestroyed = true;
-    this.view = null;
-  }
-
-  private updateDocument(newCode: string) {
-    if (!this.view || this.isDestroyed) return;
-
-    // Reconstruct the full code block with fences
-    const fence = '```' + this.language;
-    const newBlock = `${fence}\n${newCode}\n${'```'}`;
-
-    this.view.dispatch({
-      changes: {
-        from: this.from,
-        to: this.to,
-        insert: newBlock,
-      },
-    });
-  }
-
-  eq(other: CodeBlockWidget): boolean {
-    return (
-      this.code === other.code &&
-      this.language === other.language &&
-      this.from === other.from &&
-      this.to === other.to
-    );
   }
 }
 
@@ -1841,6 +1709,30 @@ function buildDecorations(view: EditorView): DecorationSet {
             decorations.push(codeBlockLineDecoration.range(lineObj.from));
           }
         }
+
+        // Syntax highlighting: parse code content with the language's parser
+        if (el.language) {
+          const parser = getLoadedParser(el.language, view);
+          if (parser) {
+            // Code content is between the end of the opening fence line and the start of closing fence line
+            const openFenceLine = view.state.doc.line(startLine);
+            const closeFenceLine = view.state.doc.line(endLine);
+            const codeFrom = openFenceLine.to + 1; // char after newline
+            const codeTo = closeFenceLine.from > codeFrom ? closeFenceLine.from - 1 : codeFrom;
+
+            if (codeTo > codeFrom) {
+              const codeText = view.state.doc.sliceString(codeFrom, codeTo);
+              const tree = parser.parse(codeText);
+              highlightTree(tree, classHighlighter, (from, to, classes) => {
+                if (classes && from < to) {
+                  decorations.push(
+                    Decoration.mark({ class: classes }).range(codeFrom + from, codeFrom + to)
+                  );
+                }
+              });
+            }
+          }
+        }
         break;
       }
 
@@ -2024,71 +1916,17 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
   }
 );
 
-// StateField for code block decorations (block replacements that span line breaks
-// cannot be provided via ViewPlugin — they require a StateField)
-const codeBlockDecorationField = StateField.define<DecorationSet>({
-  create() {
-    return Decoration.none;
-  },
-  update(_, tr) {
-    const decorations: Range<Decoration>[] = [];
-
-    syntaxTree(tr.state).iterate({
-      enter(node: SyntaxNodeRef) {
-        if (node.name !== 'FencedCode') return;
-
-        const startLine = tr.state.doc.lineAt(node.from).number;
-        const endLine = tr.state.doc.lineAt(node.to).number;
-
-        // Extract language from the opening fence line (e.g., ```javascript)
-        const firstLineText = tr.state.doc.lineAt(node.from).text;
-        const langMatch = firstLineText.match(/^```(\w+)?/);
-        const language = langMatch?.[1] || '';
-
-        // Extract code content (excluding fence lines)
-        const firstLineEnd = tr.state.doc.line(startLine).to;
-        const lastLineStart = tr.state.doc.line(endLine).from;
-        const codeStart = firstLineEnd + 1;
-        const codeEnd = lastLineStart > codeStart ? lastLineStart - 1 : codeStart;
-
-        let code = '';
-        if (codeEnd > codeStart) {
-          code = tr.state.doc.sliceString(codeStart, codeEnd);
-        }
-
-        decorations.push(
-          Decoration.replace({
-            widget: new CodeBlockWidget(
-              code,
-              language,
-              node.from,
-              node.to,
-              node.from,
-              tr.state.doc.line(endLine).to
-            ),
-            block: true,
-          }).range(node.from, node.to)
-        );
-      },
-    });
-
-    decorations.sort((a, b) => a.from - b.from);
-    return Decoration.set(decorations);
-  },
-  provide: (f) => EditorView.decorations.from(f),
-});
-
 // StateField for table decorations (block replacements that span line breaks
 // cannot be provided via ViewPlugin — they require a StateField)
 const tableDecorationField = StateField.define<DecorationSet>({
   create() {
     return Decoration.none;
   },
-  update(_, tr) {
+  update(prev, tr) {
+    if (!tr.docChanged) return prev.map(tr.changes);
+
     const decorations: Range<Decoration>[] = [];
 
-    // For editable tables, always show the widget so users can click and edit cells
-    // Raw markdown editing can be done by selecting the table text explicitly
     syntaxTree(tr.state).iterate({
       enter(node: SyntaxNodeRef) {
         if (node.name !== 'Table') return;
@@ -2217,6 +2055,38 @@ export const livePreviewStyles = EditorView.baseTheme({
     fontSize: '0.9em',
   },
 
+  // Syntax highlighting inside code blocks (tok-* classes from classHighlighter)
+  '.cm-live-code-block-line .tok-keyword': { color: '#c678dd' },
+  '.cm-live-code-block-line .tok-operator': { color: '#56b6c2' },
+  '.cm-live-code-block-line .tok-punctuation': { color: 'var(--color-fg-muted)' },
+  '.cm-live-code-block-line .tok-string': { color: '#98c379' },
+  '.cm-live-code-block-line .tok-string2': { color: '#98c379' },
+  '.cm-live-code-block-line .tok-number': { color: '#d19a66' },
+  '.cm-live-code-block-line .tok-bool': { color: '#d19a66' },
+  '.cm-live-code-block-line .tok-null': { color: '#d19a66' },
+  '.cm-live-code-block-line .tok-atom': { color: '#d19a66' },
+  '.cm-live-code-block-line .tok-comment': { color: '#7f848e', fontStyle: 'italic' },
+  '.cm-live-code-block-line .tok-lineComment': { color: '#7f848e', fontStyle: 'italic' },
+  '.cm-live-code-block-line .tok-blockComment': { color: '#7f848e', fontStyle: 'italic' },
+  '.cm-live-code-block-line .tok-function': { color: '#61afef' },
+  '.cm-live-code-block-line .tok-variableName': { color: '#e06c75' },
+  '.cm-live-code-block-line .tok-definition': { color: '#61afef' },
+  '.cm-live-code-block-line .tok-typeName': { color: '#e5c07b' },
+  '.cm-live-code-block-line .tok-className': { color: '#e5c07b' },
+  '.cm-live-code-block-line .tok-propertyName': { color: '#e06c75' },
+  '.cm-live-code-block-line .tok-attributeName': { color: '#e06c75' },
+  '.cm-live-code-block-line .tok-attributeValue': { color: '#98c379' },
+  '.cm-live-code-block-line .tok-namespace': { color: '#e5c07b' },
+  '.cm-live-code-block-line .tok-tagName': { color: '#e06c75' },
+  '.cm-live-code-block-line .tok-angleBracket': { color: 'var(--color-fg-muted)' },
+  '.cm-live-code-block-line .tok-self': { color: '#e06c75' },
+  '.cm-live-code-block-line .tok-regexp': { color: '#56b6c2' },
+  '.cm-live-code-block-line .tok-escape': { color: '#56b6c2' },
+  '.cm-live-code-block-line .tok-color': { color: '#d19a66' },
+  '.cm-live-code-block-line .tok-url': { color: '#56b6c2', textDecoration: 'underline' },
+  '.cm-live-code-block-line .tok-meta': { color: '#7f848e' },
+  '.cm-live-code-block-line .tok-invalid': { color: '#f44747' },
+
   // Blockquotes
   '.cm-live-blockquote-line': {
     borderLeft: '4px solid var(--color-border-default)',
@@ -2331,27 +2201,8 @@ export const livePreviewStyles = EditorView.baseTheme({
     fontSize: '1.1em',
   },
 
-  // Code block widget (syntax highlighted with Atom One Dark theme)
-  '.cm-live-code-block-widget': {
-    fontFamily: '"Monaco", "Menlo", "Ubuntu Mono", monospace',
-    fontSize: '0.9em',
-    margin: '0',
-  },
-  '.cm-live-code-block-widget pre': {
-    margin: '0',
-    padding: '12px 16px',
-    borderRadius: '6px',
-    overflow: 'auto',
-    backgroundColor: '#282c34',
-  },
-  '.cm-live-code-block-widget code': {
-    fontFamily: 'inherit',
-    fontSize: 'inherit',
-    backgroundColor: 'transparent',
-    outline: 'none',
-  },
 });
 
 export function livePreview() {
-  return [livePreviewPlugin, codeBlockDecorationField, tableDecorationField, livePreviewStyles];
+  return [livePreviewPlugin, tableDecorationField, livePreviewStyles];
 }
