@@ -282,75 +282,42 @@ class CheckboxWidget extends WidgetType {
 }
 
 class MathWidget extends WidgetType {
-  private showingRaw = false;
-
-  constructor(readonly latex: string) {
+  constructor(readonly latex: string, readonly from: number) {
     super();
   }
 
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const container = document.createElement('span');
     container.className = 'cm-live-math';
     container.style.cursor = 'pointer';
 
-    container.addEventListener('click', (e) => {
+    container.addEventListener('mousedown', (e) => {
       e.preventDefault();
-      e.stopPropagation();
-      this.toggleDisplay(container);
+      // Move cursor into the math expression — decoration will be removed
+      // by the next buildDecorations call (cursorInElement becomes true)
+      view.dispatch({ selection: { anchor: this.from + 1 } });
+      view.focus();
     });
 
-    this.renderMath(container);
+    try {
+      render(this.latex, container, {
+        throwOnError: false,
+        displayMode: false,
+        strict: false,
+      });
+    } catch {
+      container.textContent = `$${this.latex}$`;
+    }
+
     return container;
   }
 
   ignoreEvent(event: Event): boolean {
-    // Ignore all events on the math widget to prevent CodeMirror from moving cursor
-    return true;
-  }
-
-  private toggleDisplay(container: HTMLElement) {
-    this.showingRaw = !this.showingRaw;
-    this.renderMath(container);
-  }
-
-  private renderMath(container: HTMLElement) {
-    container.innerHTML = '';
-
-    if (this.showingRaw) {
-      // Show raw LaTeX
-      const code = document.createElement('code');
-      code.textContent = `$${this.latex}$`;
-      code.style.fontFamily = '"Monaco", "Menlo", "Ubuntu Mono", monospace';
-      code.style.backgroundColor = 'var(--color-neutral-muted)';
-      code.style.padding = '2px 4px';
-      code.style.borderRadius = '3px';
-      code.style.fontSize = '0.9em';
-      container.appendChild(code);
-    } else {
-      // Render with KaTeX
-      try {
-        render(this.latex, container, {
-          throwOnError: false,
-          displayMode: false,
-          strict: false,
-        });
-      } catch (error) {
-        // Fallback to raw text if rendering fails
-        const fallback = document.createElement('code');
-        fallback.textContent = `$${this.latex}$`;
-        fallback.style.fontFamily = '"Monaco", "Menlo", "Ubuntu Mono", monospace';
-        fallback.style.backgroundColor = 'var(--color-neutral-muted)';
-        fallback.style.padding = '2px 4px';
-        fallback.style.borderRadius = '3px';
-        fallback.style.fontSize = '0.9em';
-        fallback.style.color = 'var(--color-fg-muted)';
-        container.appendChild(fallback);
-      }
-    }
+    return event.type !== 'mousedown';
   }
 
   eq(other: MathWidget): boolean {
-    return this.latex === other.latex && this.showingRaw === other.showingRaw;
+    return this.latex === other.latex && this.from === other.from;
   }
 }
 
@@ -1664,7 +1631,7 @@ function buildDecorations(view: EditorView): DecorationSet {
         if (!cursorInElement && el.text) {
           decorations.push(
             Decoration.replace({
-              widget: new MathWidget(el.text),
+              widget: new MathWidget(el.text, el.from),
             }).range(el.from, el.to)
           );
         }
@@ -1691,15 +1658,49 @@ function buildDecorations(view: EditorView): DecorationSet {
 export const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    private mouseDown = false;
+    private view: EditorView;
 
     constructor(view: EditorView) {
+      this.view = view;
       this.decorations = buildDecorations(view);
+      this.onMouseDown = this.onMouseDown.bind(this);
+      this.onMouseUp = this.onMouseUp.bind(this);
+      view.scrollDOM.addEventListener('mousedown', this.onMouseDown);
+      window.addEventListener('mouseup', this.onMouseUp);
+    }
+
+    onMouseDown() {
+      this.mouseDown = true;
+    }
+
+    onMouseUp() {
+      if (!this.mouseDown) return;
+      this.mouseDown = false;
+      // Rebuild after mouse release so cursor-line styling reflects final position
+      this.decorations = buildDecorations(this.view);
+      this.view.update([]);
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
+      this.view = update.view;
+      if (update.docChanged || update.viewportChanged) {
         this.decorations = buildDecorations(update.view);
+      } else if (update.selectionSet) {
+        // Skip rebuilds during pointer-drag to prevent layout shifts that cause
+        // accidental text selection. Widget-dispatched selections (e.g. math click)
+        // are not pointer events and must always rebuild.
+        const isPointerDrag = this.mouseDown &&
+          update.transactions.some(tr => tr.isUserEvent('select.pointer'));
+        if (!isPointerDrag) {
+          this.decorations = buildDecorations(update.view);
+        }
       }
+    }
+
+    destroy() {
+      this.view.scrollDOM.removeEventListener('mousedown', this.onMouseDown);
+      window.removeEventListener('mouseup', this.onMouseUp);
     }
   },
   {
