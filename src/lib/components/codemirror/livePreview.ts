@@ -281,6 +281,48 @@ class CheckboxWidget extends WidgetType {
   }
 }
 
+class InlineCodeWidget extends WidgetType {
+  constructor(
+    readonly code: string,
+    readonly from: number,
+    readonly to: number
+  ) {
+    super();
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const span = document.createElement('span');
+    span.className = 'cm-live-inline-code';
+    span.textContent = this.code;
+    span.style.cursor = 'text';
+
+    span.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      // Estimate which character within the code text was clicked by
+      // comparing the click X to the widget's bounding rect.
+      const rect = span.getBoundingClientRect();
+      const ratio = rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0;
+      const clamped = Math.max(0, Math.min(1, ratio));
+      // Map ratio to position within the content (from+1 to to-1, exclusive of backticks)
+      const contentLen = this.to - this.from - 2; // exclude opening + closing backtick
+      const offset = Math.round(clamped * contentLen);
+      const anchor = this.from + 1 + offset; // +1 to skip opening backtick
+      view.dispatch({ selection: { anchor } });
+      view.focus();
+    });
+
+    return span;
+  }
+
+  ignoreEvent(event: Event): boolean {
+    return event.type !== 'mousedown';
+  }
+
+  eq(other: InlineCodeWidget): boolean {
+    return this.code === other.code && this.from === other.from && this.to === other.to;
+  }
+}
+
 class MathWidget extends WidgetType {
   constructor(readonly latex: string, readonly from: number) {
     super();
@@ -1421,7 +1463,14 @@ function buildDecorations(view: EditorView): DecorationSet {
       }
 
       case 'inlineCode': {
-        if (el.markerTo !== undefined) {
+        if (!cursorInElement && el.text !== undefined) {
+          decorations.push(
+            Decoration.replace({
+              widget: new InlineCodeWidget(el.text, el.from, el.to),
+            }).range(el.from, el.to)
+          );
+        } else if (cursorInElement && el.markerTo !== undefined) {
+          // Cursor is inside: show raw syntax, style content region
           const markerLen = el.markerTo - el.from;
           const contentFrom = el.markerTo;
           const contentTo = el.to - markerLen;
@@ -1429,17 +1478,11 @@ function buildDecorations(view: EditorView): DecorationSet {
             decorations.push(inlineCodeDecoration.range(contentFrom, contentTo));
           }
         }
-
-        if (!cursorInElement && el.markerFrom !== undefined && el.markerTo !== undefined) {
-          decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
-        }
         break;
       }
 
       case 'inlineCodeEnd': {
-        if (!cursorInParent && el.markerFrom !== undefined && el.markerTo !== undefined) {
-          decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
-        }
+        // No-op: handled entirely by inlineCode case above
         break;
       }
 

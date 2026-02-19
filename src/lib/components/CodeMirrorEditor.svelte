@@ -275,7 +275,10 @@
 
 		let replacement: string;
 		if (type === 'code_block') {
-			replacement = '```\n' + selectedText + '\n```';
+			const isMultiLine = selectedText.includes('\n');
+			replacement = isMultiLine
+				? '```\n' + selectedText + '\n```'
+				: '`' + selectedText + '`';
 		} else {
 			replacement = selectedText
 				.split('\n')
