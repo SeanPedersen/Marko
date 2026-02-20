@@ -1,22 +1,24 @@
 <script lang="ts">
 	import { parseKanban, serializeKanban, type KanbanColumn } from '$lib/utils/kanban.js';
 	import CodeMirrorEditor from './CodeMirrorEditor.svelte';
+	import Modal from './Modal.svelte';
 
 	let {
 		content = '',
 		onchange,
 		readonly = false,
 		theme = 'system',
+		rawMode = $bindable(false),
 	}: {
 		content: string;
 		onchange: (s: string) => void;
 		readonly?: boolean;
 		theme?: 'system' | 'dark' | 'light';
+		rawMode?: boolean;
 	} = $props();
 
 	let columns = $state<KanbanColumn[]>([]);
 	let frontmatter = $state('');
-	let rawMode = $state(false);
 
 	// Pointer-based drag state
 	let dragSrc = $state<{ colIdx: number; cardIdx: number } | null>(null);
@@ -24,6 +26,15 @@
 	let ghostEl: HTMLElement | null = null;
 	let dragOffsetX = 0;
 	let dragOffsetY = 0;
+
+	const DRAG_THRESHOLD = 5;
+	let pendingDrag: {
+		colIdx: number; cardIdx: number; cardEl: HTMLElement;
+		startX: number; startY: number; offsetX: number; offsetY: number;
+	} | null = null;
+
+	// Column delete confirmation
+	let confirmDeleteCol = $state<number | null>(null);
 
 	// Add card state per column
 	let addingCard = $state<number | null>(null);
@@ -62,35 +73,46 @@
 		if ((e.target as HTMLElement).closest('input, button, textarea, a')) return;
 		if (e.button !== 0) return;
 
-		e.preventDefault();
-
 		const cardEl = e.currentTarget as HTMLElement;
 		const rect = cardEl.getBoundingClientRect();
-		dragOffsetX = e.clientX - rect.left;
-		dragOffsetY = e.clientY - rect.top;
-
-		// Build ghost
-		ghostEl = cardEl.cloneNode(true) as HTMLElement;
-		ghostEl.style.cssText = [
-			'position: fixed',
-			`width: ${rect.width}px`,
-			`left: ${rect.left}px`,
-			`top: ${rect.top}px`,
-			'pointer-events: none',
-			'z-index: 9999',
-			'opacity: 0.85',
-			'box-shadow: 0 8px 24px rgba(0,0,0,0.25)',
-			'transform: rotate(1.5deg)',
-			'border-radius: 6px',
-		].join(';');
-		document.body.appendChild(ghostEl);
-
-		dragSrc = { colIdx, cardIdx };
+		pendingDrag = {
+			colIdx, cardIdx, cardEl,
+			startX: e.clientX, startY: e.clientY,
+			offsetX: e.clientX - rect.left,
+			offsetY: e.clientY - rect.top,
+		};
 		document.body.style.userSelect = 'none';
-		document.body.style.cursor = 'grabbing';
 	}
 
 	function onCardPointerMove(e: PointerEvent) {
+		// Activate drag once movement exceeds threshold
+		if (pendingDrag && !dragSrc) {
+			const dx = e.clientX - pendingDrag.startX;
+			const dy = e.clientY - pendingDrag.startY;
+			if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
+				const { colIdx, cardIdx, cardEl, offsetX, offsetY } = pendingDrag;
+				dragOffsetX = offsetX;
+				dragOffsetY = offsetY;
+				const rect = cardEl.getBoundingClientRect();
+				ghostEl = cardEl.cloneNode(true) as HTMLElement;
+				ghostEl.style.cssText = [
+					'position: fixed',
+					`width: ${rect.width}px`,
+					`left: ${rect.left}px`,
+					`top: ${rect.top}px`,
+					'pointer-events: none',
+					'z-index: 9999',
+					'opacity: 0.85',
+					'box-shadow: 0 8px 24px rgba(0,0,0,0.25)',
+					'transform: rotate(1.5deg)',
+					'border-radius: 6px',
+				].join(';');
+				document.body.appendChild(ghostEl);
+				dragSrc = { colIdx, cardIdx };
+				document.body.style.cursor = 'grabbing';
+			}
+		}
+
 		if (!dragSrc || !ghostEl) return;
 
 		const x = e.clientX - dragOffsetX;
@@ -121,10 +143,11 @@
 	}
 
 	function onCardPointerUp(e: PointerEvent) {
-		if (!dragSrc) return;
-
+		pendingDrag = null;
 		document.body.style.userSelect = '';
 		document.body.style.cursor = '';
+
+		if (!dragSrc) return;
 
 		if (ghostEl) {
 			document.body.removeChild(ghostEl);
@@ -215,7 +238,13 @@
 
 	function deleteColumn(colIdx: number) {
 		if (readonly) return;
-		columns.splice(colIdx, 1);
+		confirmDeleteCol = colIdx;
+	}
+
+	function confirmColumnDelete() {
+		if (confirmDeleteCol === null) return;
+		columns.splice(confirmDeleteCol, 1);
+		confirmDeleteCol = null;
 		commit();
 	}
 
@@ -280,18 +309,16 @@
 	}
 </script>
 
-<div class="kanban-wrapper">
-	<div class="kanban-toolbar">
-		<button
-			class="raw-toggle"
-			class:active={rawMode}
-			onclick={() => { rawMode = !rawMode; }}
-			title={rawMode ? 'Show board' : 'Edit raw markdown'}
-		>
-			{rawMode ? 'Board View' : 'Edit Raw'}
-		</button>
-	</div>
+<Modal
+	show={confirmDeleteCol !== null}
+	title="Delete column"
+	message={confirmDeleteCol !== null ? `Delete "${columns[confirmDeleteCol]?.name}" and all its cards?` : ''}
+	kind="warning"
+	onconfirm={confirmColumnDelete}
+	oncancel={() => { confirmDeleteCol = null; }}
+/>
 
+<div class="kanban-wrapper">
 	{#if rawMode}
 		<div class="raw-editor">
 			<CodeMirrorEditor
@@ -456,32 +483,6 @@
 		font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	}
 
-	.kanban-toolbar {
-		display: flex;
-		justify-content: flex-end;
-		padding: 0.5rem 1rem;
-		border-bottom: 1px solid var(--color-border-default);
-		flex-shrink: 0;
-	}
-
-	.raw-toggle {
-		font-size: 12px;
-		padding: 3px 10px;
-		border: 1px solid var(--color-border-default);
-		border-radius: 4px;
-		background: var(--color-canvas-subtle);
-		color: var(--color-fg-muted);
-		cursor: pointer;
-		transition: background 0.1s, color 0.1s;
-	}
-
-	.raw-toggle:hover,
-	.raw-toggle.active {
-		background: var(--color-accent-fg);
-		color: #fff;
-		border-color: var(--color-accent-fg);
-	}
-
 	.raw-editor {
 		flex: 1;
 		overflow: hidden;
@@ -494,7 +495,7 @@
 		padding: 1.5rem;
 		overflow-x: auto;
 		overflow-y: hidden;
-		height: calc(100% - 41px);
+		height: 100%;
 		align-items: flex-start;
 		box-sizing: border-box;
 	}

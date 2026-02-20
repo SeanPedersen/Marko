@@ -14,6 +14,9 @@
         gitStatus,
         oncommit,
         onrevert,
+        isKanban = false,
+        rawMode = false,
+        ontogglerawmode,
     } = $props<{
         filePath?: string;
         folderPath?: string;
@@ -29,6 +32,9 @@
         gitStatus?: string | null;
         oncommit?: (message: string) => void;
         onrevert?: () => void;
+        isKanban?: boolean;
+        rawMode?: boolean;
+        ontogglerawmode?: () => void;
     }>();
 
     let commitInputVisible = $state(false);
@@ -234,6 +240,17 @@
                     >
                 {/if}
             </div>
+        {/if}
+
+        {#if isKanban && ontogglerawmode}
+            <button
+                class="raw-mode-button"
+                class:active={rawMode}
+                onclick={ontogglerawmode}
+                title={rawMode ? 'Show board view' : 'Edit raw markdown'}
+            >
+                {rawMode ? 'Board' : 'Raw'}
+            </button>
         {/if}
 
         {#if gitStatus && oncommit}
@@ -557,6 +574,26 @@
     .revert-button:hover {
         background: var(--color-neutral-muted);
         color: #f85149;
+    }
+
+    .raw-mode-button {
+        font-size: 11px;
+        padding: 2px 8px;
+        border: 1px solid var(--color-border-default);
+        border-radius: 4px;
+        background: var(--color-canvas-subtle);
+        color: var(--color-fg-muted);
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: background 0.1s, color 0.1s, border-color 0.1s;
+        line-height: 20px;
+    }
+
+    .raw-mode-button:hover,
+    .raw-mode-button.active {
+        background: var(--color-accent-fg);
+        color: #fff;
+        border-color: var(--color-accent-fg);
     }
 
     .open-location-button {

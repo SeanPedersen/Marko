@@ -42,6 +42,8 @@
 		const { fields } = parseFrontmatter(tabManager.activeTab?.rawContent ?? '');
 		return fields.some((f) => f.key === 'kanban-plugin' && f.value === 'board');
 	});
+	let kanbanRawMode = $state(false);
+	$effect(() => { if (!isKanban) kanbanRawMode = false; });
 	let scrollTop = $derived(tabManager.activeTab?.scrollTop ?? 0);
 	let isScrolled = $derived(scrollTop > 0);
 	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Marko');
@@ -1167,6 +1169,9 @@
 				gitStatus={currentFileGitStatus}
 				oncommit={handleGitCommit}
 				onrevert={handleGitRevert}
+				{isKanban}
+				rawMode={kanbanRawMode}
+				ontogglerawmode={() => { kanbanRawMode = !kanbanRawMode; }}
 			/>
 			{#if isKanban}
 				<KanbanBoard
@@ -1174,6 +1179,7 @@
 					onchange={handleEditorChange}
 					readonly={false}
 					{theme}
+					bind:rawMode={kanbanRawMode}
 				/>
 			{:else}
 				<CodeMirrorEditor
