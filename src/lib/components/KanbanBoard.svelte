@@ -481,6 +481,14 @@
 		background: var(--color-canvas-default);
 		overflow: hidden;
 		font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+
+	.kanban-wrapper :global(textarea),
+	.kanban-wrapper :global(input) {
+		-webkit-user-select: text;
+		user-select: text;
 	}
 
 	.raw-editor {
@@ -498,7 +506,6 @@
 		height: 100%;
 		align-items: flex-start;
 		box-sizing: border-box;
-		user-select: none;
 	}
 
 	.board.dragging-active {
