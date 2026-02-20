@@ -257,7 +257,7 @@
 			node.style.height = 'auto';
 			node.style.height = `${node.scrollHeight}px`;
 		};
-		resize();
+		requestAnimationFrame(resize);
 		node.addEventListener('input', resize);
 		return { destroy() { node.removeEventListener('input', resize); } };
 	}
