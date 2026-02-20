@@ -12,7 +12,7 @@ export interface KanbanColumn {
 	collapsed: boolean;
 }
 
-const SETTINGS_BLOCK_REGEX = /\n?%%\s*kanban:settings\s*\n```json\s*\n([\s\S]*?)\n```\s*\n%%/;
+const SETTINGS_BLOCK_REGEX = /\n?%%\s*kanban:settings\s*\n([\s\S]*?)\n%%/;
 
 export function parseKanban(content: string): { columns: KanbanColumn[]; frontmatter: string } {
 	const { rawBlock, body } = parseFrontmatter(content);
@@ -72,7 +72,7 @@ export function serializeKanban(columns: KanbanColumn[], frontmatter: string): s
 
 	const collapseStates = columns.map((c) => c.collapsed);
 	const settingsJson = JSON.stringify({ 'kanban-plugin': 'board', 'list-collapse': collapseStates });
-	const settingsBlock = `\n%% kanban:settings\n\`\`\`json\n${settingsJson}\n\`\`\`\n%%`;
+	const settingsBlock = `\n%% kanban:settings\n${settingsJson}\n%%`;
 
 	return parts.join('\n\n') + settingsBlock + '\n';
 }
