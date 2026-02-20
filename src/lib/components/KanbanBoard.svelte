@@ -154,12 +154,6 @@
 
 	// --- Card editing ---
 
-	function toggleChecked(colIdx: number, cardIdx: number) {
-		if (readonly) return;
-		columns[colIdx].cards[cardIdx].checked = !columns[colIdx].cards[cardIdx].checked;
-		commit();
-	}
-
 	function deleteCard(colIdx: number, cardIdx: number) {
 		if (readonly) return;
 		columns[colIdx].cards.splice(cardIdx, 1);
@@ -367,23 +361,13 @@
 											autofocus
 										></textarea>
 									{:else}
-										<label class="card-label">
-											<input
-												type="checkbox"
-												class="card-checkbox"
-												checked={card.checked}
-												disabled={readonly}
-												onchange={() => toggleChecked(colIdx, cardIdx)}
-											/>
-											<span
-												class="card-text"
-												class:checked={card.checked}
-												role="button"
-												tabindex={readonly ? -1 : 0}
-												ondblclick={() => startEditCard(colIdx, cardIdx)}
-												onkeydown={(e) => { if (e.key === 'Enter') startEditCard(colIdx, cardIdx); }}
-											>{card.text}</span>
-										</label>
+										<span
+											class="card-text"
+											role="button"
+											tabindex={readonly ? -1 : 0}
+											ondblclick={() => startEditCard(colIdx, cardIdx)}
+											onkeydown={(e) => { if (e.key === 'Enter') startEditCard(colIdx, cardIdx); }}
+										>{card.text}</span>
 										{#if !readonly}
 											<button
 												class="card-delete"
@@ -457,6 +441,7 @@
 		height: 100%;
 		background: var(--color-canvas-default);
 		overflow: hidden;
+		font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	}
 
 	.kanban-toolbar {
@@ -528,8 +513,10 @@
 
 	.column-name {
 		font-weight: 600;
-		font-size: 13px;
-		color: var(--color-fg-default);
+		font-size: 12px;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--color-fg-muted);
 		flex: 1;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -587,7 +574,6 @@
 		padding: 0.5rem 0.625rem;
 		display: flex;
 		align-items: flex-start;
-		gap: 0.5rem;
 		cursor: grab;
 		position: relative;
 		touch-action: none;
@@ -609,32 +595,14 @@
 		flex-shrink: 0;
 	}
 
-	.card-label {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.5rem;
-		flex: 1;
-		cursor: pointer;
-		min-width: 0;
-	}
-
-	.card-checkbox {
-		margin-top: 2px;
-		flex-shrink: 0;
-		cursor: pointer;
-	}
-
 	.card-text {
 		font-size: 13px;
+		font-weight: 450;
 		color: var(--color-fg-default);
-		line-height: 1.4;
+		line-height: 1.45;
 		word-break: break-word;
+		letter-spacing: -0.01em;
 		flex: 1;
-	}
-
-	.card-text.checked {
-		text-decoration: line-through;
-		color: var(--color-fg-muted);
 	}
 
 	.card-delete {
