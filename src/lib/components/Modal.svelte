@@ -8,6 +8,7 @@
 		kind = 'info',
 		showSave = false,
 		okOnly = false,
+		confirmLabel,
 		onconfirm,
 		onsave,
 		oncancel,
@@ -18,6 +19,7 @@
 		kind?: 'info' | 'warning' | 'error';
 		showSave?: boolean;
 		okOnly?: boolean;
+		confirmLabel?: string;
 		onconfirm: () => void;
 		onsave?: () => void;
 		oncancel: () => void;
@@ -119,8 +121,11 @@
 				{:else}
 					<button class="modal-btn secondary" onclick={oncancel}>Cancel</button>
 					<div class="footer-spacer"></div>
-					<button class="modal-btn secondary" onclick={onconfirm}>
-						{kind === 'warning' ? "Don't Save" : 'Confirm'}
+					<button
+						class="modal-btn {kind === 'warning' ? 'primary warning' : 'secondary'}"
+						onclick={onconfirm}
+					>
+						{confirmLabel ?? (kind === 'warning' ? "Don't Save" : 'Confirm')}
 					</button>
 					{#if showSave}
 						<button class="modal-btn primary" onclick={onsave}>Save</button>

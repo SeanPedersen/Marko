@@ -314,6 +314,7 @@
 	title="Delete column"
 	message={confirmDeleteCol !== null ? `Delete "${columns[confirmDeleteCol]?.name}" and all its cards?` : ''}
 	kind="warning"
+	confirmLabel="Delete"
 	onconfirm={confirmColumnDelete}
 	oncancel={() => { confirmDeleteCol = null; }}
 />
