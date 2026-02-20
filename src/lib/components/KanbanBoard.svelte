@@ -350,9 +350,7 @@
 				>
 					<div class="column-header">
 						<span class="column-name">{col.name}</span>
-						{#if !col.collapsed}
-							<span class="card-count">{col.cards.length}</span>
-						{/if}
+						<span class="card-count">{col.cards.length}</span>
 						<div class="column-actions">
 							<button
 								class="icon-btn"
