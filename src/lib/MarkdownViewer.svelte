@@ -14,7 +14,7 @@
 
 	import HomePage from './components/HomePage.svelte';
 	import SettingsModal from './components/SettingsModal.svelte';
-	import { tabManager } from './stores/tabs.svelte.js';
+	import { tabManager, type Tab } from './stores/tabs.svelte.js';
 	import { settings, EDITOR_WIDTH_VALUES } from './stores/settings.svelte.js';
 	import { debounce } from './utils/debounce.js';
 	import { parseHeadings } from './utils/parseHeadings.js';
@@ -271,11 +271,30 @@
 		saveRecentFolder(path);
 	}
 
+	async function saveTab(tab: Tab): Promise<boolean> {
+		if (!tab.path) return false;
+		try {
+			await invoke('save_file_content', { path: tab.path, content: tab.rawContent });
+			tab.isDirty = false;
+			tab.isDeleted = false;
+			return true;
+		} catch (e) {
+			console.error('Failed to save file', e);
+			return false;
+		}
+	}
+
 	async function canCloseTab(tabId: string): Promise<boolean> {
 		const tab = tabManager.tabs.find((t) => t.id === tabId);
 		if (!tab || (!tab.isDirty && tab.path !== '')) return true;
 
 		if (!tab.isDirty) return true;
+
+		if (settings.autoSave && tab.path) {
+			if (tabManager.activeTabId === tabId) debouncedSave.cancel();
+			await saveTab(tab);
+			return true;
+		}
 
 		const response = await askCustom(`You have unsaved changes in "${tab.title}". Do you want to save them before closing?`, {
 			title: 'Unsaved Changes',
@@ -712,6 +731,20 @@
 			const { getCurrentWindow } = await import('@tauri-apps/api/window');
 			const { listen } = await import('@tauri-apps/api/event');
 			const appWindow = getCurrentWindow();
+
+			// Flush pending saves on window close to prevent data loss
+			const unlistenClose = await appWindow.onCloseRequested(async (event) => {
+				event.preventDefault();
+				debouncedSave.cancel();
+
+				const dirtyTabs = tabManager.tabs.filter((t) => t.isDirty && t.path && t.path !== 'HOME');
+				if (dirtyTabs.length > 0) {
+					await Promise.all(dirtyTabs.map(saveTab));
+				}
+
+				appWindow.destroy();
+			});
+			unlisteners.push(unlistenClose);
 
 			// Listen for file-path events (from CLI args, single-instance, file associations)
 			const unlistenFilePath = await listen<string>('file-path', (event) => {
