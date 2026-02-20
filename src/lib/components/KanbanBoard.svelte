@@ -250,6 +250,18 @@
 		frontmatter = parsed.frontmatter;
 	}
 
+	// --- Autoresize textarea action ---
+
+	function autoresize(node: HTMLTextAreaElement) {
+		const resize = () => {
+			node.style.height = 'auto';
+			node.style.height = `${node.scrollHeight}px`;
+		};
+		resize();
+		node.addEventListener('input', resize);
+		return { destroy() { node.removeEventListener('input', resize); } };
+	}
+
 	// --- Keyboard helpers ---
 
 	function handleCardKeydown(e: KeyboardEvent) {
@@ -354,10 +366,10 @@
 										<!-- svelte-ignore a11y_autofocus -->
 										<textarea
 											class="card-edit-input"
+											use:autoresize
 											bind:value={editingText}
 											onkeydown={handleCardKeydown}
 											onblur={commitEditCard}
-											rows={2}
 											autofocus
 										></textarea>
 									{:else}
@@ -389,11 +401,11 @@
 									<!-- svelte-ignore a11y_autofocus -->
 									<textarea
 										class="card-edit-input"
+										use:autoresize
 										bind:value={newCardText}
 										placeholder="Card title…"
 										onkeydown={handleNewCardKeydown}
 										onblur={commitAddCard}
-										rows={2}
 										autofocus
 									></textarea>
 								</div>
@@ -631,13 +643,17 @@
 	.card-edit-input {
 		width: 100%;
 		font-size: 13px;
+		font-weight: 450;
 		font-family: inherit;
+		letter-spacing: -0.01em;
+		line-height: 1.45;
 		border: 1px solid var(--color-accent-fg);
 		border-radius: 4px;
 		padding: 4px 6px;
 		background: var(--color-canvas-default);
 		color: var(--color-fg-default);
 		resize: none;
+		overflow: hidden;
 		outline: none;
 		box-sizing: border-box;
 	}
