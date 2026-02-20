@@ -509,6 +509,7 @@
 		display: inline-flex;
 		flex-direction: row;
 		min-width: 100%;
+		height: 100%;
 		gap: 0.75rem;
 		padding: 1.5rem;
 		align-items: flex-start;
