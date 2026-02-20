@@ -498,6 +498,7 @@
 		height: 100%;
 		align-items: flex-start;
 		box-sizing: border-box;
+		user-select: none;
 	}
 
 	.board.dragging-active {
