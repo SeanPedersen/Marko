@@ -19,6 +19,8 @@
 	import { debounce } from './utils/debounce.js';
 	import { parseHeadings } from './utils/parseHeadings.js';
 	import { buildFileIndex, resolveWikiLink, type FileIndex } from './utils/wikiLinks.js';
+	import { parseFrontmatter } from './utils/frontmatter.js';
+	import KanbanBoard from './components/KanbanBoard.svelte';
 
 	let mode = $state<'loading' | 'app' | 'installer' | 'uninstall'>('loading');
 
@@ -35,6 +37,11 @@
 		return markdownExts.includes(ext || '') ? 'markdown' : 'text';
 	});
 	let hasHeadings = $derived(parseHeadings(tabManager.activeTab?.rawContent ?? '').length > 0);
+	let isKanban = $derived.by(() => {
+		if (currentFileType !== 'markdown') return false;
+		const { fields } = parseFrontmatter(tabManager.activeTab?.rawContent ?? '');
+		return fields.some((f) => f.key === 'kanban-plugin' && f.value === 'board');
+	});
 	let scrollTop = $derived(tabManager.activeTab?.scrollTop ?? 0);
 	let isScrolled = $derived(scrollTop > 0);
 	let windowTitle = $derived(tabManager.activeTab?.title ?? 'Marko');
@@ -1125,7 +1132,7 @@
 	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
 		<TableOfContents
 			rawContent={tabManager.activeTab?.rawContent ?? ''}
-			visible={tocVisible && currentFileType === 'markdown'}
+			visible={tocVisible && currentFileType === 'markdown' && !isKanban}
 			onscrollto={handleTocScroll}
 			sidebarPosition={settings.sidebarPosition}
 			editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
@@ -1155,22 +1162,31 @@
 				editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
 				{tocVisible}
 				ontoggleToc={toggleToc}
-				showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType === 'markdown' && hasHeadings}
+				showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType === 'markdown' && hasHeadings && !isKanban}
 				onopenFileLocation={openFileLocation}
 				gitStatus={currentFileGitStatus}
 				oncommit={handleGitCommit}
 				onrevert={handleGitRevert}
 			/>
-			<CodeMirrorEditor
-				bind:this={editorRef}
-				value={tabManager.activeTab?.rawContent ?? ''}
-				{theme}
-				readonly={false}
-				fileType={currentFileType}
-				onchange={handleEditorChange}
-				editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
-				{fileIndex}
-			/>
+			{#if isKanban}
+				<KanbanBoard
+					content={tabManager.activeTab?.rawContent ?? ''}
+					onchange={handleEditorChange}
+					readonly={false}
+					{theme}
+				/>
+			{:else}
+				<CodeMirrorEditor
+					bind:this={editorRef}
+					value={tabManager.activeTab?.rawContent ?? ''}
+					{theme}
+					readonly={false}
+					fileType={currentFileType}
+					onchange={handleEditorChange}
+					editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
+					{fileIndex}
+				/>
+			{/if}
 		</div>
 	{:else}
 		<FolderExplorer

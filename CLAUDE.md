@@ -40,6 +40,7 @@ src/
 │   │   ├── HomePage.svelte           # Start screen (recent files/folders)
 │   │   ├── Modal.svelte              # Confirmation dialog (save/discard/cancel)
 │   │   ├── SettingsModal.svelte      # Settings dialog (editor width, sidebar position, CLI install)
+│   │   ├── KanbanBoard.svelte        # Kanban board UI (Obsidian-compatible, replaces editor for kanban files)
 │   │   └── ContextMenu.svelte        # Right-click context menu
 │   ├── stores/
 │   │   ├── tabs.svelte.ts            # TabManager class: tab CRUD, navigation history, dirty state
@@ -48,6 +49,7 @@ src/
 │       ├── debounce.ts               # Typed debounce with call()/cancel()
 │       ├── parseHeadings.ts          # Extract headings from markdown (with line numbers)
 │       ├── frontmatter.ts            # YAML frontmatter parser
+│       ├── kanban.ts                 # Kanban board parsing/serialization (Obsidian format)
 │       └── wikiLinks.ts              # Wiki-link utilities (file index, resolution, fuzzy matching)
 ```
 
