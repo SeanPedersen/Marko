@@ -340,6 +340,7 @@
 			onpointermove={onCardPointerMove}
 			onpointerup={onCardPointerUp}
 		>
+			<div class="board-inner">
 			{#each columns as col, colIdx (col.name + colIdx)}
 				<div
 					class="column"
@@ -470,6 +471,7 @@
 					{/if}
 				</div>
 			{/if}
+			</div>
 		</div>
 	{/if}
 </div>
@@ -498,14 +500,19 @@
 	}
 
 	.board {
-		display: flex;
-		flex-direction: row;
-		gap: 0.75rem;
-		padding: 1.5rem;
 		overflow-x: auto;
 		overflow-y: hidden;
 		height: 100%;
+	}
+
+	.board-inner {
+		display: inline-flex;
+		flex-direction: row;
+		min-width: 100%;
+		gap: 0.75rem;
+		padding: 1.5rem;
 		align-items: flex-start;
+		justify-content: center;
 		box-sizing: border-box;
 	}
 
