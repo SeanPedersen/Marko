@@ -113,7 +113,7 @@
                                 ? part
                                 : part.charAt(0);
                         })
-                        .join(" / ");
+                        .join("/");
                     return { root, dir: collapsedDir, filename };
                 }
                 return { root, dir: "", filename };
@@ -130,7 +130,7 @@
                             ? part
                             : part.charAt(0);
                     })
-                    .join(" / ");
+                    .join("/");
                 return { root: "", dir: collapsedDir, filename };
             }
 
@@ -222,24 +222,7 @@
         {/if}
 
         {#if displayPath}
-            <div class="file-path">
-                {#if displayPath.root}
-                    <span class="path-root">{displayPath.root}</span>
-                    <span class="path-separator"> / </span>
-                {/if}
-                {#if displayPath.dir}
-                    <span class="path-dir">{displayPath.dir}</span>
-                    <span class="path-separator"> / </span>
-                {/if}
-                <span class="path-filename">{displayPath.filename}</span>
-                {#if gitStatus}
-                    {@const badge = gitBadge(gitStatus)}
-                    <span
-                        class="git-status-badge {badge.cssClass}"
-                        title="Git: {gitStatus}">{badge.letter}</span
-                    >
-                {/if}
-            </div>
+            <div class="file-path">{#if displayPath.root}<span class="path-root">{displayPath.root}</span><span class="path-separator">/</span>{/if}{#if displayPath.dir}<span class="path-dir">{displayPath.dir}</span><span class="path-separator">/</span>{/if}<span class="path-filename">{displayPath.filename}</span>{#if gitStatus}{@const badge = gitBadge(gitStatus)}<span class="git-status-badge {badge.cssClass}" title="Git: {gitStatus}">{badge.letter}</span>{/if}</div>
         {/if}
 
         {#if isKanban && ontogglerawmode}
@@ -414,7 +397,7 @@
     .file-path {
         display: flex;
         align-items: center;
-        gap: 2px;
+        gap: 0;
         font-family:
             "Monaco", "Menlo", "Ubuntu Mono", "SF Mono", "JetBrains Mono",
             "Fira Code", monospace;
@@ -441,10 +424,10 @@
     }
 
     .path-separator {
-        color: var(--color-border-default);
-        opacity: 0.6;
-        margin: 0 1px;
+        color: var(--color-fg-muted);
+        opacity: 0.8;
         font-weight: 400;
+        padding: 0 3px;
     }
 
     .path-filename {
