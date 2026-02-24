@@ -87,6 +87,18 @@
 
 			// Keymaps
 			keymap.of([
+				// Override selectAll so head stays at 0 (cursor at top) — prevents the
+				// view from scrolling to the bottom after Cmd/Ctrl+A.
+				{
+					key: 'Mod-a',
+					run: (view) => {
+						view.dispatch({
+							selection: { anchor: view.state.doc.length, head: 0 },
+							userEvent: 'select',
+						});
+						return true;
+					},
+				},
 				...defaultKeymap,
 				...historyKeymap,
 				indentWithTab,
