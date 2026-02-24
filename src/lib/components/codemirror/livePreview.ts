@@ -2050,3 +2050,46 @@ export const livePreviewStyles = EditorView.baseTheme({
 export function livePreview() {
   return [livePreviewPlugin, tableDecorationField, livePreviewStyles];
 }
+
+// Lightweight URL detection for plain text files (no markdown parsing)
+function buildPlainUrlDecorations(view: EditorView): DecorationSet {
+  const urls = findPlainUrls(view, []);
+  const cursorPos = view.state.selection.main.head;
+  const decorations: Range<Decoration>[] = [];
+
+  for (const el of urls) {
+    if (el.text === undefined || el.url === undefined) continue;
+    const cursorInside = cursorPos >= el.from && cursorPos <= el.to;
+    if (!cursorInside) {
+      decorations.push(
+        Decoration.replace({
+          widget: new LinkWidget(el.text, el.url, false),
+        }).range(el.from, el.to)
+      );
+    }
+  }
+
+  decorations.sort((a, b) => a.from - b.from);
+  return Decoration.set(decorations);
+}
+
+const plainUrlPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildPlainUrlDecorations(view);
+    }
+
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.viewportChanged || update.selectionSet) {
+        this.decorations = buildPlainUrlDecorations(update.view);
+      }
+    }
+  },
+  { decorations: (v) => v.decorations }
+);
+
+export function plainUrlDetection() {
+  return [plainUrlPlugin, livePreviewStyles];
+}

@@ -7,7 +7,7 @@
 	import { languages } from '@codemirror/language-data';
 	import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language';
 	import { createTheme } from './codemirror/theme.js';
-	import { livePreview } from './codemirror/livePreview.js';
+	import { livePreview, plainUrlDetection } from './codemirror/livePreview.js';
 	import { wikiLinkCompletion, fileIndexFacet, fileIndexCompartment, updateFileIndex } from './codemirror/wikiLinkCompletion.js';
 	import type { FileIndex } from '$lib/utils/wikiLinks';
 	import type { Extension } from '@codemirror/state';
@@ -142,6 +142,8 @@
 				wikiLinkCompletion(),
 				fileIndexCompartment.of(fileIndexFacet.of(fileIndex)),
 			);
+		} else if (fileType === 'text') {
+			extensions.push(plainUrlDetection());
 		}
 
 		return extensions;
