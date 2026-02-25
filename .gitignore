@@ -1,5 +1,6 @@
 .DS_Store
 node_modules
+.vscode
 /build
 /.svelte-kit
 /package
@@ -12,4 +13,3 @@ test.md
 test_image.png
 src-tauri/output.txt
 test_obsidian.md
-
