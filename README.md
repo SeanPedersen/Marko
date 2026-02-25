@@ -1,18 +1,19 @@
 
 # Marko
 
-A simple, lightweight WYSIWYG Markdown editor for Windows, macOS, and Linux.
+A simple, lightweight WYSIWYG Markdown editor for Windows, macOS and Linux.
 
 ## Features
 
 - WYSIWYG Markdown inline editor (CodeMirror)
 - Open and view folders (file tree in sidebar)
+- Obsidian Kanban plugin support
+- Obsidian like file linking syntax: [[file_name]]
 - Basic git integration (commit, revert, pull+push)
 - Tabbed interface
-- Obsidian like file linking syntax: [[file_name]]
-- Lightweight native UI
-- Free and open-source
-- No telemetry or bloat
+- CLI support: `marko .` or `marko file.md`
+- Lightweight native UI (Tauri v2)
+- Free and open-source. No telemetry or bloat.
 
 ## Install
 
@@ -35,6 +36,10 @@ Right click on a markdown file and select "Open with" and select the downloaded 
 - Run `npm run tauri build` to build the installer
 - Repeat the steps above to set the executable as the default program to open `.md` files
 
-## Based on
+## References
 
-[MarkPad](https://github.com/alecdotdev/Markpad) by Alec Ames
+Based on: [MarkPad](https://github.com/alecdotdev/Markpad) by Alec Ames
+
+Similar projects:
+- <https://github.com/ajkdrag/otterly>
+- <https://github.com/Keshav-writes-code/Cherit>
