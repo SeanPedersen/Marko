@@ -544,6 +544,7 @@ const headingDecorations = [
   Decoration.line({ class: 'cm-live-h6' }),
 ];
 
+const normalizeHeadingDecoration = Decoration.line({ class: 'cm-live-normalize-heading' });
 const codeBlockLineDecoration = Decoration.line({ class: 'cm-live-code-block-line' });
 const blockquoteLineDecoration = Decoration.line({ class: 'cm-live-blockquote-line' });
 // List item decorations with indent levels
@@ -916,6 +917,13 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
           const level = name === 'SetextHeading1' ? 1 : 2;
           // Setext headings: text on first line, === or --- on second line
           const endLineObj = doc.lineAt(to);
+          const markerText = doc.sliceString(endLineObj.from, endLineObj.to).trim();
+          // A single '-' is ambiguous with a list item start — reset heading styling
+          if (markerText === '-') {
+            const firstLineObj = doc.lineAt(from);
+            elements.push({ type: 'normalizeHeading', from, to, line: firstLineObj.number });
+            break;
+          }
           elements.push({
             type: 'heading',
             from,
@@ -1380,6 +1388,15 @@ function buildDecorations(view: EditorView): DecorationSet {
       : cursorInElement;
 
     switch (el.type) {
+      case 'normalizeHeading': {
+        // Reset heading token styles on both lines of the setext heading
+        const firstLineObj = view.state.doc.lineAt(el.from);
+        const secondLineObj = view.state.doc.lineAt(el.to);
+        decorations.push(normalizeHeadingDecoration.range(firstLineObj.from));
+        decorations.push(normalizeHeadingDecoration.range(secondLineObj.from));
+        break;
+      }
+
       case 'heading': {
         // Add line decoration for heading style
         const lineObj = view.state.doc.lineAt(el.from);
@@ -1792,6 +1809,13 @@ export const livePreviewStyles = EditorView.baseTheme({
   // Hide syntax markers
   '.cm-hide': {
     display: 'none',
+  },
+
+  // Reset heading token styles when a setext marker is a single '-'
+  // !important needed to beat HighlightStyle's direct token-level font-size
+  '.cm-live-normalize-heading span': {
+    fontSize: '1em !important',
+    fontWeight: 'normal !important',
   },
 
   // Headings - use line-height for spacing instead of margins
