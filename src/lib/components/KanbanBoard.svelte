@@ -501,6 +501,8 @@
 			onpointerup={onCardPointerUp}
 		>
 			<div class="board-inner">
+			{#if !readonly}<div class="add-column-spacer" aria-hidden="true"></div>{/if}
+			<div class="columns-group">
 			{#each columns as col, colIdx (col.name + colIdx)}
 				<div
 					class="column"
@@ -614,6 +616,7 @@
 					{/if}
 				</div>
 			{/each}
+			</div>
 
 			{#if !readonly}
 				<div class="column add-column">
@@ -689,6 +692,20 @@
 		align-items: flex-start;
 		justify-content: center;
 		box-sizing: border-box;
+	}
+
+	/* Invisible counterweight so the add-column doesn't shift the center */
+	.add-column-spacer {
+		width: 280px;
+		flex-shrink: 0;
+		pointer-events: none;
+	}
+
+	.columns-group {
+		display: flex;
+		flex-direction: row;
+		gap: 0.75rem;
+		align-items: flex-start;
 	}
 
 	.board.dragging-active {
