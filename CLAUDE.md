@@ -40,7 +40,8 @@ src/
 │   │   ├── HomePage.svelte           # Start screen (recent files/folders)
 │   │   ├── Modal.svelte              # Confirmation dialog (save/discard/cancel)
 │   │   ├── SettingsModal.svelte      # Settings dialog (editor width, sidebar position, CLI install)
-│   │   ├── KanbanBoard.svelte        # Kanban board UI (Obsidian-compatible, replaces editor for kanban files)
+│   │   ├── KanbanBoard.svelte        # Kanban board UI (Obsidian + Marko extended format)
+│   │   ├── CardDetailPane.svelte     # Card detail modal (editable title + CodeMirror body editor)
 │   │   └── ContextMenu.svelte        # Right-click context menu
 │   ├── stores/
 │   │   ├── tabs.svelte.ts            # TabManager class: tab CRUD, navigation history, dirty state
@@ -49,7 +50,8 @@ src/
 │       ├── debounce.ts               # Typed debounce with call()/cancel()
 │       ├── parseHeadings.ts          # Extract headings from markdown (with line numbers)
 │       ├── frontmatter.ts            # YAML frontmatter parser
-│       ├── kanban.ts                 # Kanban board parsing/serialization (Obsidian format)
+│       ├── kanban.ts                 # Shared kanban types, single-pass parser, Obsidian serializer
+│       ├── markoKanban.ts            # Marko-extended serializer (card bodies, marko-kanban-plugin key)
 │       └── wikiLinks.ts              # Wiki-link utilities (file index, resolution, fuzzy matching)
 ```
 
@@ -84,6 +86,27 @@ src/
 - Missing file handling: prompts user to create new file when clicking non-existent link
 - `FileIndex` type indexes all markdown files by basename and filename for fast lookup
 - `resolveWikiLink()` returns `found | not-found | ambiguous` status with path or candidates
+
+### Kanban Board (`src/lib/components/KanbanBoard.svelte`)
+- Replaces the editor for files detected as kanban (frontmatter `kanban-plugin: board` or `marko-kanban-plugin: board`)
+- **Format detection**: `detectKanbanFormat()` returns `'obsidian'` or `'marko'`; `commit()` auto-upgrades to Marko format on first card body save
+- **Inline editing**: shared CodeMirror instance overlays the card; Mod+Enter commits, Escape cancels; typing `\n---\n` splits content into title + body at commit time
+- **Card detail modal**: clicking a card's body footer opens `CardDetailPane`; `openPane`/`closePane` manage `paneCard` state; closing commits only if title or body changed
+- **Card delete**: confirmation modal before splice (mirrors column-delete flow)
+- **Card footer**: shows first non-empty line of body, CSS `text-overflow: ellipsis`, full-width clickable button
+
+### CardDetailPane (`src/lib/components/CardDetailPane.svelte`)
+- Centered modal overlay (660px wide, 62vh), `fly={{ y: 12 }}` entrance transition
+- Editable title input at top; full CodeMirror editor for body below
+- On mount: focuses the CodeMirror body editor (`editorRef.focus()`)
+- Escape (captured at document level) and backdrop click both call `onclose(title, body)`
+- Parent (`KanbanBoard`) diffs title + body against original and only commits if changed
+
+### Kanban Format Split
+- **`kanban.ts`**: `KanbanCard` (with `body`), `KanbanColumn`, `KanbanFormat`, `createCard`, `detectKanbanFormat`, `parseKanban` (single-pass state machine handles both formats), `serializeKanban` (Obsidian-compatible: `kanban-plugin`, `\n\n` separator, no bodies)
+- **`markoKanban.ts`**: `upgradeToMarko` (rewrites frontmatter key), `serializeMarkoKanban` (bodies via `---`, `\n\n\n` column separator, `marko-kanban-plugin` settings key)
+- **Format rule**: `## ` inside a card body is safe as long as it is NOT preceded by 2+ blank lines (which signals a new column)
+- **Backward compat**: Obsidian files parse and round-trip without change; upgrade is one-way and triggered automatically
 
 ### Git Integration
 - **Backend**: Three Rust commands using `git2` crate in `src-tauri/src/lib.rs`:
