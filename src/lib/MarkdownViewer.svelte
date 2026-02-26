@@ -63,9 +63,16 @@
 
 	// Wiki-links: track all markdown files in the current folder
 	let allMarkdownFiles = $state<string[]>([]);
+	let currentFileDir = $derived(
+		currentFile
+			? currentFile.substring(0, Math.max(currentFile.lastIndexOf('/'), currentFile.lastIndexOf('\\')))
+			: ''
+	);
+	let indexRoot = $derived(currentFileDir);
+
 	let fileIndex = $derived<FileIndex>(
-		currentFolder
-			? buildFileIndex(allMarkdownFiles, currentFolder)
+		indexRoot
+			? buildFileIndex(allMarkdownFiles, indexRoot)
 			: { entries: [], byBasename: new Map(), byFilename: new Map() }
 	);
 
@@ -696,7 +703,7 @@
 			const detail = (e as CustomEvent<{ target: string; newTab?: boolean }>).detail;
 			if (!detail?.target) return;
 
-			const result = resolveWikiLink(detail.target, fileIndex, currentFile, currentFolder);
+			const result = resolveWikiLink(detail.target, fileIndex, currentFile, indexRoot);
 			const openInNewTab = detail.newTab ?? false;
 
 			if (result.status === 'found' && result.path) {
@@ -724,6 +731,36 @@
 
 		document.addEventListener('marko:wiki-link', handleWikiLink);
 		unlisteners.push(() => document.removeEventListener('marko:wiki-link', handleWikiLink));
+
+		// Handle regular markdown link clicks from the live preview ([text](url))
+		const handleLink = async (e: Event) => {
+			const detail = (e as CustomEvent<{ url: string; newTab?: boolean }>).detail;
+			if (!detail?.url) return;
+
+			const rawUrl = detail.url;
+			if (rawUrl.startsWith('#')) return;
+
+			const isMarkdown = ['.md', '.markdown', '.mdown', '.mkd'].some((ext) => {
+				const urlNoHash = rawUrl.split('#')[0].split('?')[0];
+				return urlNoHash.toLowerCase().endsWith(ext);
+			});
+
+			if (isMarkdown && !rawUrl.match(/^[a-z]+:\/\//i)) {
+				const urlNoHash = rawUrl.split('#')[0].split('?')[0];
+				const resolved = resolvePath(currentFile, urlNoHash);
+				await loadMarkdown(resolved, { navigate: !detail.newTab, newTab: detail.newTab ?? false });
+				return;
+			}
+
+			try {
+				await openUrl(rawUrl);
+			} catch (err) {
+				console.error('Failed to open URL:', rawUrl, err);
+			}
+		};
+
+		document.addEventListener('marko:link', handleLink);
+		unlisteners.push(() => document.removeEventListener('marko:link', handleLink));
 
 		invoke('show_window').catch(console.error);
 
@@ -905,12 +942,12 @@
 		}
 	});
 
-	// Collect markdown files for wiki-link autocomplete when folder changes or refreshes
+	// Collect markdown files for wiki-link autocomplete from the current file's directory.
 	$effect(() => {
-		const folder = currentFolder;
+		const root = indexRoot;
 		const _ = folderRefreshKey; // Also react to folder refresh
-		if (folder) {
-			collectMarkdownFiles(folder).then(files => {
+		if (root) {
+			collectMarkdownFiles(root).then(files => {
 				allMarkdownFiles = files;
 			});
 		} else {

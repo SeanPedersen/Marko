@@ -146,9 +146,19 @@ class LinkWidget extends WidgetType {
     span.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      import('@tauri-apps/plugin-opener').then(({ openUrl }) => {
-        openUrl(this.url).catch(console.error);
-      });
+      span.dispatchEvent(new CustomEvent('marko:link', {
+        bubbles: true,
+        detail: { url: this.url, newTab: false },
+      }));
+    });
+    span.addEventListener('auxclick', (e) => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      e.stopPropagation();
+      span.dispatchEvent(new CustomEvent('marko:link', {
+        bubbles: true,
+        detail: { url: this.url, newTab: true },
+      }));
     });
 
     if (this.showUrlPreview) {
