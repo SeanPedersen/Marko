@@ -99,6 +99,79 @@ const baseTheme = EditorView.theme({
   '.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionMatchedText': {
     color: '#ffffff',
   },
+  // Search panel
+  '.cm-panels': {
+    backgroundColor: 'var(--color-canvas-subtle)',
+    borderTop: '1px solid var(--color-border-default)',
+    color: 'var(--color-fg-default)',
+  },
+  '.cm-search': {
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '6px',
+    padding: '8px 12px',
+    fontSize: '13px',
+  },
+  '.cm-textfield': {
+    backgroundColor: 'var(--color-canvas-default)',
+    color: 'var(--color-fg-default)',
+    border: '1px solid var(--color-border-default)',
+    borderRadius: '6px',
+    padding: '4px 8px',
+    fontSize: '13px',
+    outline: 'none',
+    minWidth: '160px',
+  },
+  '.cm-textfield:focus': {
+    borderColor: 'var(--color-accent-fg)',
+    boxShadow: '0 0 0 2px color-mix(in srgb, var(--color-accent-fg) 25%, transparent)',
+  },
+  '.cm-button': {
+    backgroundImage: 'none',
+    backgroundColor: 'var(--color-canvas-default)',
+    color: 'var(--color-fg-default)',
+    border: '1px solid var(--color-border-default)',
+    borderRadius: '6px',
+    padding: '4px 10px',
+    fontSize: '13px',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  '.cm-button:hover': {
+    backgroundColor: 'var(--color-neutral-muted)',
+  },
+  '.cm-search button[name="close"]': {
+    backgroundColor: 'transparent',
+    color: 'var(--color-fg-muted)',
+    border: 'none',
+    padding: '4px 6px',
+    marginLeft: 'auto',
+    cursor: 'pointer',
+    fontSize: '16px',
+  },
+  '.cm-search button[name="close"]:hover': {
+    color: 'var(--color-fg-default)',
+    backgroundColor: 'transparent',
+  },
+  '.cm-search label': {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    cursor: 'pointer',
+    color: 'var(--color-fg-muted)',
+    fontSize: '12px',
+  },
+  '.cm-searchMatch': {
+    backgroundColor: 'color-mix(in srgb, var(--color-accent-fg) 20%, transparent)',
+    outline: '1px solid color-mix(in srgb, var(--color-accent-fg) 50%, transparent)',
+    borderRadius: '2px',
+  },
+  '.cm-searchMatch.cm-searchMatch-selected': {
+    backgroundColor: 'color-mix(in srgb, var(--color-accent-fg) 45%, transparent)',
+    outline: '1px solid var(--color-accent-fg)',
+  },
+
   // Completion icon (file type)
   '.cm-completionIcon': {
     fontSize: '14px',

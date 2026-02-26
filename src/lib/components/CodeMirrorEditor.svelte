@@ -3,6 +3,7 @@
 	import { EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine, rectangularSelection, ViewPlugin } from '@codemirror/view';
 	import { EditorState, Compartment } from '@codemirror/state';
 	import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+	import { search, searchKeymap } from '@codemirror/search';
 	import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 	import { languages } from '@codemirror/language-data';
 	import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language';
@@ -99,10 +100,35 @@
 						return true;
 					},
 				},
+				...searchKeymap,
 				...defaultKeymap,
 				...historyKeymap,
 				indentWithTab,
 			]),
+
+			// Search panel (Cmd/Ctrl+F)
+			search({ top: false }),
+
+			// Disable system autocorrect/suggestions on search panel inputs
+			ViewPlugin.fromClass(class {
+				observer: MutationObserver;
+				constructor(view: EditorView) {
+					this.observer = new MutationObserver(() => this.disableSuggestions(view));
+					this.observer.observe(view.dom, { childList: true, subtree: true });
+					this.disableSuggestions(view);
+				}
+				disableSuggestions(view: EditorView) {
+					view.dom.querySelectorAll('.cm-textfield').forEach((el) => {
+						const input = el as HTMLInputElement;
+						if (input.getAttribute('autocomplete') === 'off') return;
+						input.setAttribute('autocomplete', 'off');
+						input.setAttribute('autocorrect', 'off');
+						input.setAttribute('autocapitalize', 'off');
+						input.setAttribute('spellcheck', 'false');
+					});
+				}
+				destroy() { this.observer.disconnect(); }
+			}),
 
 			// Custom theme
 			themeCompartment.of(createTheme()),
@@ -338,6 +364,13 @@
 		max-width: var(--editor-max-width, 720px);
 		margin: 0 auto;
 	}
+
+  /* Reset native appearance on search panel controls */
+  .codemirror-container :global(.cm-button),
+  .codemirror-container :global(.cm-textfield) {
+    -webkit-appearance: none;
+    appearance: none;
+  }
 
   /* Selection styling (uses CSS variables so theme can override) */
   .codemirror-container :global(.cm-selectionBackground) {
