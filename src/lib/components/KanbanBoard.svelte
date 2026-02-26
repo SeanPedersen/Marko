@@ -1,7 +1,16 @@
 <script lang="ts">
+	import { onMount, onDestroy, tick } from 'svelte';
 	import { parseKanban, serializeKanban, type KanbanColumn } from '$lib/utils/kanban.js';
 	import CodeMirrorEditor from './CodeMirrorEditor.svelte';
 	import Modal from './Modal.svelte';
+	import { parseInline } from 'marked';
+	import DOMPurify from 'dompurify';
+	import { EditorView, keymap } from '@codemirror/view';
+	import { EditorState } from '@codemirror/state';
+	import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+	import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+	import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+	import { createTheme } from './codemirror/theme.js';
 
 	let {
 		content = '',
@@ -42,11 +51,17 @@
 
 	// Inline card editing
 	let editingCard = $state<{ colIdx: number; cardIdx: number } | null>(null);
-	let editingText = $state('');
+	let editingText = '';
 
 	// Add column state
 	let addingColumn = $state(false);
 	let newColumnName = $state('');
+
+	// Shared CodeMirror instance for card editing
+	let sharedEditorEl: HTMLDivElement;
+	let sharedView: EditorView | null = null;
+	let editorPos = $state({ left: 0, top: 0, width: 280 });
+	let editorVisible = $state(false);
 
 	// Parse content whenever it changes externally (but not when rawMode is active)
 	let prevContent = '';
@@ -63,6 +78,92 @@
 		const serialized = serializeKanban(columns, frontmatter);
 		prevContent = serialized;
 		onchange(serialized);
+	}
+
+	// --- Markdown rendering ---
+
+	function renderCardMarkdown(text: string): string {
+		const html = parseInline(text) as string;
+		return DOMPurify.sanitize(html, {
+			ALLOWED_TAGS: ['strong', 'em', 'code', 'del', 's', 'a', 'br'],
+		});
+	}
+
+	// --- Shared CodeMirror editor ---
+
+	onMount(() => {
+		initSharedEditor();
+	});
+
+	onDestroy(() => {
+		sharedView?.destroy();
+		sharedView = null;
+	});
+
+	function initSharedEditor() {
+		const state = EditorState.create({
+			doc: '',
+			extensions: [
+				history(),
+				EditorView.lineWrapping,
+				keymap.of([
+					{ key: 'Enter', run: () => { commitEditCard(); return true; } },
+					{ key: 'Escape', run: () => { cancelEditCard(); return true; } },
+					...defaultKeymap,
+					...historyKeymap,
+				]),
+				markdown({ base: markdownLanguage }),
+				syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+				createTheme(),
+				EditorView.updateListener.of((update) => {
+					if (update.docChanged) editingText = update.state.doc.toString();
+				}),
+			],
+		});
+
+		sharedView = new EditorView({ state, parent: sharedEditorEl });
+	}
+
+	async function startEditCard(colIdx: number, cardIdx: number) {
+		if (readonly) return;
+		editingCard = { colIdx, cardIdx };
+		const text = columns[colIdx].cards[cardIdx].text;
+		editingText = text;
+
+		await tick();
+
+		const cardEl = document.querySelector<HTMLElement>(
+			`[data-col-idx="${colIdx}"][data-card-idx="${cardIdx}"]`
+		);
+		if (!cardEl || !sharedView) return;
+
+		const rect = cardEl.getBoundingClientRect();
+		editorPos = { left: rect.left, top: rect.top, width: rect.width };
+
+		sharedView.dispatch({
+			changes: { from: 0, to: sharedView.state.doc.length, insert: text },
+			selection: { anchor: 0, head: text.length },
+		});
+		editorVisible = true;
+		sharedView.focus();
+	}
+
+	function commitEditCard() {
+		if (!editingCard) return;
+		const trimmed = editingText.trim();
+		if (trimmed) {
+			columns[editingCard.colIdx].cards[editingCard.cardIdx].text = trimmed;
+			commit();
+		}
+		editorVisible = false;
+		editingCard = null;
+		editingText = '';
+	}
+
+	function cancelEditCard() {
+		editorVisible = false;
+		editingCard = null;
+		editingText = '';
 	}
 
 	// --- Pointer drag & drop ---
@@ -175,34 +276,12 @@
 		dropTarget = null;
 	}
 
-	// --- Card editing ---
+	// --- Card actions ---
 
 	function deleteCard(colIdx: number, cardIdx: number) {
 		if (readonly) return;
 		columns[colIdx].cards.splice(cardIdx, 1);
 		commit();
-	}
-
-	function startEditCard(colIdx: number, cardIdx: number) {
-		if (readonly) return;
-		editingCard = { colIdx, cardIdx };
-		editingText = columns[colIdx].cards[cardIdx].text;
-	}
-
-	function commitEditCard() {
-		if (!editingCard) return;
-		const trimmed = editingText.trim();
-		if (trimmed) {
-			columns[editingCard.colIdx].cards[editingCard.cardIdx].text = trimmed;
-			commit();
-		}
-		editingCard = null;
-		editingText = '';
-	}
-
-	function cancelEditCard() {
-		editingCard = null;
-		editingText = '';
 	}
 
 	// --- Add card ---
@@ -279,7 +358,7 @@
 		frontmatter = parsed.frontmatter;
 	}
 
-	// --- Autoresize textarea action ---
+	// --- Autoresize textarea action (add-card form) ---
 
 	function autoresize(node: HTMLTextAreaElement) {
 		const resize = () => {
@@ -292,11 +371,6 @@
 	}
 
 	// --- Keyboard helpers ---
-
-	function handleCardKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter') { e.preventDefault(); commitEditCard(); }
-		if (e.key === 'Escape') cancelEditCard();
-	}
 
 	function handleNewCardKeydown(e: KeyboardEvent) {
 		if (e.key === 'Enter') { e.preventDefault(); commitAddCard(); }
@@ -318,6 +392,18 @@
 	onconfirm={confirmColumnDelete}
 	oncancel={() => { confirmDeleteCol = null; }}
 />
+
+<!-- Shared CodeMirror instance for card editing (always mounted, hidden when inactive) -->
+<div bind:this={sharedEditorEl} class="shared-card-editor" class:visible={editorVisible}
+	style:left="{editorPos.left}px"
+	style:top="{editorPos.top}px"
+	style:width="{editorPos.width}px"
+></div>
+
+<!-- Backdrop: commits on outside click -->
+{#if editorVisible}
+	<div class="editor-backdrop" onpointerdown={commitEditCard} role="presentation"></div>
+{/if}
 
 <div class="kanban-wrapper">
 	{#if rawMode}
@@ -375,6 +461,7 @@
 						<div class="cards">
 							{#each col.cards as card, cardIdx (card.id)}
 								{@const isSrc = dragSrc?.colIdx === colIdx && dragSrc?.cardIdx === cardIdx}
+								{@const isEditing = editingCard?.colIdx === colIdx && editingCard?.cardIdx === cardIdx}
 								{@const insertBefore = dropTarget?.colIdx === colIdx && dropTarget?.insertIdx === cardIdx}
 
 								{#if insertBefore}
@@ -384,37 +471,27 @@
 								<div
 									class="card"
 									class:is-src={isSrc}
+									class:is-editing={isEditing}
 									data-col-idx={colIdx}
 									data-card-idx={cardIdx}
 									role="listitem"
 									onpointerdown={(e) => onCardPointerDown(e, colIdx, cardIdx)}
 								>
-									{#if editingCard?.colIdx === colIdx && editingCard?.cardIdx === cardIdx}
-										<!-- svelte-ignore a11y_autofocus -->
-										<textarea
-											class="card-edit-input"
-											use:autoresize
-											bind:value={editingText}
-											onkeydown={handleCardKeydown}
-											onblur={commitEditCard}
-											autofocus
-										></textarea>
-									{:else}
-										<span
-											class="card-text"
-											role="button"
-											tabindex={readonly ? -1 : 0}
-											ondblclick={() => startEditCard(colIdx, cardIdx)}
-											onkeydown={(e) => { if (e.key === 'Enter') startEditCard(colIdx, cardIdx); }}
-										>{card.text}</span>
-										{#if !readonly}
-											<button
-												class="card-delete"
-												onclick={() => deleteCard(colIdx, cardIdx)}
-												title="Delete card"
-												aria-label="Delete card"
-											>✕</button>
-										{/if}
+									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+									<span
+										class="card-text"
+										role="button"
+										tabindex={readonly ? -1 : 0}
+										ondblclick={() => startEditCard(colIdx, cardIdx)}
+										onkeydown={(e) => { if (e.key === 'Enter') startEditCard(colIdx, cardIdx); }}
+									>{@html renderCardMarkdown(card.text)}</span>
+									{#if !readonly}
+										<button
+											class="card-delete"
+											onclick={() => deleteCard(colIdx, cardIdx)}
+											title="Delete card"
+											aria-label="Delete card"
+										>✕</button>
 									{/if}
 								</div>
 							{/each}
@@ -615,6 +692,11 @@
 		opacity: 0.35;
 	}
 
+	/* Hide card content while shared editor overlays it */
+	.card.is-editing {
+		visibility: hidden;
+	}
+
 	.drop-line {
 		height: 3px;
 		border-radius: 2px;
@@ -631,6 +713,26 @@
 		word-break: break-word;
 		letter-spacing: -0.01em;
 		flex: 1;
+	}
+
+	/* Markdown rendered inside cards */
+	.card-text :global(strong) { font-weight: 650; }
+	.card-text :global(em) { font-style: italic; }
+	.card-text :global(del),
+	.card-text :global(s) { text-decoration: line-through; }
+	.card-text :global(code) {
+		font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+		font-size: 11px;
+		background: var(--color-neutral-muted);
+		padding: 1px 4px;
+		border-radius: 3px;
+	}
+	.card-text :global(a) {
+		color: var(--color-accent-fg);
+		text-decoration: none;
+	}
+	.card-text :global(a:hover) {
+		text-decoration: underline;
 	}
 
 	.card-delete {
@@ -654,6 +756,57 @@
 	.card-delete:hover {
 		color: #cf222e;
 		background: color-mix(in srgb, #cf222e 10%, transparent);
+	}
+
+	/* Shared CodeMirror card editor */
+	.shared-card-editor {
+		display: none;
+		position: fixed;
+		z-index: 1000;
+		background: var(--color-canvas-default);
+		border: 1px solid var(--color-accent-fg);
+		border-radius: 6px;
+		padding: 0.375rem 0.5rem;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+		box-sizing: border-box;
+		min-height: 36px;
+		-webkit-user-select: text;
+		user-select: text;
+	}
+
+	.shared-card-editor.visible {
+		display: block;
+	}
+
+	.shared-card-editor :global(.cm-editor) {
+		outline: none;
+	}
+
+	.shared-card-editor :global(.cm-scroller) {
+		padding: 0;
+		max-height: 180px;
+		overflow-y: auto;
+	}
+
+	.shared-card-editor :global(.cm-content) {
+		font-size: 13px;
+		font-weight: 450;
+		font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+		letter-spacing: -0.01em;
+		line-height: 1.45;
+		padding: 0;
+		min-height: 20px;
+	}
+
+	.shared-card-editor :global(.cm-line) {
+		padding: 0;
+	}
+
+	/* Backdrop to catch outside-click commits */
+	.editor-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 999;
 	}
 
 	.card-edit-input {
