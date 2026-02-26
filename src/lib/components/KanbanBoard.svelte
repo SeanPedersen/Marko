@@ -706,6 +706,7 @@
 		flex-direction: row;
 		gap: 0.75rem;
 		align-items: flex-start;
+		height: 100%;
 	}
 
 	.board.dragging-active {
