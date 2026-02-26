@@ -140,6 +140,12 @@
 				markdown({ base: markdownLanguage }),
 				syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
 				createTheme(),
+				EditorView.contentAttributes.of({
+					autocomplete: 'off',
+					autocorrect: 'off',
+					autocapitalize: 'off',
+					spellcheck: 'false',
+				}),
 				EditorView.updateListener.of((update) => {
 					if (update.docChanged) editingText = update.state.doc.toString();
 				}),
@@ -603,6 +609,10 @@
 										onkeydown={handleNewCardKeydown}
 										onblur={commitAddCard}
 										autofocus
+										autocomplete="off"
+										autocorrect="off"
+										autocapitalize="off"
+										spellcheck="false"
 									></textarea>
 								</div>
 							{/if}
@@ -630,6 +640,10 @@
 								onkeydown={handleNewColumnKeydown}
 								onblur={commitAddColumn}
 								autofocus
+								autocomplete="off"
+								autocorrect="off"
+								autocapitalize="off"
+								spellcheck="false"
 							/>
 						</div>
 					{:else}
