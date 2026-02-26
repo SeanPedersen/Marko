@@ -40,7 +40,9 @@
 	let isKanban = $derived.by(() => {
 		if (currentFileType !== 'markdown') return false;
 		const { fields } = parseFrontmatter(tabManager.activeTab?.rawContent ?? '');
-		return fields.some((f) => f.key === 'kanban-plugin' && f.value === 'board');
+		return fields.some(
+			(f) => (f.key === 'kanban-plugin' || f.key === 'marko-kanban-plugin') && f.value === 'board'
+		);
 	});
 	let kanbanRawMode = $state(false);
 	$effect(() => { if (!isKanban) kanbanRawMode = false; });

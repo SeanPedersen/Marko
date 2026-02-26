@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
-	import { parseKanban, serializeKanban, type KanbanColumn } from '$lib/utils/kanban.js';
+	import { parseKanban, serializeKanban, detectKanbanFormat, createCard, type KanbanColumn, type KanbanFormat } from '$lib/utils/kanban.js';
+	import { serializeMarkoKanban, upgradeToMarko } from '$lib/utils/markoKanban.js';
 	import CodeMirrorEditor from './CodeMirrorEditor.svelte';
+	import CardDetailPane from './CardDetailPane.svelte';
 	import Modal from './Modal.svelte';
 	import { parseInline } from 'marked';
 	import DOMPurify from 'dompurify';
@@ -28,6 +30,7 @@
 
 	let columns = $state<KanbanColumn[]>([]);
 	let frontmatter = $state('');
+	let format = $state<KanbanFormat>('obsidian');
 
 	// Pointer-based drag state
 	let dragSrc = $state<{ colIdx: number; cardIdx: number } | null>(null);
@@ -45,6 +48,9 @@
 	// Column delete confirmation
 	let confirmDeleteCol = $state<number | null>(null);
 
+	// Card delete confirmation
+	let confirmDeleteCard = $state<{ colIdx: number; cardIdx: number } | null>(null);
+
 	// Add card state per column
 	let addingCard = $state<number | null>(null);
 	let newCardText = $state('');
@@ -52,6 +58,9 @@
 	// Inline card editing
 	let editingCard = $state<{ colIdx: number; cardIdx: number } | null>(null);
 	let editingText = '';
+
+	// Detail pane
+	let paneCard = $state<{ colIdx: number; cardIdx: number } | null>(null);
 
 	// Add column state
 	let addingColumn = $state(false);
@@ -70,14 +79,26 @@
 			const parsed = parseKanban(content);
 			columns = parsed.columns;
 			frontmatter = parsed.frontmatter;
+			format = detectKanbanFormat(content);
 			prevContent = content;
 		}
 	});
 
 	function commit() {
-		const serialized = serializeKanban(columns, frontmatter);
-		prevContent = serialized;
-		onchange(serialized);
+		const hasBody = columns.some((col) => col.cards.some((card) => card.body));
+		if (format === 'marko' || hasBody) {
+			if (format !== 'marko') {
+				format = 'marko';
+				frontmatter = upgradeToMarko(frontmatter);
+			}
+			const serialized = serializeMarkoKanban(columns, frontmatter);
+			prevContent = serialized;
+			onchange(serialized);
+		} else {
+			const serialized = serializeKanban(columns, frontmatter);
+			prevContent = serialized;
+			onchange(serialized);
+		}
 	}
 
 	// --- Markdown rendering ---
@@ -87,6 +108,10 @@
 		return DOMPurify.sanitize(html, {
 			ALLOWED_TAGS: ['strong', 'em', 'code', 'del', 's', 'a', 'br'],
 		});
+	}
+
+	function bodyPreview(body: string): string {
+		return body.split('\n').find((l) => l.trim()) ?? '';
 	}
 
 	// --- Shared CodeMirror editor ---
@@ -107,7 +132,7 @@
 				history(),
 				EditorView.lineWrapping,
 				keymap.of([
-					{ key: 'Enter', run: () => { commitEditCard(); return true; } },
+					{ key: 'Mod-Enter', run: () => { commitEditCard(); return true; } },
 					{ key: 'Escape', run: () => { cancelEditCard(); return true; } },
 					...defaultKeymap,
 					...historyKeymap,
@@ -150,10 +175,23 @@
 
 	function commitEditCard() {
 		if (!editingCard) return;
-		const trimmed = editingText.trim();
-		if (trimmed) {
-			columns[editingCard.colIdx].cards[editingCard.cardIdx].text = trimmed;
-			commit();
+		const raw = editingText;
+		const sepMatch = raw.match(/\n---\s*(\n|$)/);
+		const card = columns[editingCard.colIdx].cards[editingCard.cardIdx];
+		if (sepMatch && sepMatch.index !== undefined) {
+			const title = raw.slice(0, sepMatch.index).trim();
+			const body = raw.slice(sepMatch.index + sepMatch[0].length).trimEnd();
+			if (title) {
+				card.text = title;
+				card.body = body;
+				commit();
+			}
+		} else {
+			const trimmed = raw.trim();
+			if (trimmed) {
+				card.text = trimmed;
+				commit();
+			}
 		}
 		editorVisible = false;
 		editingCard = null;
@@ -164,6 +202,25 @@
 		editorVisible = false;
 		editingCard = null;
 		editingText = '';
+	}
+
+	// --- Detail pane ---
+
+	function openPane(colIdx: number, cardIdx: number) {
+		if (readonly) return;
+		if (editorVisible) cancelEditCard();
+		paneCard = { colIdx, cardIdx };
+	}
+
+	function closePane(updatedTitle: string, updatedBody: string) {
+		if (!paneCard) return;
+		const card = columns[paneCard.colIdx].cards[paneCard.cardIdx];
+		if (updatedTitle !== card.text || updatedBody !== card.body) {
+			card.text = updatedTitle;
+			card.body = updatedBody;
+			commit();
+		}
+		paneCard = null;
 	}
 
 	// --- Pointer drag & drop ---
@@ -280,7 +337,13 @@
 
 	function deleteCard(colIdx: number, cardIdx: number) {
 		if (readonly) return;
-		columns[colIdx].cards.splice(cardIdx, 1);
+		confirmDeleteCard = { colIdx, cardIdx };
+	}
+
+	function confirmCardDelete() {
+		if (!confirmDeleteCard) return;
+		columns[confirmDeleteCard.colIdx].cards.splice(confirmDeleteCard.cardIdx, 1);
+		confirmDeleteCard = null;
 		commit();
 	}
 
@@ -296,7 +359,7 @@
 		if (addingCard === null) return;
 		const trimmed = newCardText.trim();
 		if (trimmed) {
-			columns[addingCard].cards.push({ id: crypto.randomUUID(), text: trimmed, checked: false });
+			columns[addingCard].cards.push(createCard(trimmed));
 			commit();
 		}
 		addingCard = null;
@@ -356,6 +419,7 @@
 		const parsed = parseKanban(newContent);
 		columns = parsed.columns;
 		frontmatter = parsed.frontmatter;
+		format = detectKanbanFormat(newContent);
 	}
 
 	// --- Autoresize textarea action (add-card form) ---
@@ -391,6 +455,16 @@
 	confirmLabel="Delete"
 	onconfirm={confirmColumnDelete}
 	oncancel={() => { confirmDeleteCol = null; }}
+/>
+
+<Modal
+	show={confirmDeleteCard !== null}
+	title="Delete card"
+	message={confirmDeleteCard !== null ? `Delete "${columns[confirmDeleteCard.colIdx]?.cards[confirmDeleteCard.cardIdx]?.text}"?` : ''}
+	kind="warning"
+	confirmLabel="Delete"
+	onconfirm={confirmCardDelete}
+	oncancel={() => { confirmDeleteCard = null; }}
 />
 
 <!-- Shared CodeMirror instance for card editing (always mounted, hidden when inactive) -->
@@ -477,21 +551,37 @@
 									role="listitem"
 									onpointerdown={(e) => onCardPointerDown(e, colIdx, cardIdx)}
 								>
-									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-									<span
-										class="card-text"
-										role="button"
-										tabindex={readonly ? -1 : 0}
-										ondblclick={() => startEditCard(colIdx, cardIdx)}
-										onkeydown={(e) => { if (e.key === 'Enter') startEditCard(colIdx, cardIdx); }}
-									>{@html renderCardMarkdown(card.text)}</span>
-									{#if !readonly}
+									<div class="card-main">
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+										<span
+											class="card-text"
+											role="button"
+											tabindex={readonly ? -1 : 0}
+											ondblclick={() => startEditCard(colIdx, cardIdx)}
+											onkeydown={(e) => { if (e.key === 'Enter') startEditCard(colIdx, cardIdx); }}
+										>{@html renderCardMarkdown(card.text)}</span>
+										{#if !readonly && card.body}
+											<button
+												class="card-expand"
+												onclick={(e) => { e.stopPropagation(); openPane(colIdx, cardIdx); }}
+												title="Open details"
+												aria-label="Open card details"
+											>≡</button>
+										{/if}
+										{#if !readonly}
+											<button
+												class="card-delete"
+												onclick={() => deleteCard(colIdx, cardIdx)}
+												title="Delete card"
+												aria-label="Delete card"
+											>✕</button>
+										{/if}
+									</div>
+									{#if card.body}
 										<button
-											class="card-delete"
-											onclick={() => deleteCard(colIdx, cardIdx)}
-											title="Delete card"
-											aria-label="Delete card"
-										>✕</button>
+											class="card-footer"
+											onclick={(e) => { e.stopPropagation(); openPane(colIdx, cardIdx); }}
+										>{bodyPreview(card.body)}</button>
 									{/if}
 								</div>
 							{/each}
@@ -550,6 +640,15 @@
 		</div>
 	{/if}
 </div>
+
+{#if paneCard !== null}
+	<CardDetailPane
+		card={columns[paneCard.colIdx].cards[paneCard.cardIdx]}
+		{theme}
+		{readonly}
+		onclose={closePane}
+	/>
+{/if}
 
 <style>
 	.kanban-wrapper {
@@ -678,10 +777,64 @@
 		border-radius: 6px;
 		padding: 0.5rem 0.625rem;
 		display: flex;
-		align-items: flex-start;
+		flex-direction: column;
 		cursor: grab;
 		position: relative;
 		touch-action: none;
+	}
+
+	.card-main {
+		display: flex;
+		align-items: flex-start;
+		width: 100%;
+	}
+
+	.card-footer {
+		display: block;
+		width: 100%;
+		margin-top: 0.25rem;
+		padding-top: 0.25rem;
+		border-top: 1px solid var(--color-border-default);
+		background: none;
+		border-left: none;
+		border-right: none;
+		border-bottom: none;
+		cursor: pointer;
+		color: var(--color-fg-muted);
+		font-size: 11px;
+		text-align: left;
+		line-height: 1.4;
+		font-family: inherit;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.card-footer:hover {
+		color: var(--color-fg-default);
+	}
+
+	.card-expand {
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: var(--color-fg-muted);
+		font-size: 13px;
+		padding: 2px 4px;
+		border-radius: 3px;
+		opacity: 0;
+		flex-shrink: 0;
+		line-height: 1;
+		transition: opacity 0.1s;
+	}
+
+	.card:hover .card-expand {
+		opacity: 1;
+	}
+
+	.card-expand:hover {
+		color: var(--color-accent-fg);
+		background: color-mix(in srgb, var(--color-accent-fg) 10%, transparent);
 	}
 
 	.board.dragging-active .card {
