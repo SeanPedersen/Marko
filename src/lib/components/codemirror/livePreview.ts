@@ -14,6 +14,7 @@ import { languages } from '@codemirror/language-data';
 import { highlightTree, classHighlighter } from '@lezer/highlight';
 import { render } from 'katex';
 import 'katex/dist/katex.min.css';
+import mermaid from 'mermaid';
 
 // Cache of loaded language parsers: name → parser (null while loading or unavailable)
 const languageCache = new Map<string, ReturnType<LanguageDescription['load']> extends Promise<infer T> ? T : never>();
@@ -530,6 +531,65 @@ class TableWidget extends WidgetType {
 
   eq(other: TableWidget): boolean {
     return this.rawText === other.rawText && this.from === other.from && this.to === other.to;
+  }
+}
+
+// --- Mermaid rendering ---
+let mermaidCurrentTheme: 'default' | 'dark' | null = null;
+let mermaidRenderCount = 0;
+
+function ensureMermaidInitialized(isDark: boolean): void {
+  const theme = isDark ? 'dark' : 'default';
+  if (mermaidCurrentTheme === theme) return;
+  mermaidCurrentTheme = theme;
+  mermaid.initialize({ startOnLoad: false, theme });
+}
+
+function resolveIsDark(): boolean {
+  const attr = document.documentElement.dataset.theme;
+  if (attr === 'dark') return true;
+  if (attr === 'light') return false;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+class MermaidWidget extends WidgetType {
+  constructor(
+    readonly code: string,
+    readonly from: number,
+    readonly to: number,
+  ) {
+    super();
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const container = document.createElement('div');
+    container.className = 'cm-live-mermaid';
+
+    container.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      view.dispatch({ selection: { anchor: this.from } });
+      view.focus();
+    });
+
+    ensureMermaidInitialized(resolveIsDark());
+    const id = `cm-mermaid-${++mermaidRenderCount}`;
+
+    mermaid.render(id, this.code || 'graph LR\n  A --> B').then(({ svg }) => {
+      container.innerHTML = svg;
+    }).catch(() => {
+      container.textContent = '⚠ Invalid mermaid diagram';
+      container.classList.add('cm-live-mermaid-error');
+    });
+
+    return container;
+  }
+
+  ignoreEvent(event: Event): boolean {
+    return event.type !== 'mousedown';
+  }
+
+  eq(other: MermaidWidget): boolean {
+    return this.code === other.code && this.from === other.from;
   }
 }
 
@@ -1814,6 +1874,48 @@ const tableDecorationField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
+// StateField for mermaid diagram decorations (block replacement spanning line breaks)
+const mermaidDecorationField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none;
+  },
+  update(prev, tr) {
+    const selectionChanged = !tr.newSelection.eq(tr.startState.selection);
+    if (!tr.docChanged && !selectionChanged) return prev.map(tr.changes);
+
+    const cursorPos = tr.state.selection.main.head;
+    const decorations: Range<Decoration>[] = [];
+
+    syntaxTree(tr.state).iterate({
+      enter(node: SyntaxNodeRef) {
+        if (node.name !== 'FencedCode') return;
+
+        const openFenceLine = tr.state.doc.lineAt(node.from);
+        const langMatch = openFenceLine.text.match(/^(`{3,}|~{3,})(\w+)?/);
+        if (langMatch?.[2]?.toLowerCase() !== 'mermaid') return;
+
+        if (cursorPos >= node.from && cursorPos <= node.to) return;
+
+        const closeFenceLine = tr.state.doc.lineAt(node.to);
+        const codeFrom = openFenceLine.to + 1;
+        const codeTo = closeFenceLine.from > codeFrom ? closeFenceLine.from - 1 : codeFrom;
+        const code = codeFrom < codeTo ? tr.state.doc.sliceString(codeFrom, codeTo) : '';
+
+        decorations.push(
+          Decoration.replace({
+            widget: new MermaidWidget(code, node.from, node.to),
+            block: true,
+          }).range(node.from, node.to)
+        );
+      },
+    });
+
+    decorations.sort((a, b) => a.from - b.from);
+    return Decoration.set(decorations);
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
 // Styles for live preview elements
 export const livePreviewStyles = EditorView.baseTheme({
   // Hide syntax markers
@@ -2079,10 +2181,27 @@ export const livePreviewStyles = EditorView.baseTheme({
     fontSize: '1.1em',
   },
 
+  // Mermaid diagrams
+  '.cm-live-mermaid': {
+    cursor: 'pointer',
+    display: 'block',
+    padding: '0.75em 0',
+    overflowX: 'auto',
+  },
+  '.cm-live-mermaid svg': {
+    maxWidth: '100%',
+    height: 'auto',
+  },
+  '.cm-live-mermaid-error': {
+    fontStyle: 'italic',
+    fontSize: '0.9em',
+    opacity: '0.6',
+  },
+
 });
 
 export function livePreview() {
-  return [livePreviewPlugin, tableDecorationField, livePreviewStyles];
+  return [livePreviewPlugin, tableDecorationField, mermaidDecorationField, livePreviewStyles];
 }
 
 // Lightweight URL detection for plain text files (no markdown parsing)

@@ -406,7 +406,49 @@
 		}
 	}
 
-	async function nextUntitledFilename(): Promise<string> {
+	async function handleNewKanbanFile() {
+		if (!currentFolder) {
+			const selected = await open({ multiple: false, directory: true });
+			if (!selected || typeof selected !== 'string') return;
+			openFolder(selected);
+		}
+
+		const filename = await nextUntitledFilename('Kanban');
+		const newPath = `${currentFolder}/${filename}`;
+		const content = `---\nkanban-plugin: board\n---\n\n## Todo\n\n- [ ] Add your first card\n\n## In Progress\n\n## Done\n\n%% kanban:settings\n{"kanban-plugin":"board"}\n%%\n`;
+
+		try {
+			await invoke('save_file_content', { path: newPath, content });
+			await loadMarkdown(newPath, { newTab: true });
+			saveRecentFile(newPath);
+			if (tabManager.activeTabId) tabManager.startRenaming(tabManager.activeTabId);
+		} catch (e) {
+			console.error('Failed to create kanban file:', e);
+		}
+	}
+
+	async function handleNewMermaidFile() {
+		if (!currentFolder) {
+			const selected = await open({ multiple: false, directory: true });
+			if (!selected || typeof selected !== 'string') return;
+			openFolder(selected);
+		}
+
+		const filename = await nextUntitledFilename('Diagram');
+		const newPath = `${currentFolder}/${filename}`;
+		const content = '```mermaid\nflowchart TD\n    A[Start] --> B{Decision}\n    B -->|Yes| C[Action]\n    B -->|No| D[End]\n```\n';
+
+		try {
+			await invoke('save_file_content', { path: newPath, content });
+			await loadMarkdown(newPath, { newTab: true });
+			saveRecentFile(newPath);
+			if (tabManager.activeTabId) tabManager.startRenaming(tabManager.activeTabId);
+		} catch (e) {
+			console.error('Failed to create mermaid file:', e);
+		}
+	}
+
+	async function nextUntitledFilename(prefix = 'Untitled'): Promise<string> {
 		// macOS and Windows are case-insensitive, Linux is case-sensitive
 		const isCaseInsensitive = navigator.userAgent.includes('Macintosh') || navigator.userAgent.includes('Windows');
 		const normalize = (s: string) => isCaseInsensitive ? s.toLowerCase() : s;
@@ -414,7 +456,7 @@
 		// Collect existing names from open tabs
 		const existingNames = new Set(
 			tabManager.tabs
-				.filter((t) => normalize(t.title).startsWith(normalize('Untitled')))
+				.filter((t) => normalize(t.title).startsWith(normalize(prefix)))
 				.map((t) => normalize(t.title.replace(/\.md$/i, '')))
 		);
 
@@ -423,7 +465,7 @@
 			try {
 				const entries = await invoke('read_directory', { path: currentFolder }) as { name: string; is_dir: boolean }[];
 				for (const entry of entries) {
-					if (!entry.is_dir && normalize(entry.name).startsWith(normalize('Untitled'))) {
+					if (!entry.is_dir && normalize(entry.name).startsWith(normalize(prefix))) {
 						existingNames.add(normalize(entry.name.replace(/\.md$/i, '')));
 					}
 				}
@@ -432,10 +474,10 @@
 			}
 		}
 
-		if (!existingNames.has(normalize('Untitled'))) return 'Untitled.md';
+		if (!existingNames.has(normalize(prefix))) return `${prefix}.md`;
 
 		for (let i = 1; ; i++) {
-			const candidate = `Untitled ${i}`;
+			const candidate = `${prefix} ${i}`;
 			if (!existingNames.has(normalize(candidate))) return `${candidate}.md`;
 		}
 	}
@@ -1255,7 +1297,7 @@
 			sidebarPosition={settings.sidebarPosition}
 		/>
 		<div class="home-container" class:sidebar-open={folderExplorerVisible} class:sidebar-right={settings.sidebarPosition === 'right'}>
-			<HomePage {recentFiles} {recentFolders} onselectFile={selectFile} onselectFolder={selectFolder} onloadFile={loadMarkdown} onopenFolder={openFolder} onremoveRecentFile={removeRecentFile} onremoveRecentFolder={removeRecentFolder} onnewFile={handleNewFile} onsettings={toggleSettings} />
+			<HomePage {recentFiles} {recentFolders} onselectFile={selectFile} onselectFolder={selectFolder} onloadFile={loadMarkdown} onopenFolder={openFolder} onremoveRecentFile={removeRecentFile} onremoveRecentFolder={removeRecentFolder} onnewFile={handleNewFile} onnewKanbanFile={handleNewKanbanFile} onnewMermaidFile={handleNewMermaidFile} />
 		</div>
 	{/if}
 
