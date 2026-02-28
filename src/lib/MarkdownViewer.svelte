@@ -52,7 +52,7 @@
 	let canGoBack = $derived(tabManager.activeTabId ? tabManager.canGoBack(tabManager.activeTabId) : false);
 	let canGoForward = $derived(tabManager.activeTabId ? tabManager.canGoForward(tabManager.activeTabId) : false);
 
-	let showHome = $state(false);
+	let showHome = $derived(tabManager.activeTab?.path === 'HOME');
 	let folderRefreshKey = $state(0);
 	let isDragging = $state(false);
 	let tocVisible = $state(localStorage.getItem('toc-visible') !== 'false');
@@ -148,34 +148,23 @@
 		modalState.show = false;
 	}
 
-	$effect(() => {
-		const _ = tabManager.activeTabId;
-		showHome = false;
-	});
-
 	async function loadMarkdown(filePath: string, options: { navigate?: boolean; skipTabManagement?: boolean; newTab?: boolean } = {}) {
-		showHome = false;
 		try {
-			if (options.navigate && tabManager.activeTab) {
+			const isOnHome = tabManager.activeTab?.path === 'HOME';
+
+			if (options.navigate && tabManager.activeTab && !isOnHome) {
 				tabManager.navigate(tabManager.activeTab.id, filePath);
 			} else if (!options.skipTabManagement) {
-				if (options.newTab) {
-					const existing = tabManager.tabs.find((t) => t.path === filePath);
-					if (existing) {
-						tabManager.setActive(existing.id);
-					} else {
-						tabManager.addTab(filePath);
-					}
+				const existing = tabManager.tabs.find((t) => t.path === filePath);
+				if (existing) {
+					tabManager.setActive(existing.id);
+				} else if (options.newTab || isOnHome) {
+					tabManager.addTab(filePath);
+				} else if (tabManager.activeTab) {
+					// Replace current tab
+					tabManager.updateTabPath(tabManager.activeTab.id, filePath);
 				} else {
-					const existing = tabManager.tabs.find((t) => t.path === filePath);
-					if (existing) {
-						tabManager.setActive(existing.id);
-					} else if (tabManager.activeTab) {
-						// Replace current tab
-						tabManager.updateTabPath(tabManager.activeTab.id, filePath);
-					} else {
-						tabManager.addTab(filePath);
-					}
+					tabManager.addTab(filePath);
 				}
 			}
 			const activeId = tabManager.activeTabId;
@@ -408,7 +397,6 @@
 			await invoke('save_file_content', { path: newPath, content: '' });
 			await loadMarkdown(newPath, { newTab: true });
 			saveRecentFile(newPath);
-			showHome = false;
 			// Start rename mode so user can change the name if desired
 			if (tabManager.activeTabId) {
 				tabManager.startRenaming(tabManager.activeTabId);
@@ -483,10 +471,6 @@
 			],
 		});
 		if (selected && typeof selected === 'string') loadMarkdown(selected);
-	}
-
-	function toggleHome() {
-		showHome = !showHome;
 	}
 
 	async function closeFile() {
@@ -1159,10 +1143,8 @@
 		isScrolled={false}
 		currentFile={''}
 		windowTitle="Marko"
-		showHome={false}
 		{zoomLevel}
 		onselectFile={selectFile}
-		ontoggleHome={toggleHome}
 		onresetZoom={() => (zoomLevel = 100)}
 		{theme}
 		onSetTheme={(t) => (theme = t)}
@@ -1182,11 +1164,8 @@
 			{isScrolled}
 			{currentFile}
 			{windowTitle}
-			{showHome}
 			onselectFile={selectFile}
-			ontoggleHome={toggleHome}
 			ondetach={handleDetach}
-			ontabclick={() => (showHome = false)}
 			{zoomLevel}
 			onresetZoom={() => (zoomLevel = 100)}
 			oncloseTab={(id) => {
@@ -1201,9 +1180,9 @@
 			{folderExplorerVisible}
 			ontoggleFolderExplorer={toggleFolderExplorer}
 			showFolderExplorerButton={!!currentFolder}
-		ontoggleSettings={toggleSettings} />
+			ontoggleSettings={toggleSettings} />
 
-	{#if tabManager.activeTab && (tabManager.activeTab.path !== '' || tabManager.activeTab.title !== 'Recents') && !showHome}
+	{#if tabManager.activeTab && tabManager.activeTab.path !== 'HOME'}
 		<TableOfContents
 			rawContent={tabManager.activeTab?.rawContent ?? ''}
 			visible={tocVisible && currentFileType === 'markdown' && !isKanban}
@@ -1236,7 +1215,7 @@
 				editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
 				{tocVisible}
 				ontoggleToc={toggleToc}
-				showTocButton={!showHome && tabManager.activeTab && tabManager.activeTab.path !== '' && currentFileType === 'markdown' && hasHeadings && !isKanban}
+				showTocButton={tabManager.activeTab && tabManager.activeTab.path !== 'HOME' && tabManager.activeTab.path !== '' && currentFileType === 'markdown' && hasHeadings && !isKanban}
 				onopenFileLocation={openFileLocation}
 				gitStatus={currentFileGitStatus}
 				oncommit={handleGitCommit}
@@ -1275,7 +1254,7 @@
 			refreshKey={folderRefreshKey}
 			sidebarPosition={settings.sidebarPosition}
 		/>
-		<div class="home-container" class:sidebar-open={folderExplorerVisible && !!currentFolder} class:sidebar-right={settings.sidebarPosition === 'right'}>
+		<div class="home-container" class:sidebar-open={folderExplorerVisible} class:sidebar-right={settings.sidebarPosition === 'right'}>
 			<HomePage {recentFiles} {recentFolders} onselectFile={selectFile} onselectFolder={selectFolder} onloadFile={loadMarkdown} onopenFolder={openFolder} onremoveRecentFile={removeRecentFile} onremoveRecentFolder={removeRecentFolder} onnewFile={handleNewFile} onsettings={toggleSettings} />
 		</div>
 	{/if}
@@ -1368,16 +1347,22 @@
 	}
 
 	.home-container {
-		transition: margin-left 0.15s ease-out, margin-right 0.15s ease-out;
+		position: fixed;
+		top: 36px;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		overflow-y: auto;
+		transition: left 0.15s ease-out, right 0.15s ease-out;
 	}
 
 	.home-container.sidebar-open {
-		margin-left: 220px;
+		left: clamp(0px, 1184px - 100vw, calc(232px - 2rem));
 	}
 
 	.home-container.sidebar-open.sidebar-right {
-		margin-left: 0;
-		margin-right: 220px;
+		left: 0;
+		right: clamp(0px, 1184px - 100vw, calc(232px - 2rem));
 	}
 
 	.tooltip {

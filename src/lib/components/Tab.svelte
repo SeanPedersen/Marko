@@ -91,15 +91,14 @@
 		onrename?.(editValue);
 	}
 
-	// home tab has empty path
-	let isHomeTab = $derived(tab.path === '');
+	let isHomeTab = $derived(tab.path === 'HOME');
 	// Hide dirty indicator when auto-save is enabled (file will be saved automatically)
 	let showDirtyIndicator = $derived(tab.isDirty && !(settings.autoSave && tab.path));
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="tab {isActive ? 'active' : ''}" class:last={isLast} class:renaming={tab.isRenaming} role="group" title={tab.path || 'Recents'} oncontextmenu={handleContextMenu}>
+<div class="tab {isActive ? 'active' : ''}" class:last={isLast} class:renaming={tab.isRenaming} class:home={isHomeTab} role="group" title={isHomeTab ? 'Home' : (tab.path || 'Untitled')} oncontextmenu={handleContextMenu}>
 	{#if tab.isRenaming}
 		<input
 			bind:this={inputRef}
@@ -112,24 +111,31 @@
 		/>
 	{:else}
 		<button class="tab-content-btn" {onclick} onmousedown={handleMiddleClick} ondblclick={handleDoubleClick}>
-			<span class="tab-label">
-				{tab.title}
-			</span>
+			{#if isHomeTab}
+				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Home">
+					<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+					<polyline points="9 22 9 12 15 12 15 22"></polyline>
+				</svg>
+			{:else}
+				<span class="tab-label">{tab.title}</span>
+			{/if}
 		</button>
 	{/if}
-	<div class="tab-actions">
-		<button class="tab-close" class:dirty={showDirtyIndicator} class:deleted={tab.isDeleted} onclick={handleClose} onmousedown={(e) => e.stopPropagation()} title="Close (Ctrl+W)">
-			{#if tab.isDeleted}
-				<svg class="deleted-icon" width="12" height="12" viewBox="0 0 16 16">
-					<path fill="currentColor" d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5m-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5M4.5 5.029l.5 8.5a.5.5 0 1 0 .998-.06l-.5-8.5a.5.5 0 1 0-.998.06m6.53-.528a.5.5 0 0 0-.528.47l-.5 8.5a.5.5 0 0 0 .998.058l.5-8.5a.5.5 0 0 0-.47-.528M8 4.5a.5.5 0 0 0-.5.5v8.5a.5.5 0 0 0 1 0V5a.5.5 0 0 0-.5-.5"/>
-				</svg>
-			{:else if showDirtyIndicator}
-				<span class="dirty-dot"></span>
-			{/if}
-			<svg class="close-icon" width="12" height="12" viewBox="0 0 12 12"
-				><path fill="currentColor" d="M11 1.7L10.3 1 6 5.3 1.7 1 1 1.7 5.3 6 1 10.3 1.7 11 6 6.7 10.3 11 11 10.3 6.7 6z" /></svg>
-		</button>
-	</div>
+	{#if !isHomeTab}
+		<div class="tab-actions">
+			<button class="tab-close" class:dirty={showDirtyIndicator} class:deleted={tab.isDeleted} onclick={handleClose} onmousedown={(e) => e.stopPropagation()} title="Close (Ctrl+W)">
+				{#if tab.isDeleted}
+					<svg class="deleted-icon" width="12" height="12" viewBox="0 0 16 16">
+						<path fill="currentColor" d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5m-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5M4.5 5.029l.5 8.5a.5.5 0 1 0 .998-.06l-.5-8.5a.5.5 0 1 0-.998.06m6.53-.528a.5.5 0 0 0-.528.47l-.5 8.5a.5.5 0 0 0 .998.058l.5-8.5a.5.5 0 0 0-.47-.528M8 4.5a.5.5 0 0 0-.5.5v8.5a.5.5 0 0 0 1 0V5a.5.5 0 0 0-.5-.5"/>
+					</svg>
+				{:else if showDirtyIndicator}
+					<span class="dirty-dot"></span>
+				{/if}
+				<svg class="close-icon" width="12" height="12" viewBox="0 0 12 12"
+					><path fill="currentColor" d="M11 1.7L10.3 1 6 5.3 1.7 1 1 1.7 5.3 6 1 10.3 1.7 11 6 6.7 10.3 11 11 10.3 6.7 6z" /></svg>
+			</button>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -151,6 +157,16 @@
 		transition:
 			background-color 0.25s cubic-bezier(0.05, 0.95, 0.05, 0.95),
 			color 0.25s cubic-bezier(0.05, 0.95, 0.05, 0.95);
+	}
+
+	.tab.home {
+		min-width: 40px;
+		max-width: 40px;
+	}
+
+	.tab.home .tab-content-btn {
+		padding: 0;
+		justify-content: center;
 	}
 
 	.tab.last {

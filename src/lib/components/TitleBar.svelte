@@ -12,9 +12,7 @@
 		isScrolled,
 		currentFile,
 		windowTitle,
-		showHome,
 		onselectFile,
-		ontoggleHome,
 		ondetach,
 		ontabclick,
 		zoomLevel,
@@ -33,9 +31,7 @@
 		isScrolled: boolean;
 		currentFile: string;
 		windowTitle: string;
-		showHome: boolean;
 		onselectFile: () => void;
-		ontoggleHome: () => void;
 		ondetach?: (tabId: string) => void;
 		ontabclick?: () => void;
 		zoomLevel?: number;
@@ -113,15 +109,6 @@
 		if (zoomLevel && zoomLevel !== 100) list.push('zoom');
 		list.push('settings');
 		list.push('theme');
-
-		if (currentFile && !showHome) {
-			const ext = currentFile.split('.').pop()?.toLowerCase() || '';
-			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd'].includes(ext);
-
-			if (isMarkdown) {
-				// Removed split, sync, fullWidth, live, and edit buttons since Milkdown provides unified WYSIWYG editing
-			}
-		}
 		return list;
 	});
 
@@ -164,12 +151,6 @@
 				</button>
 			</div>
 		{/if}
-		<button class="icon-home-btn {showHome ? 'active' : ''}" onclick={ontoggleHome} aria-label="Home">
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-				<polyline points="9 22 9 12 15 12 15 22"></polyline>
-			</svg>
-		</button>
 		{#if showFolderExplorerButton}
 			<button
 				class="icon-home-btn {folderExplorerVisible ? 'active' : ''}"
@@ -185,7 +166,7 @@
 
 	{#if tabManager.tabs.length > 0 && settings.showTabs}
 		<div class="tab-area">
-			<TabList onnewTab={onnewTab ?? (() => tabManager.addNewTab())} {ondetach} {showHome} {ontabclick} {oncloseTab} {oncommitRename} />
+			<TabList onnewTab={onnewTab ?? (() => tabManager.addNewTab())} {ondetach} {ontabclick} {oncloseTab} {oncommitRename} />
 		</div>
 	{:else}
 		<div class="window-title-container" data-tauri-drag-region>

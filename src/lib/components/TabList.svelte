@@ -8,14 +8,12 @@
 	let {
 		onnewTab,
 		ondetach,
-		showHome = false,
 		ontabclick,
 		oncloseTab,
 		oncommitRename,
 	} = $props<{
 		onnewTab: () => void;
 		ondetach?: (tabId: string) => void;
-		showHome?: boolean;
 		ontabclick?: () => void;
 		oncloseTab?: (id: string) => void;
 		oncommitRename?: (id: string, newTitle: string) => void;
@@ -39,6 +37,7 @@
 
 	function handleMouseDown(e: MouseEvent, tab: TabData, element: HTMLElement) {
 		if (e.button !== 0) return; // Only left click
+		if (tab.path === 'HOME') return; // HOME tab is not draggable
 		// e.preventDefault(); // allow click to propagate
 		e.stopPropagation(); // Stop window drag from triggering
 
@@ -199,7 +198,7 @@
 					onmousedown={(e) => handleMouseDown(e, tab, e.currentTarget as HTMLElement)}>
 					<Tab
 						{tab}
-						isActive={!showHome && tabManager.activeTabId === tab.id}
+						isActive={tabManager.activeTabId === tab.id}
 						isLast={i === tabManager.tabs.length - 1}
 						onclick={() => {
 							if (justDragged) return;
@@ -215,7 +214,7 @@
 
 		{#if draggingId && dragState}
 			<div class="drag-proxy" style:left="{dragState.initialRect.left + (dragState.currentX - dragState.startX)}px" style:top="{dragState.initialRect.top}px">
-				<Tab tab={dragState.tab} isActive={!showHome && tabManager.activeTabId === dragState.tab.id} onclick={() => {}} onclose={() => {}} />
+				<Tab tab={dragState.tab} isActive={tabManager.activeTabId === dragState.tab.id} onclick={() => {}} onclose={() => {}} />
 			</div>
 		{/if}
 

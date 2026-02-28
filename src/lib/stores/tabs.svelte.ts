@@ -18,9 +18,30 @@ export interface Tab {
 	isDeleted?: boolean;
 }
 
+const HOME_TAB_ID = 'home-tab';
+
+const HOME_TAB: Tab = {
+	id: HOME_TAB_ID,
+	path: 'HOME',
+	title: 'Home',
+	content: '',
+	rawContent: '',
+	originalContent: '',
+	scrollTop: 0,
+	isDirty: false,
+	isEditing: false,
+	isRenaming: false,
+	history: [],
+	historyIndex: -1,
+	scrollPercentage: 0,
+	anchorLine: 0,
+	editorViewState: null,
+	isSplit: false,
+};
+
 class TabManager {
-	tabs = $state<Tab[]>([]);
-	activeTabId = $state<string | null>(null);
+	tabs = $state<Tab[]>([{ ...HOME_TAB }]);
+	activeTabId = $state<string | null>(HOME_TAB_ID);
 
 	get activeTab() {
 		return this.tabs.find((t) => t.id === this.activeTabId);
@@ -94,57 +115,34 @@ class TabManager {
 		}
 	}
 
-	addHomeTab() {
-		// Check if home tab exists
-		const homeTab = this.tabs.find(t => t.path === 'HOME');
-		if (homeTab) {
-			this.activeTabId = homeTab.id;
-			return;
-		}
-
-		const id = crypto.randomUUID();
-		this.tabs.push({
-			id,
-			path: 'HOME',
-			title: 'Home',
-			content: '',
-			rawContent: '',
-			originalContent: '',
-			scrollTop: 0,
-			isDirty: false,
-			isEditing: false,
-			isRenaming: false,
-			history: [],
-			historyIndex: -1,
-			scrollPercentage: 0,
-			anchorLine: 0,
-			editorViewState: null,
-			isSplit: false,
-		});
-
-		this.activeTabId = id;
+	navigateHome() {
+		this.activeTabId = HOME_TAB_ID;
 	}
 
 	closeTab(id: string) {
 		const index = this.tabs.findIndex((t) => t.id === id);
 		if (index === -1) return;
 
+		const tab = this.tabs[index];
+		if (tab.path === 'HOME') return; // HOME tab cannot be closed
+
 		if (this.activeTabId === id) {
 			const fallback = this.tabs[index + 1] || this.tabs[index - 1];
 			this.activeTabId = fallback ? fallback.id : null;
 		}
 
-		const tab = this.tabs[index];
-		// Don't add HOME to history
-		if (tab.path && tab.path !== 'HOME') {
+		if (tab.path) {
 			this.recentlyClosed.push(tab.path);
 		}
 		this.tabs.splice(index, 1);
 	}
 
 	closeAll() {
-		this.tabs = [];
-		this.activeTabId = null;
+		const homeTab = this.tabs.find(t => t.path === 'HOME') ?? { ...HOME_TAB };
+		const closedPaths = this.tabs.filter(t => t.path && t.path !== 'HOME').map(t => t.path);
+		this.recentlyClosed.push(...closedPaths);
+		this.tabs = [homeTab];
+		this.activeTabId = homeTab.id;
 	}
 
 	setActive(id: string) {
@@ -212,6 +210,7 @@ class TabManager {
 
 	reorderTabs(fromIndex: number, toIndex: number) {
 		if (fromIndex === toIndex) return;
+		if (fromIndex === 0 || toIndex === 0) return; // HOME tab stays at index 0
 		const [moved] = this.tabs.splice(fromIndex, 1);
 		this.tabs.splice(toIndex, 0, moved);
 	}
@@ -338,17 +337,18 @@ class TabManager {
 		}
 	}
 
-	// Close other tabs (keep only the specified tab)
+	// Close other tabs (keep only the specified tab + HOME)
 	closeOthers(id: string) {
 		const tabToKeep = this.tabs.find((t) => t.id === id);
 		if (!tabToKeep) return;
 
+		const homeTab = this.tabs.find(t => t.path === 'HOME') ?? { ...HOME_TAB };
 		const closedPaths = this.tabs
 			.filter((t) => t.id !== id && t.path && t.path !== 'HOME')
 			.map((t) => t.path);
 		this.recentlyClosed.push(...closedPaths);
 
-		this.tabs = [tabToKeep];
+		this.tabs = tabToKeep.path === 'HOME' ? [homeTab] : [homeTab, tabToKeep];
 		this.activeTabId = id;
 	}
 
