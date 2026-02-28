@@ -983,7 +983,7 @@ pub fn run() {
         );
     }
 
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .manage(AppState {
             startup_file: Mutex::new(None),
         })
@@ -1029,10 +1029,9 @@ pub fn run() {
         .plugin(tauri_plugin_prevent_default::init())
         .plugin(tauri_plugin_window_state::Builder::default().build());
 
+    // Shadow (not mutate) builder so release builds don't warn about unused `mut`
     #[cfg(debug_assertions)]
-    {
-        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
-    }
+    let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
 
     builder.on_menu_event(|app, event| {
             let id = event.id().as_ref();
