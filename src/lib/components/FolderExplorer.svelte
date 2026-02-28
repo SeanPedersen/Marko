@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 
 	type SortMode = 'az' | 'modified';
 
@@ -38,6 +38,9 @@
 	let searchInputEl = $state<HTMLInputElement | null>(null);
 	let gitStatuses = $state<Map<string, string>>(new Map());
 	let isSyncing = $state(false);
+	let newFileDir = $state<string | null>(null);
+	let newFileName = $state('');
+	let newFileInputEl = $state<HTMLInputElement | null>(null);
 	let isGitRepo = $state(false);
 	let gitAhead = $state(0);
 	let gitBehind = $state(0);
@@ -296,7 +299,7 @@
 			toggleDir(entry);
 		} else {
 			const ext = entry.name.split('.').pop()?.toLowerCase() || '';
-			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd'].includes(ext);
+			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd', 'txt'].includes(ext);
 			if (isMarkdown && onopenfile) {
 				const newTab = event.button === 1; // Middle mouse button
 				onopenfile(entry.path, { newTab });
@@ -309,7 +312,7 @@
 			return isExpanded(entry.path) ? 'folder-open' : 'folder';
 		}
 		const ext = entry.name.split('.').pop()?.toLowerCase() || '';
-		if (['md', 'markdown', 'mdown', 'mkd'].includes(ext)) {
+		if (['md', 'markdown', 'mdown', 'mkd', 'txt'].includes(ext)) {
 			return 'markdown';
 		}
 		return 'file';
@@ -409,70 +412,154 @@
 		if (searchQuery) return searchExpandedDirs.has(path);
 		return expandedDirs.has(path);
 	}
+
+	async function handleNewFileClickRoot(e: MouseEvent) {
+		e.stopPropagation();
+		newFileDir = folderPath;
+		newFileName = '';
+		await tick();
+		newFileInputEl?.focus();
+	}
+
+	function handleNewFileKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			createNewFile();
+		} else if (e.key === 'Escape') {
+			cancelNewFile();
+		}
+	}
+
+	function cancelNewFile() {
+		newFileDir = null;
+		newFileName = '';
+	}
+
+	async function createNewFile() {
+		if (!newFileDir) return;
+		let name = newFileName.trim();
+		if (!name) { cancelNewFile(); return; }
+		if (!name.includes('.')) name += '.md';
+
+		const path = newFileDir + '/' + name;
+		const dir = newFileDir;
+		cancelNewFile();
+
+		try {
+			await invoke('save_file_content', { path, content: '' });
+			const contents = await loadDirectory(dir);
+			if (dir === folderPath) {
+				entries = contents;
+			} else {
+				dirContents.set(dir, contents);
+				dirContents = new Map(dirContents);
+			}
+			onopenfile?.(path);
+		} catch (err) {
+			console.error('Failed to create file:', err);
+		}
+	}
 </script>
 
 {#snippet renderEntry(entry: DirEntry, depth: number)}
 	{@const icon = getFileIcon(entry)}
-	{@const isMarkdown = !entry.is_dir && ['md', 'markdown', 'mdown', 'mkd'].includes(entry.name.split('.').pop()?.toLowerCase() || '')}
+	{@const isMarkdown = !entry.is_dir && ['md', 'markdown', 'mdown', 'mkd', 'txt'].includes(entry.name.split('.').pop()?.toLowerCase() || '')}
 	{@const isLoading = loadingDirs.has(entry.path)}
 	{@const entryGitStatus = getEntryStatus(entry)}
 	{@const badge = entryGitStatus ? statusBadge(entryGitStatus) : null}
 	<li class="explorer-item" style="padding-left: {depth * 12 + 8}px">
-		<button
-			class="explorer-link {badge ? badge.cssClass : ''}"
-			class:is-dir={entry.is_dir}
-			class:is-markdown={isMarkdown}
-			class:disabled={!entry.is_dir && !isMarkdown}
-			onclick={(event) => handleFileClick(event, entry)}
-			onauxclick={(event) => { if (event.button === 1) handleFileClick(event, entry); }}
-			oncontextmenu={(event) => handleContextMenu(event, entry)}
-			title={entry.path}
-		>
-			<span class="icon">
-				{#if isLoading}
-					<svg class="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<circle cx="12" cy="12" r="10" stroke-dasharray="30 60" />
-					</svg>
-				{:else if icon === 'folder'}
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-					</svg>
-				{:else if icon === 'folder-open'}
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v1" />
-						<path d="M22 11H8l-2 8h16l-2-8z" />
-					</svg>
-				{:else if icon === 'markdown'}
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-						<polyline points="14 2 14 8 20 8" />
-					</svg>
-				{:else}
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-						<polyline points="14 2 14 8 20 8" />
-					</svg>
+		{#if entry.is_dir}
+			<div
+				class="explorer-link is-dir {badge ? badge.cssClass : ''}"
+				role="button"
+				tabindex="0"
+				onclick={(event) => handleFileClick(event, entry)}
+				onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleFileClick(e as unknown as MouseEvent, entry); }}
+				oncontextmenu={(event) => handleContextMenu(event, entry)}
+				title={entry.path}
+			>
+				<span class="icon">
+					{#if isLoading}
+						<svg class="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<circle cx="12" cy="12" r="10" stroke-dasharray="30 60" />
+						</svg>
+					{:else if icon === 'folder-open'}
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v1" />
+							<path d="M22 11H8l-2 8h16l-2-8z" />
+						</svg>
+					{:else}
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+						</svg>
+					{/if}
+				</span>
+				<span class="name">{entry.name}</span>
+				{#if badge}
+					<span class="git-badge {badge.cssClass}">{badge.letter}</span>
 				{/if}
-			</span>
-			<span class="name">{entry.name}</span>
-			{#if badge}
-				<span class="git-badge {badge.cssClass}">{badge.letter}</span>
-			{/if}
-			{#if entry.is_dir}
 				<span class="chevron" class:expanded={isExpanded(entry.path)}>
 					<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<polyline points="9 18 15 12 9 6" />
 					</svg>
 				</span>
-			{/if}
-		</button>
+			</div>
+		{:else}
+			<button
+				class="explorer-link {badge ? badge.cssClass : ''}"
+				class:is-markdown={isMarkdown}
+				class:disabled={!isMarkdown}
+				onclick={(event) => handleFileClick(event, entry)}
+				onauxclick={(event) => { if (event.button === 1) handleFileClick(event, entry); }}
+				oncontextmenu={(event) => handleContextMenu(event, entry)}
+				title={entry.path}
+			>
+				<span class="icon">
+					{#if icon === 'markdown'}
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+							<polyline points="14 2 14 8 20 8" />
+						</svg>
+					{:else}
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+							<polyline points="14 2 14 8 20 8" />
+						</svg>
+					{/if}
+				</span>
+				<span class="name">{entry.name}</span>
+				{#if badge}
+					<span class="git-badge {badge.cssClass}">{badge.letter}</span>
+				{/if}
+			</button>
+		{/if}
 	</li>
 	{#if entry.is_dir && isExpanded(entry.path)}
 		{@const children = sortEntries(dirContents.get(entry.path) || []).filter(matchesSearch)}
+		{#if newFileDir === entry.path}
+			<li class="explorer-item new-file-row" style="padding-left: {(depth + 1) * 12 + 8}px">
+				<span class="icon">
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+						<polyline points="14 2 14 8 20 8" />
+					</svg>
+				</span>
+				<input
+					bind:this={newFileInputEl}
+					bind:value={newFileName}
+					onkeydown={handleNewFileKeydown}
+					onblur={cancelNewFile}
+					class="new-file-input"
+					type="text"
+					placeholder="filename.md"
+					spellcheck="false"
+				/>
+			</li>
+		{/if}
 		{#each children as child}
 			{@render renderEntry(child, depth + 1)}
 		{/each}
-		{#if children.length === 0 && !loadingDirs.has(entry.path)}
+		{#if children.length === 0 && !loadingDirs.has(entry.path) && newFileDir !== entry.path}
 			<li class="explorer-item empty" style="padding-left: {(depth + 1) * 12 + 8}px">
 				<span class="empty-text">Empty folder</span>
 			</li>
@@ -537,6 +624,16 @@
 				<span class="header-text" title={folderPath}>{getFolderName(folderPath)}</span>
 				<button
 					class="header-btn"
+					onclick={handleNewFileClickRoot}
+					title="New file"
+					aria-label="New file"
+				>
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+						<path d="M12 5v14" /><path d="M5 12h14" />
+					</svg>
+				</button>
+				<button
+					class="header-btn"
 					onclick={toggleSearch}
 					title="Search files"
 					aria-label="Search files"
@@ -566,6 +663,26 @@
 			{/if}
 		</div>
 		<ul class="explorer-list">
+			{#if newFileDir === folderPath}
+				<li class="explorer-item new-file-row" style="padding-left: 8px">
+					<span class="icon">
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+							<polyline points="14 2 14 8 20 8" />
+						</svg>
+					</span>
+					<input
+						bind:this={newFileInputEl}
+						bind:value={newFileName}
+						onkeydown={handleNewFileKeydown}
+						onblur={cancelNewFile}
+						class="new-file-input"
+						type="text"
+						placeholder="filename.md"
+						spellcheck="false"
+					/>
+				</li>
+			{/if}
 			{#each sortEntries(entries).filter(matchesSearch) as entry}
 				{@render renderEntry(entry, 0)}
 			{/each}
@@ -813,6 +930,7 @@
 		flex: 1;
 	}
 
+
 	.sync-btn {
 		gap: 3px;
 	}
@@ -864,6 +982,29 @@
 	.explorer-link.git-untracked > .name { color: #3fb950; }
 	.explorer-link.git-deleted > .name { color: #f85149; }
 	.explorer-link.git-conflicted > .name { color: #f85149; }
+
+
+	.new-file-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding-top: 2px;
+		padding-bottom: 2px;
+		padding-right: 8px;
+	}
+
+	.new-file-input {
+		flex: 1;
+		min-width: 0;
+		border: 1px solid var(--color-accent-fg);
+		border-radius: 3px;
+		background: var(--color-canvas-subtle);
+		color: var(--color-fg-default);
+		font-size: 12.5px;
+		font-family: inherit;
+		outline: none;
+		padding: 1px 5px;
+	}
 
 	.chevron {
 		display: flex;
