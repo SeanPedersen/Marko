@@ -1226,6 +1226,15 @@
 			showFolderExplorerButton={!!currentFolder}
 			ontoggleSettings={toggleSettings} />
 
+	<FolderExplorer
+		folderPath={currentFolder}
+		visible={folderExplorerVisible && !!currentFolder}
+		onopenfile={loadMarkdown}
+		onfileschanged={handleFilesChanged}
+		refreshKey={folderRefreshKey}
+		sidebarPosition={settings.sidebarPosition}
+	/>
+
 	{#if tabManager.activeTab && tabManager.activeTab.path !== 'HOME'}
 		<TableOfContents
 			rawContent={tabManager.activeTab?.rawContent ?? ''}
@@ -1233,14 +1242,6 @@
 			onscrollto={handleTocScroll}
 			sidebarPosition={settings.sidebarPosition}
 			editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
-		/>
-		<FolderExplorer
-			folderPath={currentFolder}
-			visible={folderExplorerVisible}
-			onopenfile={loadMarkdown}
-			onfileschanged={handleFilesChanged}
-			refreshKey={folderRefreshKey}
-			sidebarPosition={settings.sidebarPosition}
 		/>
 		<div
 			class="markdown-container"
@@ -1290,14 +1291,6 @@
 			{/if}
 		</div>
 	{:else}
-		<FolderExplorer
-			folderPath={currentFolder}
-			visible={folderExplorerVisible && !!currentFolder}
-			onopenfile={loadMarkdown}
-			onfileschanged={handleFilesChanged}
-			refreshKey={folderRefreshKey}
-			sidebarPosition={settings.sidebarPosition}
-		/>
 		<div class="home-container" class:sidebar-open={folderExplorerVisible} class:sidebar-right={settings.sidebarPosition === 'right'}>
 			<HomePage {recentFiles} {recentFolders} onselectFile={selectFile} onselectFolder={selectFolder} onloadFile={loadMarkdown} onopenFolder={openFolder} onremoveRecentFile={removeRecentFile} onremoveRecentFolder={removeRecentFolder} onnewFile={handleNewFile} onnewKanbanFile={handleNewKanbanFile} onnewMermaidFile={handleNewMermaidFile} />
 		</div>
