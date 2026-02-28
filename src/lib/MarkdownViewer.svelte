@@ -808,6 +808,7 @@
 				appWindow.onCloseRequested(async (event) => {
 					event.preventDefault();
 					debouncedSave.cancel();
+					saveTabSession();
 					const dirtyTabs = tabManager.tabs.filter((t) => t.isDirty && t.path && t.path !== 'HOME');
 					if (dirtyTabs.length > 0) await Promise.all(dirtyTabs.map(saveTab));
 					appWindow.destroy();
@@ -860,38 +861,43 @@
 			]);
 			unlisteners.push(...listeners);
 
+			// Always restore the previous session first
+			await restoreTabSession();
+
 			// Check for file passed via URL query param (for detached windows)
 			const urlParams = new URLSearchParams(window.location.search);
 			const fileParam = urlParams.get('file');
-			if (fileParam) handleFilePath(fileParam);
-
-			// Check for initial CLI args or macOS file association paths
-			try {
-				const paths = await invoke('send_markdown_path') as string[];
-				if (paths.length > 0) {
-					handleFilePath(paths[0]);
-				} else {
-					// On macOS, the Opened event (file association) may arrive after
-					// the frontend initializes. Retry a few times to catch it.
-					let retries = 0;
-					const maxRetries = 5;
-					const retryInterval = setInterval(async () => {
-						retries++;
-						try {
-							const retryPaths = await invoke('send_markdown_path') as string[];
-							if (retryPaths.length > 0) {
-								clearInterval(retryInterval);
-								handleFilePath(retryPaths[0]);
-							} else if (retries >= maxRetries) {
+			if (fileParam) {
+				handleFilePath(fileParam);
+			} else {
+				// Check for initial CLI args or macOS file association paths
+				try {
+					const paths = await invoke('send_markdown_path') as string[];
+					if (paths.length > 0) {
+						loadMarkdown(paths[0], { newTab: true });
+					} else {
+						// On macOS, the Opened event (file association) may arrive after
+						// the frontend initializes. Retry a few times to catch it.
+						let retries = 0;
+						const maxRetries = 5;
+						const retryInterval = setInterval(async () => {
+							retries++;
+							try {
+								const retryPaths = await invoke('send_markdown_path') as string[];
+								if (retryPaths.length > 0) {
+									clearInterval(retryInterval);
+									loadMarkdown(retryPaths[0], { newTab: true });
+								} else if (retries >= maxRetries) {
+									clearInterval(retryInterval);
+								}
+							} catch {
 								clearInterval(retryInterval);
 							}
-						} catch {
-							clearInterval(retryInterval);
-						}
-					}, 300);
+						}, 300);
+					}
+				} catch (e) {
+					console.error('Failed to get startup paths:', e);
 				}
-			} catch (e) {
-				console.error('Failed to get startup paths:', e);
 			}
 
 			// Set mode then show — window appears in its final state, no loading screen visible
@@ -979,6 +985,56 @@
 
 	const FOLDER_REFRESH_DELAY_MS = 500;
 	const debouncedFolderRefresh = debounce(() => { folderRefreshKey++; }, FOLDER_REFRESH_DELAY_MS);
+
+	// --- Session persistence ---
+
+	interface TabSession {
+		tabs: { path: string; scrollTop: number }[];
+		activeTabPath: string | null;
+	}
+
+	function saveTabSession() {
+		const tabs = tabManager.tabs
+			.filter((t) => t.path && t.path !== 'HOME')
+			.map((t) => ({ path: t.path, scrollTop: t.scrollTop }));
+		const activeTab = tabManager.activeTab;
+		const activeTabPath = activeTab?.path !== 'HOME' ? (activeTab?.path ?? null) : null;
+		localStorage.setItem('session-tabs', JSON.stringify({ tabs, activeTabPath } satisfies TabSession));
+	}
+
+	async function restoreTabSession(): Promise<boolean> {
+		const stored = localStorage.getItem('session-tabs');
+		if (!stored) return false;
+		try {
+			const { tabs, activeTabPath } = JSON.parse(stored) as TabSession;
+			if (!tabs || tabs.length === 0) return false;
+
+			for (const { path, scrollTop } of tabs) {
+				await loadMarkdown(path, { newTab: true });
+				// Restore scroll after loading — tab is now active
+				if (tabManager.activeTabId) tabManager.updateTabScroll(tabManager.activeTabId, scrollTop);
+			}
+
+			if (activeTabPath) {
+				const activeTab = tabManager.tabs.find((t) => t.path === activeTabPath);
+				if (activeTab) tabManager.setActive(activeTab.id);
+			}
+			return true;
+		} catch (e) {
+			console.error('Failed to restore tab session:', e);
+			return false;
+		}
+	}
+
+	const SESSION_SAVE_DELAY_MS = 500;
+	const debouncedSessionSave = debounce(saveTabSession, SESSION_SAVE_DELAY_MS);
+
+	$effect(() => {
+		// Re-run when tabs or active tab change to keep session in sync
+		const _ = tabManager.tabs.map((t) => t.path);
+		const _a = tabManager.activeTabId;
+		debouncedSessionSave.call();
+	});
 
 	function handleFilesChanged(removed: string[], added: string[]) {
 		for (const tab of tabManager.tabs) {
