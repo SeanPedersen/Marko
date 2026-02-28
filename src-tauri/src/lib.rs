@@ -983,7 +983,7 @@ pub fn run() {
         );
     }
 
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .manage(AppState {
             startup_file: Mutex::new(None),
         })
