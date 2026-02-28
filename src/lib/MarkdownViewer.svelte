@@ -790,128 +790,80 @@
 		document.addEventListener('marko:link', handleLink);
 		unlisteners.push(() => document.removeEventListener('marko:link', handleLink));
 
-		invoke('show_window').catch(console.error);
-
 		const init = async () => {
-			const { getCurrentWindow } = await import('@tauri-apps/api/window');
-			const { listen } = await import('@tauri-apps/api/event');
+			// Fire get_app_mode and module imports in parallel — neither blocks the other
+			const appModePromise: Promise<string> = Promise.race([
+				invoke('get_app_mode') as Promise<string>,
+				new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000)),
+			]).catch(() => 'app');
+
+			const [{ getCurrentWindow }, { listen }] = await Promise.all([
+				import('@tauri-apps/api/window'),
+				import('@tauri-apps/api/event'),
+			]);
 			const appWindow = getCurrentWindow();
 
-			// Flush pending saves on window close to prevent data loss
-			const unlistenClose = await appWindow.onCloseRequested(async (event) => {
-				event.preventDefault();
-				debouncedSave.cancel();
-
-				const dirtyTabs = tabManager.tabs.filter((t) => t.isDirty && t.path && t.path !== 'HOME');
-				if (dirtyTabs.length > 0) {
-					await Promise.all(dirtyTabs.map(saveTab));
-				}
-
-				appWindow.destroy();
-			});
-			unlisteners.push(unlistenClose);
-
-			// Listen for file-path events (from CLI args, single-instance, file associations)
-			const unlistenFilePath = await listen<string>('file-path', (event) => {
-				handleFilePath(event.payload);
-			});
-			unlisteners.push(unlistenFilePath);
-
-			const unlistenCopyName = await listen<string>('menu-file-copy-name', (event) => {
-				const name = event.payload.split(/[/\\]/).pop() || event.payload;
-				navigator.clipboard.writeText(name).catch(console.error);
-			});
-			unlisteners.push(unlistenCopyName);
-
-			const unlistenCopyPath = await listen<string>('menu-file-copy-path', (event) => {
-				navigator.clipboard.writeText(event.payload).catch(console.error);
-			});
-			unlisteners.push(unlistenCopyPath);
-
-			const unlistenFolderChanged = await listen('folder-changed', () => {
-				debouncedFolderRefresh.call();
-			});
-			unlisteners.push(unlistenFolderChanged);
-
-			const unlistenFileTrash = await listen<string>('menu-file-trash', async (event) => {
-				const path = event.payload;
-				try {
-					await invoke('trash_file', { path });
-					const openTab = tabManager.tabs.find((t) => t.path === path);
-					if (openTab) tabManager.closeTab(openTab.id);
-					folderRefreshKey++;
-				} catch (e) {
-					console.error('Failed to trash file:', e);
-				}
-			});
-			unlisteners.push(unlistenFileTrash);
-
-			// Document format context menu events
-			const unlistenDocCodeBlock = await listen('menu-doc-code-block', () => {
-				editorRef?.wrapSelection('code_block');
-			});
-			unlisteners.push(unlistenDocCodeBlock);
-
-			const unlistenDocQuote = await listen('menu-doc-quote', () => {
-				editorRef?.wrapSelection('quote');
-			});
-			unlisteners.push(unlistenDocQuote);
-
-			// Tab context menu events
-			const unlistenTabNew = await listen('menu-tab-new', () => {
-				handleNewFile();
-			});
-			unlisteners.push(unlistenTabNew);
-
-			const unlistenTabUndo = await listen('menu-tab-undo', () => {
-				handleUndoCloseTab();
-			});
-			unlisteners.push(unlistenTabUndo);
-
-			const unlistenTabRename = await listen<string>('menu-tab-rename', (event) => {
-				tabManager.startRenaming(event.payload);
-			});
-			unlisteners.push(unlistenTabRename);
-
-			const unlistenTabClose = await listen<string>('menu-tab-close', async (event) => {
-				const tabId = event.payload;
-				if (await canCloseTab(tabId)) {
-					tabManager.closeTab(tabId);
-				}
-			});
-			unlisteners.push(unlistenTabClose);
-
-			const unlistenTabCloseOthers = await listen<string>('menu-tab-close-others', async (event) => {
-				const tabId = event.payload;
-				// Close all other tabs (with confirmation for dirty ones)
-				const otherTabs = tabManager.tabs.filter((t) => t.id !== tabId);
-				for (const tab of otherTabs) {
-					if (await canCloseTab(tab.id)) {
-						tabManager.closeTab(tab.id);
+			// Register all event listeners in parallel
+			const listeners = await Promise.all([
+				appWindow.onCloseRequested(async (event) => {
+					event.preventDefault();
+					debouncedSave.cancel();
+					const dirtyTabs = tabManager.tabs.filter((t) => t.isDirty && t.path && t.path !== 'HOME');
+					if (dirtyTabs.length > 0) await Promise.all(dirtyTabs.map(saveTab));
+					appWindow.destroy();
+				}),
+				listen<string>('file-path', (event) => { handleFilePath(event.payload); }),
+				listen<string>('menu-file-copy-name', (event) => {
+					const name = event.payload.split(/[/\\]/).pop() || event.payload;
+					navigator.clipboard.writeText(name).catch(console.error);
+				}),
+				listen<string>('menu-file-copy-path', (event) => {
+					navigator.clipboard.writeText(event.payload).catch(console.error);
+				}),
+				listen('folder-changed', () => { debouncedFolderRefresh.call(); }),
+				listen<string>('menu-file-trash', async (event) => {
+					const path = event.payload;
+					try {
+						await invoke('trash_file', { path });
+						const openTab = tabManager.tabs.find((t) => t.path === path);
+						if (openTab) tabManager.closeTab(openTab.id);
+						folderRefreshKey++;
+					} catch (e) {
+						console.error('Failed to trash file:', e);
 					}
-				}
-			});
-			unlisteners.push(unlistenTabCloseOthers);
-
-			const unlistenTabCloseRight = await listen<string>('menu-tab-close-right', async (event) => {
-				const tabId = event.payload;
-				const index = tabManager.tabs.findIndex((t) => t.id === tabId);
-				if (index === -1) return;
-				const rightTabs = tabManager.tabs.slice(index + 1);
-				for (const tab of rightTabs) {
-					if (await canCloseTab(tab.id)) {
-						tabManager.closeTab(tab.id);
+				}),
+				listen('menu-doc-code-block', () => { editorRef?.wrapSelection('code_block'); }),
+				listen('menu-doc-quote', () => { editorRef?.wrapSelection('quote'); }),
+				listen('menu-tab-new', () => { handleNewFile(); }),
+				listen('menu-tab-undo', () => { handleUndoCloseTab(); }),
+				listen<string>('menu-tab-rename', (event) => { tabManager.startRenaming(event.payload); }),
+				listen<string>('menu-tab-close', async (event) => {
+					const tabId = event.payload;
+					if (await canCloseTab(tabId)) tabManager.closeTab(tabId);
+				}),
+				listen<string>('menu-tab-close-others', async (event) => {
+					const tabId = event.payload;
+					const otherTabs = tabManager.tabs.filter((t) => t.id !== tabId);
+					for (const tab of otherTabs) {
+						if (await canCloseTab(tab.id)) tabManager.closeTab(tab.id);
 					}
-				}
-			});
-			unlisteners.push(unlistenTabCloseRight);
+				}),
+				listen<string>('menu-tab-close-right', async (event) => {
+					const tabId = event.payload;
+					const index = tabManager.tabs.findIndex((t) => t.id === tabId);
+					if (index === -1) return;
+					const rightTabs = tabManager.tabs.slice(index + 1);
+					for (const tab of rightTabs) {
+						if (await canCloseTab(tab.id)) tabManager.closeTab(tab.id);
+					}
+				}),
+			]);
+			unlisteners.push(...listeners);
 
 			// Check for file passed via URL query param (for detached windows)
 			const urlParams = new URLSearchParams(window.location.search);
 			const fileParam = urlParams.get('file');
-			if (fileParam) {
-				handleFilePath(fileParam);
-			}
+			if (fileParam) handleFilePath(fileParam);
 
 			// Check for initial CLI args or macOS file association paths
 			try {
@@ -942,15 +894,9 @@
 				console.error('Failed to get startup paths:', e);
 			}
 
-			try {
-				const appModePromise = invoke('get_app_mode');
-				const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
-				const appMode = await Promise.race([appModePromise, timeoutPromise]) as any;
-				mode = appMode;
-			} catch (e) {
-				console.error('Failed to get app mode, defaulting to app', e);
-				mode = 'app';
-			}
+			// Set mode then show — window appears in its final state, no loading screen visible
+			mode = await appModePromise as typeof mode;
+			invoke('show_window').catch(console.error);
 		};
 
 		init();
