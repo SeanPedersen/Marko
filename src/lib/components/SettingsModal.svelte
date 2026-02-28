@@ -104,7 +104,7 @@
 			</div>
 			<div class="modal-body">
 				<div class="setting-group">
-					<label class="setting-label">Editor Width</label>
+					<div class="setting-label">Editor Width</div>
 					<p class="setting-description">Set the maximum width of the text editor content area.</p>
 					<div class="segmented-control">
 						{#each editorWidthOptions as option}
@@ -119,7 +119,7 @@
 				</div>
 
 				<div class="setting-group">
-					<label class="setting-label">Sidebar Position</label>
+					<div class="setting-label">Sidebar Position</div>
 					<p class="setting-description">Choose which side of the window to display the sidebar.</p>
 					<div class="segmented-control">
 						{#each sidebarPositionOptions as option}
@@ -133,7 +133,7 @@
 				</div>
 
 				<div class="setting-group">
-					<label class="setting-label">Terminal Command</label>
+					<div class="setting-label">Terminal Command</div>
 					<p class="setting-description">Install the <code>marko</code> command to open files from the terminal.</p>
 					<div class="cli-install-row">
 						<button

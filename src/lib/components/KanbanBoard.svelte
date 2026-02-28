@@ -610,7 +610,6 @@
 										onblur={commitAddCard}
 										autofocus
 										autocomplete="off"
-										autocorrect="off"
 										autocapitalize="off"
 										spellcheck="false"
 									></textarea>
@@ -641,7 +640,6 @@
 								onblur={commitAddColumn}
 								autofocus
 								autocomplete="off"
-								autocorrect="off"
 								autocapitalize="off"
 								spellcheck="false"
 							/>

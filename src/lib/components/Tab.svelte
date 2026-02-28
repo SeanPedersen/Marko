@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Tab } from '../stores/tabs.svelte.js';
 	import { settings } from '../stores/settings.svelte.js';
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 
 	let {
 		tab,
@@ -22,7 +22,7 @@
 	}>();
 
 	let inputRef = $state<HTMLInputElement | null>(null);
-	let editValue = $state(tab.title);
+	let editValue = $state(untrack(() => tab.title));
 
 	// When entering rename mode, focus input and select name without extension
 	$effect(() => {

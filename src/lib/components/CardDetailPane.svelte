@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import type { KanbanCard } from '$lib/utils/kanban.js';
@@ -17,9 +17,8 @@
 		onclose: (updatedTitle: string, updatedBody: string) => void;
 	} = $props();
 
-	let titleInput = $state(card.text);
-	let bodyContent = $state(card.body);
-	let titleEl: HTMLInputElement;
+	let titleInput = $state(untrack(() => card.text));
+	let bodyContent = $state(untrack(() => card.body));
 	let editorRef: ReturnType<typeof CodeMirrorEditor>;
 
 	function handleClose() {
@@ -55,6 +54,7 @@
 		class="modal"
 		transition:fly={{ y: 12, duration: 180, easing: cubicOut }}
 		role="dialog"
+		tabindex="-1"
 		aria-modal="true"
 		aria-label="Card details"
 		onpointerdown={(e) => e.stopPropagation()}
@@ -64,7 +64,6 @@
 				<span class="modal-title-readonly">{card.text}</span>
 			{:else}
 				<input
-					bind:this={titleEl}
 					class="modal-title"
 					type="text"
 					bind:value={titleInput}
