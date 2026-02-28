@@ -14,6 +14,7 @@
         gitStatus,
         oncommit,
         onrevert,
+        oncommitandpush,
         isKanban = false,
         rawMode = false,
         ontogglerawmode,
@@ -32,6 +33,7 @@
         gitStatus?: string | null;
         oncommit?: (message: string) => void;
         onrevert?: () => void;
+        oncommitandpush?: (message: string) => Promise<void>;
         isKanban?: boolean;
         rawMode?: boolean;
         ontogglerawmode?: () => void;
@@ -40,6 +42,8 @@
     let commitInputVisible = $state(false);
     let commitMessage = $state("");
     let commitInputEl = $state<HTMLInputElement | null>(null);
+    let commitAndPush = $state(false);
+    let isPushing = $state(false);
 
     function gitBadge(status: string): { letter: string; cssClass: string } {
         switch (status) {
@@ -62,17 +66,34 @@
     }
 
     function handleCommitClick() {
+        commitAndPush = false;
         commitInputVisible = true;
         commitMessage = "";
         requestAnimationFrame(() => commitInputEl?.focus());
     }
 
-    function submitCommit() {
+    function handleCommitAndPushClick() {
+        commitAndPush = true;
+        commitInputVisible = true;
+        commitMessage = "";
+        requestAnimationFrame(() => commitInputEl?.focus());
+    }
+
+    async function submitCommit() {
         const msg = commitMessage.trim();
-        if (!msg || !oncommit) return;
-        oncommit(msg);
+        if (!msg) return;
         commitInputVisible = false;
         commitMessage = "";
+        if (commitAndPush && oncommitandpush) {
+            isPushing = true;
+            try {
+                await oncommitandpush(msg);
+            } finally {
+                isPushing = false;
+            }
+        } else {
+            oncommit?.(msg);
+        }
     }
 
     function handleCommitKeydown(e: KeyboardEvent) {
@@ -237,7 +258,23 @@
         {/if}
 
         {#if gitStatus && oncommit}
-            {#if commitInputVisible}
+            {#if isPushing}
+                <div class="pushing-indicator" title="Pushing…">
+                    <svg
+                        class="spinner"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                    >
+                        <circle cx="12" cy="12" r="10" stroke-opacity="0.25" />
+                        <path d="M12 2a10 10 0 0 1 10 10" />
+                    </svg>
+                </div>
+            {:else if commitInputVisible}
                 <div class="commit-input-wrapper">
                     <input
                         bind:this={commitInputEl}
@@ -309,6 +346,27 @@
                         <polyline points="20 6 9 17 4 12" />
                     </svg>
                 </button>
+                {#if oncommitandpush}
+                    <button
+                        class="commit-button"
+                        onclick={handleCommitAndPushClick}
+                        title="Commit and push this file"
+                    >
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <line x1="12" y1="19" x2="12" y2="5" />
+                            <polyline points="5 12 12 5 19 12" />
+                        </svg>
+                    </button>
+                {/if}
             {/if}
         {/if}
     </div>
@@ -577,6 +635,24 @@
         background: var(--color-accent-fg);
         color: #fff;
         border-color: var(--color-accent-fg);
+    }
+
+    .pushing-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        flex-shrink: 0;
+        color: #3fb950;
+    }
+
+    .spinner {
+        animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
     }
 
     .open-location-button {

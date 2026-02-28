@@ -961,6 +961,19 @@
 		}
 	}
 
+	async function handleGitCommitAndPush(message: string) {
+		if (!currentFile) return;
+		try {
+			await invoke('git_commit_file', { path: currentFile, message });
+			await invoke('git_sync', { path: currentFile });
+			const result = await invoke('get_file_git_status', { path: currentFile });
+			currentFileGitStatus = result as string | null;
+			folderRefreshKey++;
+		} catch (e) {
+			console.error('Git commit and push failed:', e);
+		}
+	}
+
 	async function handleGitRevert() {
 		if (!currentFile) return;
 		try {
@@ -1264,6 +1277,7 @@
 				onopenFileLocation={openFileLocation}
 				gitStatus={currentFileGitStatus}
 				oncommit={handleGitCommit}
+				oncommitandpush={handleGitCommitAndPush}
 				onrevert={handleGitRevert}
 				{isKanban}
 				rawMode={kanbanRawMode}
