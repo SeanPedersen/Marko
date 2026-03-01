@@ -232,23 +232,23 @@
 		return gitStatuses.get(entry.path);
 	}
 
-	function statusBadge(status: string): { letter: string; cssClass: string } {
+	function statusBadge(status: string): { letter: string; color: string } {
 		switch (status) {
 			case 'modified':
 			case 'staged_modified':
-				return { letter: 'M', cssClass: 'git-modified' };
+				return { letter: 'M', color: '#d29922' };
 			case 'staged':
-				return { letter: 'A', cssClass: 'git-staged' };
+				return { letter: 'A', color: '#3fb950' };
 			case 'untracked':
-				return { letter: 'U', cssClass: 'git-untracked' };
+				return { letter: 'U', color: '#3fb950' };
 			case 'deleted':
-				return { letter: 'D', cssClass: 'git-deleted' };
+				return { letter: 'D', color: '#f85149' };
 			case 'conflicted':
-				return { letter: 'C', cssClass: 'git-conflicted' };
+				return { letter: 'C', color: '#f85149' };
 			case 'renamed':
-				return { letter: 'R', cssClass: 'git-staged' };
+				return { letter: 'R', color: '#3fb950' };
 			default:
-				return { letter: '?', cssClass: '' };
+				return { letter: '?', color: 'inherit' };
 		}
 	}
 
@@ -467,10 +467,10 @@
 	{@const isLoading = loadingDirs.has(entry.path)}
 	{@const entryGitStatus = getEntryStatus(entry)}
 	{@const badge = entryGitStatus ? statusBadge(entryGitStatus) : null}
-	<li class="explorer-item" style="padding-left: {depth * 12 + 8}px">
+	<li class="relative" style="padding-left: {depth * 12 + 8}px">
 		{#if entry.is_dir}
 			<div
-				class="explorer-link is-dir {badge ? badge.cssClass : ''}"
+				class="flex items-center w-full py-[3px] px-2 border-none bg-none text-(--color-fg-default) text-[12.5px] leading-[1.4] text-left cursor-pointer overflow-hidden transition-[color,background] duration-100 gap-[6px] hover:bg-(--color-neutral-muted)"
 				role="button"
 				tabindex="0"
 				onclick={(event) => handleFileClick(event, entry)}
@@ -478,9 +478,9 @@
 				oncontextmenu={(event) => handleContextMenu(event, entry)}
 				title={entry.path}
 			>
-				<span class="icon">
+				<span class="flex items-center justify-center shrink-0">
 					{#if isLoading}
-						<svg class="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<svg class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 							<circle cx="12" cy="12" r="10" stroke-dasharray="30 60" />
 						</svg>
 					{:else if icon === 'folder-open'}
@@ -494,11 +494,11 @@
 						</svg>
 					{/if}
 				</span>
-				<span class="name">{entry.name}</span>
+				<span class="overflow-hidden text-ellipsis whitespace-nowrap flex-1" style={badge ? `color: ${badge.color}` : ''}>{entry.name}</span>
 				{#if badge}
-					<span class="git-badge {badge.cssClass}">{badge.letter}</span>
+					<span class="text-[10px] font-bold leading-none shrink-0 ml-auto [font-family:'SF_Mono','Monaco','Menlo',monospace]" style="color: {badge.color}">{badge.letter}</span>
 				{/if}
-				<span class="chevron" class:expanded={isExpanded(entry.path)}>
+				<span class="flex items-center justify-center ml-auto transition-transform duration-[150ms] ease-linear {isExpanded(entry.path) ? 'rotate-90' : ''}">
 					<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<polyline points="9 18 15 12 9 6" />
 					</svg>
@@ -506,30 +506,21 @@
 			</div>
 		{:else}
 			<button
-				class="explorer-link {badge ? badge.cssClass : ''}"
-				class:is-markdown={isMarkdown}
-				class:disabled={!isMarkdown}
+				class="flex items-center w-full py-[3px] px-2 border-none bg-none text-[12.5px] leading-[1.4] text-left overflow-hidden transition-[color,background] duration-100 gap-[6px] {isMarkdown ? 'text-(--color-fg-muted) cursor-pointer hover:text-(--color-accent-fg) hover:bg-(--color-neutral-muted)' : 'text-(--color-fg-muted) opacity-50 cursor-default'}"
 				onclick={(event) => handleFileClick(event, entry)}
 				onauxclick={(event) => { if (event.button === 1) handleFileClick(event, entry); }}
 				oncontextmenu={(event) => handleContextMenu(event, entry)}
 				title={entry.path}
 			>
-				<span class="icon">
-					{#if icon === 'markdown'}
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-							<polyline points="14 2 14 8 20 8" />
-						</svg>
-					{:else}
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-							<polyline points="14 2 14 8 20 8" />
-						</svg>
-					{/if}
+				<span class="flex items-center justify-center shrink-0">
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+						<polyline points="14 2 14 8 20 8" />
+					</svg>
 				</span>
-				<span class="name">{entry.name}</span>
+				<span class="overflow-hidden text-ellipsis whitespace-nowrap flex-1" style={badge ? `color: ${badge.color}` : ''}>{entry.name}</span>
 				{#if badge}
-					<span class="git-badge {badge.cssClass}">{badge.letter}</span>
+					<span class="text-[10px] font-bold leading-none shrink-0 ml-auto [font-family:'SF_Mono','Monaco','Menlo',monospace]" style="color: {badge.color}">{badge.letter}</span>
 				{/if}
 			</button>
 		{/if}
@@ -537,8 +528,8 @@
 	{#if entry.is_dir && isExpanded(entry.path)}
 		{@const children = sortEntries(dirContents.get(entry.path) || []).filter(matchesSearch)}
 		{#if newFileDir === entry.path}
-			<li class="explorer-item new-file-row" style="padding-left: {(depth + 1) * 12 + 8}px">
-				<span class="icon">
+			<li class="relative flex items-center gap-[6px] pt-[2px] pb-[2px] pr-2" style="padding-left: {(depth + 1) * 12 + 8}px">
+				<span class="flex items-center justify-center shrink-0">
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
 						<polyline points="14 2 14 8 20 8" />
@@ -549,7 +540,7 @@
 					bind:value={newFileName}
 					onkeydown={handleNewFileKeydown}
 					onblur={cancelNewFile}
-					class="new-file-input"
+					class="flex-1 min-w-0 border border-(--color-accent-fg) rounded-[3px] bg-(--color-canvas-subtle) text-(--color-fg-default) text-[12.5px] [font-family:inherit] outline-none py-[1px] px-[5px]"
 					type="text"
 					placeholder="filename.md"
 					spellcheck="false"
@@ -560,31 +551,35 @@
 			{@render renderEntry(child, depth + 1)}
 		{/each}
 		{#if children.length === 0 && !loadingDirs.has(entry.path) && newFileDir !== entry.path}
-			<li class="explorer-item empty" style="padding-left: {(depth + 1) * 12 + 8}px">
-				<span class="empty-text">Empty folder</span>
+			<li class="relative py-2 px-3" style="padding-left: {(depth + 1) * 12 + 8}px">
+				<span class="text-(--color-fg-muted) text-[11px] italic">Empty folder</span>
 			</li>
 		{/if}
 	{/if}
 {/snippet}
 
 {#if visible && folderPath}
-	<nav class="explorer-sidebar {sidebarPosition === 'right' ? 'position-right' : ''}" aria-label="File explorer">
-		<div class="explorer-header">
+	<nav
+		class="explorer-nav fixed top-9 bottom-0 w-[220px] overflow-y-auto overflow-x-hidden z-50 [font-family:var(--font-win)] pt-2 {sidebarPosition === 'right' ? 'left-auto right-0 border-l border-(--color-border-default) animate-slide-in-right' : 'left-0 border-r border-(--color-border-default) animate-slide-in'}"
+		style="background-color: var(--color-canvas-default)"
+		aria-label="File explorer"
+	>
+		<div class="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.5px] text-(--color-fg-muted) flex items-center gap-[6px]">
 			{#if searchOpen}
-				<div class="search-bar">
-					<svg class="search-bar-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<div class="flex items-center gap-1 flex-1 min-w-0 bg-(--color-canvas-subtle) border border-(--color-border-default) rounded-[4px] py-[2px] px-[6px] animate-search-expand">
+					<svg class="shrink-0 text-(--color-fg-muted)" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
 					</svg>
 					<input
 						bind:this={searchInputEl}
 						bind:value={searchQuery}
 						onkeydown={handleSearchKeydown}
-						class="search-input"
+						class="flex-1 min-w-0 border-none bg-none text-(--color-fg-default) text-[11px] [font-family:inherit] outline-none py-[2px] placeholder:text-(--color-fg-muted) placeholder:opacity-60 normal-case tracking-normal font-normal"
 						type="text"
 						placeholder="Filter files..."
 						spellcheck="false"
 					/>
-					<button class="search-close" onclick={toggleSearch} aria-label="Close search">
+					<button class="flex items-center justify-center shrink-0 w-[18px] h-[18px] p-0 border-none rounded-[3px] bg-none text-(--color-fg-muted) cursor-pointer transition-[color,background] duration-100 hover:text-(--color-fg-default) hover:bg-(--color-neutral-muted)" onclick={toggleSearch} aria-label="Close search">
 						<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
 							<path d="M18 6 6 18" /><path d="m6 6 12 12" />
 						</svg>
@@ -593,14 +588,14 @@
 			{:else}
 				{#if isGitRepo}
 					<button
-						class="header-btn sync-btn"
+						class="flex items-center justify-center shrink-0 w-7 h-[22px] p-0 border-none rounded-[4px] bg-none text-(--color-fg-muted) cursor-pointer transition-[color,background] duration-100 gap-[3px] disabled:opacity-50 disabled:cursor-default hover:enabled:text-(--color-fg-default) hover:enabled:bg-(--color-neutral-muted)"
 						onclick={handleSync}
 						disabled={isSyncing}
 						title={isSyncing ? 'Syncing...' : 'Git pull & push'}
 						aria-label="Git sync"
 					>
 						{#if gitBehind > 0}
-							<span class="ahead-behind behind" title="{gitBehind} behind remote">
+							<span class="flex items-center gap-[1px] text-[10px] font-semibold [font-family:'SF_Mono','Monaco','Menlo',monospace] leading-none text-[#d29922]" title="{gitBehind} behind remote">
 								<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
 									<path d="M12 5v14" /><path d="m19 12-7 7-7-7" />
 								</svg>
@@ -608,22 +603,22 @@
 							</span>
 						{/if}
 						{#if gitAhead > 0}
-							<span class="ahead-behind ahead" title="{gitAhead} ahead of remote">
+							<span class="flex items-center gap-[1px] text-[10px] font-semibold [font-family:'SF_Mono','Monaco','Menlo',monospace] leading-none text-[#3fb950]" title="{gitAhead} ahead of remote">
 								<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
 									<path d="M12 19V5" /><path d="m5 12 7-7 7 7" />
 								</svg>
 								{gitAhead}
 							</span>
 						{/if}
-						<svg class:spinning={isSyncing} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<svg class:animate-spin={isSyncing} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<path d="M21.5 2v6h-6" /><path d="M2.5 22v-6h6" />
 							<path d="M2.5 11.5a10 10 0 0 1 18.4-4.5" /><path d="M21.5 12.5a10 10 0 0 1-18.4 4.5" />
 						</svg>
 					</button>
 				{/if}
-				<span class="header-text" title={folderPath}>{getFolderName(folderPath)}</span>
+				<span class="overflow-hidden text-ellipsis whitespace-nowrap flex-1" title={folderPath}>{getFolderName(folderPath)}</span>
 				<button
-					class="header-btn"
+					class="flex items-center justify-center shrink-0 w-7 h-[22px] p-0 border-none rounded-[4px] bg-none text-(--color-fg-muted) cursor-pointer transition-[color,background] duration-100 hover:text-(--color-fg-default) hover:bg-(--color-neutral-muted)"
 					onclick={handleNewFileClickRoot}
 					title="New file"
 					aria-label="New file"
@@ -633,7 +628,7 @@
 					</svg>
 				</button>
 				<button
-					class="header-btn"
+					class="flex items-center justify-center shrink-0 w-7 h-[22px] p-0 border-none rounded-[4px] bg-none text-(--color-fg-muted) cursor-pointer transition-[color,background] duration-100 hover:text-(--color-fg-default) hover:bg-(--color-neutral-muted)"
 					onclick={toggleSearch}
 					title="Search files"
 					aria-label="Search files"
@@ -643,7 +638,7 @@
 					</svg>
 				</button>
 				<button
-					class="header-btn"
+					class="flex items-center justify-center shrink-0 w-7 h-[22px] p-0 border-none rounded-[4px] bg-none text-(--color-fg-muted) cursor-pointer transition-[color,background] duration-100 hover:text-(--color-fg-default) hover:bg-(--color-neutral-muted)"
 					onclick={toggleSort}
 					title={sortMode === 'az' ? 'Sorted A–Z (click for recent)' : 'Sorted by recent (click for A–Z)'}
 					aria-label="Toggle sort mode"
@@ -662,10 +657,10 @@
 				</button>
 			{/if}
 		</div>
-		<ul class="explorer-list">
+		<ul class="list-none m-0 p-0">
 			{#if newFileDir === folderPath}
-				<li class="explorer-item new-file-row" style="padding-left: 8px">
-					<span class="icon">
+				<li class="relative flex items-center gap-[6px] pt-[2px] pb-[2px] pr-2" style="padding-left: 8px">
+					<span class="flex items-center justify-center shrink-0">
 						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 							<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
 							<polyline points="14 2 14 8 20 8" />
@@ -676,7 +671,7 @@
 						bind:value={newFileName}
 						onkeydown={handleNewFileKeydown}
 						onblur={cancelNewFile}
-						class="new-file-input"
+						class="flex-1 min-w-0 border border-(--color-accent-fg) rounded-[3px] bg-(--color-canvas-subtle) text-(--color-fg-default) text-[12.5px] [font-family:inherit] outline-none py-[1px] px-[5px]"
 						type="text"
 						placeholder="filename.md"
 						spellcheck="false"
@@ -687,8 +682,8 @@
 				{@render renderEntry(entry, 0)}
 			{/each}
 			{#if sortEntries(entries).filter(matchesSearch).length === 0}
-				<li class="explorer-item empty">
-					<span class="empty-text">{searchQuery ? 'No matches' : 'No files found'}</span>
+				<li class="relative py-2 px-3">
+					<span class="text-(--color-fg-muted) text-[11px] italic">{searchQuery ? 'No matches' : 'No files found'}</span>
 				</li>
 			{/if}
 		</ul>
@@ -696,351 +691,15 @@
 {/if}
 
 <style>
-	.explorer-sidebar {
-		position: fixed;
-		top: 36px;
-		left: 0;
-		bottom: 0;
-		width: 220px;
-		background: var(--color-canvas-default);
-		border-right: 1px solid var(--color-border-default);
-		overflow-y: auto;
-		overflow-x: hidden;
-		z-index: 50;
-		font-family: var(--win-font);
-		padding-top: 8px;
-		animation: slideIn 0.15s ease-out;
-	}
-
-	.explorer-sidebar.position-right {
-		left: auto;
-		right: 0;
-		border-right: none;
-		border-left: 1px solid var(--color-border-default);
-		animation: slideInRight 0.15s ease-out;
-	}
-
-	@keyframes slideIn {
-		from {
-			transform: translateX(-100%);
-			opacity: 0;
-		}
-		to {
-			transform: translateX(0);
-			opacity: 1;
-		}
-	}
-
-	@keyframes slideInRight {
-		from {
-			transform: translateX(100%);
-			opacity: 0;
-		}
-		to {
-			transform: translateX(0);
-			opacity: 1;
-		}
-	}
-
-	.explorer-header {
-		padding: 4px 12px 8px;
-		font-size: 11px;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		color: var(--color-fg-muted);
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
-
-	.header-text {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		flex: 1;
-	}
-
-	.header-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
-		width: 28px;
-		height: 22px;
-		padding: 0;
-		border: none;
-		border-radius: 4px;
-		background: none;
-		color: var(--color-fg-muted);
-		cursor: pointer;
-		transition: color 0.1s, background 0.1s;
-	}
-
-	.header-btn:hover {
-		color: var(--color-fg-default);
-		background: var(--color-neutral-muted);
-	}
-
-	.search-bar {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		flex: 1;
-		min-width: 0;
-		background: var(--color-canvas-subtle);
-		border: 1px solid var(--color-border-default);
-		border-radius: 4px;
-		padding: 2px 6px;
-		animation: searchExpand 0.15s ease-out;
-	}
-
-	@keyframes searchExpand {
-		from {
-			opacity: 0;
-			transform: scaleX(0.8);
-			transform-origin: right;
-		}
-		to {
-			opacity: 1;
-			transform: scaleX(1);
-			transform-origin: right;
-		}
-	}
-
-	.search-bar-icon {
-		flex-shrink: 0;
-		color: var(--color-fg-muted);
-	}
-
-	.search-input {
-		flex: 1;
-		min-width: 0;
-		border: none;
-		background: none;
-		color: var(--color-fg-default);
-		font-size: 11px;
-		font-family: inherit;
-		outline: none;
-		padding: 2px 0;
-	}
-
-	.search-input::placeholder {
-		color: var(--color-fg-muted);
-		opacity: 0.6;
-	}
-
-	.search-close {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
-		width: 18px;
-		height: 18px;
-		padding: 0;
-		border: none;
-		border-radius: 3px;
-		background: none;
-		color: var(--color-fg-muted);
-		cursor: pointer;
-		transition: color 0.1s, background 0.1s;
-	}
-
-	.search-close:hover {
-		color: var(--color-fg-default);
-		background: var(--color-neutral-muted);
-	}
-
-	.explorer-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-	}
-
-	.explorer-item {
-		position: relative;
-	}
-
-	.explorer-item.empty {
-		padding: 8px 12px;
-	}
-
-	.empty-text {
-		color: var(--color-fg-muted);
-		font-size: 11px;
-		font-style: italic;
-	}
-
-	.explorer-link {
-		display: flex;
-		align-items: center;
-		width: 100%;
-		padding: 3px 8px;
-		border: none;
-		background: none;
-		color: var(--color-fg-muted);
-		font-size: 12.5px;
-		line-height: 1.4;
-		text-align: left;
-		cursor: pointer;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		transition: color 0.1s, background 0.1s;
-		gap: 6px;
-	}
-
-	.explorer-link:hover {
-		color: var(--color-fg-default);
-		background: var(--color-neutral-muted);
-	}
-
-	.explorer-link.is-dir {
-		color: var(--color-fg-default);
-	}
-
-	.explorer-link.is-markdown {
-		color: var(--color-fg-muted);
-	}
-
-	.explorer-link.is-markdown:hover {
-		color: var(--color-accent-fg);
-	}
-
-	.explorer-link.disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-
-	.explorer-link.disabled:hover {
-		background: none;
-		color: var(--color-fg-muted);
-	}
-
-	.icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
-	}
-
-	.name {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		flex: 1;
-	}
-
-
-	.sync-btn {
-		gap: 3px;
-	}
-
-	.sync-btn:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-
-	.spinning {
-		animation: spin 1s linear infinite;
-	}
-
-	.ahead-behind {
-		display: flex;
-		align-items: center;
-		gap: 1px;
-		font-size: 10px;
-		font-weight: 600;
-		font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
-		line-height: 1;
-	}
-
-	.ahead-behind.ahead {
-		color: #3fb950;
-	}
-
-	.ahead-behind.behind {
-		color: #d29922;
-	}
-
-	.git-badge {
-		font-size: 10px;
-		font-weight: 700;
-		line-height: 1;
-		flex-shrink: 0;
-		margin-left: auto;
-		font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
-	}
-
-	.git-badge.git-modified { color: #d29922; }
-	.git-badge.git-staged { color: #3fb950; }
-	.git-badge.git-untracked { color: #3fb950; }
-	.git-badge.git-deleted { color: #f85149; }
-	.git-badge.git-conflicted { color: #f85149; }
-
-	.explorer-link.git-modified > .name { color: #d29922; }
-	.explorer-link.git-staged > .name { color: #3fb950; }
-	.explorer-link.git-untracked > .name { color: #3fb950; }
-	.explorer-link.git-deleted > .name { color: #f85149; }
-	.explorer-link.git-conflicted > .name { color: #f85149; }
-
-
-	.new-file-row {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding-top: 2px;
-		padding-bottom: 2px;
-		padding-right: 8px;
-	}
-
-	.new-file-input {
-		flex: 1;
-		min-width: 0;
-		border: 1px solid var(--color-accent-fg);
-		border-radius: 3px;
-		background: var(--color-canvas-subtle);
-		color: var(--color-fg-default);
-		font-size: 12.5px;
-		font-family: inherit;
-		outline: none;
-		padding: 1px 5px;
-	}
-
-	.chevron {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		margin-left: auto;
-		transition: transform 0.15s ease;
-	}
-
-	.chevron.expanded {
-		transform: rotate(90deg);
-	}
-
-	.spinner {
-		animation: spin 1s linear infinite;
-	}
-
-	@keyframes spin {
-		from {
-			transform: rotate(0deg);
-		}
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
-	/* Scrollbar styling */
-	.explorer-sidebar::-webkit-scrollbar {
+	.explorer-nav::-webkit-scrollbar {
 		width: 4px;
 	}
 
-	.explorer-sidebar::-webkit-scrollbar-track {
+	.explorer-nav::-webkit-scrollbar-track {
 		background: transparent;
 	}
 
-	.explorer-sidebar::-webkit-scrollbar-thumb {
+	.explorer-nav::-webkit-scrollbar-thumb {
 		background: var(--color-neutral-muted);
 		border-radius: 2px;
 	}

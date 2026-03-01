@@ -474,7 +474,8 @@
 />
 
 <!-- Shared CodeMirror instance for card editing (always mounted, hidden when inactive) -->
-<div bind:this={sharedEditorEl} class="shared-card-editor" class:visible={editorVisible}
+<div bind:this={sharedEditorEl}
+	class="shared-editor {editorVisible ? 'block' : 'hidden'} fixed z-[1000] bg-(--color-canvas-default) border border-(--color-accent-fg) rounded-[6px] px-2 py-[6px] shadow-[0_4px_16px_rgba(0,0,0,0.18)] box-border min-h-[36px] select-text"
 	style:left="{editorPos.left}px"
 	style:top="{editorPos.top}px"
 	style:width="{editorPos.width}px"
@@ -482,12 +483,12 @@
 
 <!-- Backdrop: commits on outside click -->
 {#if editorVisible}
-	<div class="editor-backdrop" onpointerdown={commitEditCard} role="presentation"></div>
+	<div class="fixed inset-0 z-[999]" onpointerdown={commitEditCard} role="presentation"></div>
 {/if}
 
-<div class="kanban-wrapper">
+<div class="kanban-board flex flex-col h-full bg-(--color-canvas-default) overflow-hidden [font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] select-none">
 	{#if rawMode}
-		<div class="raw-editor">
+		<div class="flex-1 overflow-hidden">
 			<CodeMirrorEditor
 				value={content}
 				{theme}
@@ -499,29 +500,28 @@
 		</div>
 	{:else}
 		<div
-			class="board"
-			class:dragging-active={dragSrc !== null}
+			class="overflow-x-auto overflow-y-hidden h-full {dragSrc !== null ? 'cursor-grabbing' : ''}"
 			role="region"
 			aria-label="Kanban board"
 			onpointermove={onCardPointerMove}
 			onpointerup={onCardPointerUp}
 		>
-			<div class="board-inner">
-			{#if !readonly}<div class="add-column-spacer" aria-hidden="true"></div>{/if}
-			<div class="columns-group">
+			<div class="inline-flex flex-row min-w-full h-full gap-3 p-6 items-start justify-center box-border">
+			{#if !readonly}<div class="w-[280px] shrink-0 pointer-events-none" aria-hidden="true"></div>{/if}
+			<div class="flex flex-row gap-3 items-start h-full">
 			{#each columns as col, colIdx (col.name + colIdx)}
 				<div
-					class="column"
+					class="w-[280px] shrink-0 bg-(--color-canvas-subtle) border border-(--color-border-default) rounded-[8px] flex flex-col max-h-full"
 					data-col-idx={colIdx}
 					role="group"
 					aria-label={col.name}
 				>
-					<div class="column-header">
-						<span class="column-name">{col.name}</span>
-						<span class="card-count">{col.cards.length}</span>
-						<div class="column-actions">
+					<div class="flex items-center gap-2 px-3 py-[10px] border-b border-(--color-border-default) shrink-0">
+						<span class="font-semibold text-[12px] tracking-[0.04em] uppercase text-(--color-fg-muted) flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{col.name}</span>
+						<span class="text-[11px] bg-(--color-neutral-muted) text-(--color-fg-muted) rounded-[10px] px-[7px] py-[1px] font-medium">{col.cards.length}</span>
+						<div class="flex gap-[2px]">
 							<button
-								class="icon-btn"
+								class="bg-none border-none cursor-pointer text-(--color-fg-muted) text-[11px] px-[5px] py-[2px] rounded-[3px] leading-none hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)"
 								onclick={() => toggleCollapse(colIdx)}
 								title={col.collapsed ? 'Expand' : 'Collapse'}
 								aria-label={col.collapsed ? 'Expand column' : 'Collapse column'}
@@ -530,7 +530,7 @@
 							</button>
 							{#if !readonly}
 								<button
-									class="icon-btn delete-col"
+									class="bg-none border-none cursor-pointer text-(--color-fg-muted) text-[11px] px-[5px] py-[2px] rounded-[3px] leading-none hover:bg-(--color-neutral-muted) hover:text-[#cf222e]"
 									onclick={() => deleteColumn(colIdx)}
 									title="Delete column"
 									aria-label="Delete column"
@@ -540,29 +540,27 @@
 					</div>
 
 					{#if !col.collapsed}
-						<div class="cards">
+						<div class="p-2 flex flex-col gap-[6px] overflow-y-auto flex-1 min-h-[40px]">
 							{#each col.cards as card, cardIdx (card.id)}
 								{@const isSrc = dragSrc?.colIdx === colIdx && dragSrc?.cardIdx === cardIdx}
 								{@const isEditing = editingCard?.colIdx === colIdx && editingCard?.cardIdx === cardIdx}
 								{@const insertBefore = dropTarget?.colIdx === colIdx && dropTarget?.insertIdx === cardIdx}
 
 								{#if insertBefore}
-									<div class="drop-line"></div>
+									<div class="h-[3px] rounded-[2px] bg-(--color-accent-fg) mx-[2px] shrink-0"></div>
 								{/if}
 
 								<div
-									class="card"
-									class:is-src={isSrc}
-									class:is-editing={isEditing}
+									class="kanban-card bg-(--color-canvas-default) border border-(--color-border-default) rounded-[6px] px-[10px] py-2 flex flex-col cursor-grab relative touch-none {isSrc ? 'opacity-35' : ''} {isEditing ? 'invisible' : ''} {dragSrc !== null ? '[&]:cursor-grabbing' : ''}"
 									data-col-idx={colIdx}
 									data-card-idx={cardIdx}
 									role="listitem"
 									onpointerdown={(e) => onCardPointerDown(e, colIdx, cardIdx)}
 								>
-									<div class="card-main">
+									<div class="flex items-start w-full">
 										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 										<span
-											class="card-text"
+											class="card-text flex-1 text-(--color-fg-default) leading-[1.45] break-words tracking-[-0.01em]"
 											role="button"
 											tabindex={readonly ? -1 : 0}
 											ondblclick={() => startEditCard(colIdx, cardIdx)}
@@ -570,7 +568,7 @@
 										>{@html renderCardMarkdown(card.text)}</span>
 										{#if !readonly && card.body}
 											<button
-												class="card-expand"
+												class="card-action bg-none border-none cursor-pointer text-(--color-fg-muted) text-[13px] px-1 py-[2px] rounded-[3px] opacity-0 shrink-0 leading-none transition-opacity duration-100 hover:text-(--color-accent-fg) hover:bg-[color-mix(in_srgb,var(--color-accent-fg)_10%,transparent)]"
 												onclick={(e) => { e.stopPropagation(); openPane(colIdx, cardIdx); }}
 												title="Open details"
 												aria-label="Open card details"
@@ -578,7 +576,7 @@
 										{/if}
 										{#if !readonly}
 											<button
-												class="card-delete"
+												class="card-action bg-none border-none cursor-pointer text-(--color-fg-muted) text-[11px] px-1 py-[2px] rounded-[3px] opacity-0 shrink-0 leading-none transition-opacity duration-100 hover:text-[#cf222e] hover:bg-[color-mix(in_srgb,#cf222e_10%,transparent)]"
 												onclick={() => deleteCard(colIdx, cardIdx)}
 												title="Delete card"
 												aria-label="Delete card"
@@ -587,7 +585,7 @@
 									</div>
 									{#if card.body}
 										<button
-											class="card-footer"
+											class="block w-full mt-1 pt-1 border-t border-(--color-border-default) border-l-0 border-r-0 border-b-0 cursor-pointer text-(--color-fg-muted) text-[11px] text-left leading-[1.4] [font-family:inherit] bg-none whitespace-nowrap overflow-hidden text-ellipsis hover:text-(--color-fg-default)"
 											onclick={(e) => { e.stopPropagation(); openPane(colIdx, cardIdx); }}
 										>{bodyPreview(card.body)}</button>
 									{/if}
@@ -595,14 +593,14 @@
 							{/each}
 
 							{#if dropTarget?.colIdx === colIdx && dropTarget?.insertIdx === col.cards.length}
-								<div class="drop-line"></div>
+								<div class="h-[3px] rounded-[2px] bg-(--color-accent-fg) mx-[2px] shrink-0"></div>
 							{/if}
 
 							{#if addingCard === colIdx}
-								<div class="card add-card-form">
+								<div class="bg-(--color-canvas-default) border border-(--color-border-default) rounded-[6px] px-[10px] py-2 flex flex-col">
 									<!-- svelte-ignore a11y_autofocus -->
 									<textarea
-										class="card-edit-input"
+										class="w-full text-[13px] [font-family:inherit] tracking-[-0.01em] leading-[1.45] border border-(--color-accent-fg) rounded-[4px] px-[6px] py-1 bg-(--color-canvas-default) text-(--color-fg-default) resize-none overflow-hidden outline-none box-border"
 										use:autoresize
 										bind:value={newCardText}
 										placeholder="Card title…"
@@ -618,7 +616,7 @@
 						</div>
 
 						{#if !readonly}
-							<button class="add-card-btn" onclick={() => startAddCard(colIdx)}>
+							<button class="mx-2 mb-2 px-2 py-[6px] bg-none border border-dashed border-(--color-border-default) rounded-[6px] text-(--color-fg-muted) text-[12px] cursor-pointer text-left transition-[background,color] duration-100 shrink-0 hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)" onclick={() => startAddCard(colIdx)}>
 								+ Add card
 							</button>
 						{/if}
@@ -628,12 +626,12 @@
 			</div>
 
 			{#if !readonly}
-				<div class="column add-column">
+				<div class="w-[280px] shrink-0 flex flex-col bg-none border border-dashed border-(--color-border-default) rounded-[8px] min-h-[60px] items-stretch">
 					{#if addingColumn}
-						<div class="column-header">
+						<div class="flex items-center gap-2 px-3 py-[10px] shrink-0">
 							<!-- svelte-ignore a11y_autofocus -->
 							<input
-								class="column-name-input"
+								class="flex-1 text-[13px] font-semibold [font-family:inherit] border border-(--color-accent-fg) rounded-[4px] px-[6px] py-[2px] bg-(--color-canvas-default) text-(--color-fg-default) outline-none min-w-0"
 								bind:value={newColumnName}
 								placeholder="Column name…"
 								onkeydown={handleNewColumnKeydown}
@@ -645,7 +643,7 @@
 							/>
 						</div>
 					{:else}
-						<button class="add-column-btn" onclick={startAddColumn}>
+						<button class="bg-none border-none cursor-pointer text-(--color-fg-muted) text-[13px] p-4 text-left w-full hover:text-(--color-fg-default)" onclick={startAddColumn}>
 							+ Add column
 						</button>
 					{/if}
@@ -666,239 +664,19 @@
 {/if}
 
 <style>
-	.kanban-wrapper {
-		display: flex;
-		flex-direction: column;
-		height: 100%;
-		background: var(--color-canvas-default);
-		overflow: hidden;
-		font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-		-webkit-user-select: none;
-		user-select: none;
-	}
-
-	.kanban-wrapper :global(textarea),
-	.kanban-wrapper :global(input) {
+	/* Allow text selection inside textarea/input */
+	.kanban-board :global(textarea),
+	.kanban-board :global(input) {
 		-webkit-user-select: text;
 		user-select: text;
 	}
 
-	.raw-editor {
-		flex: 1;
-		overflow: hidden;
-	}
-
-	.board {
-		overflow-x: auto;
-		overflow-y: hidden;
-		height: 100%;
-	}
-
-	.board-inner {
-		display: inline-flex;
-		flex-direction: row;
-		min-width: 100%;
-		height: 100%;
-		gap: 0.75rem;
-		padding: 1.5rem;
-		align-items: flex-start;
-		justify-content: center;
-		box-sizing: border-box;
-	}
-
-	/* Invisible counterweight so the add-column doesn't shift the center */
-	.add-column-spacer {
-		width: 280px;
-		flex-shrink: 0;
-		pointer-events: none;
-	}
-
-	.columns-group {
-		display: flex;
-		flex-direction: row;
-		gap: 0.75rem;
-		align-items: flex-start;
-		height: 100%;
-	}
-
-	.board.dragging-active {
-		cursor: grabbing;
-	}
-
-	.column {
-		width: 280px;
-		flex-shrink: 0;
-		background: var(--color-canvas-subtle);
-		border: 1px solid var(--color-border-default);
-		border-radius: 8px;
-		display: flex;
-		flex-direction: column;
-		max-height: 100%;
-	}
-
-	.column-header {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.625rem 0.75rem;
-		border-bottom: 1px solid var(--color-border-default);
-		flex-shrink: 0;
-	}
-
-	.column-name {
-		font-weight: 600;
-		font-size: 12px;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--color-fg-muted);
-		flex: 1;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.card-count {
-		font-size: 11px;
-		background: var(--color-neutral-muted);
-		color: var(--color-fg-muted);
-		border-radius: 10px;
-		padding: 1px 7px;
-		font-weight: 500;
-	}
-
-	.column-actions {
-		display: flex;
-		gap: 2px;
-	}
-
-	.icon-btn {
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: var(--color-fg-muted);
-		font-size: 11px;
-		padding: 2px 5px;
-		border-radius: 3px;
-		line-height: 1;
-	}
-
-	.icon-btn:hover {
-		background: var(--color-neutral-muted);
-		color: var(--color-fg-default);
-	}
-
-	.delete-col:hover {
-		color: #cf222e;
-	}
-
-	.cards {
-		padding: 0.5rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
-		overflow-y: auto;
-		flex: 1;
-		min-height: 40px;
-	}
-
-	.card {
-		background: var(--color-canvas-default);
-		border: 1px solid var(--color-border-default);
-		border-radius: 6px;
-		padding: 0.5rem 0.625rem;
-		display: flex;
-		flex-direction: column;
-		cursor: grab;
-		position: relative;
-		touch-action: none;
-	}
-
-	.card-main {
-		display: flex;
-		align-items: flex-start;
-		width: 100%;
-	}
-
-	.card-footer {
-		display: block;
-		width: 100%;
-		margin-top: 0.25rem;
-		padding-top: 0.25rem;
-		border-top: 1px solid var(--color-border-default);
-		background: none;
-		border-left: none;
-		border-right: none;
-		border-bottom: none;
-		cursor: pointer;
-		color: var(--color-fg-muted);
-		font-size: 11px;
-		text-align: left;
-		line-height: 1.4;
-		font-family: inherit;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.card-footer:hover {
-		color: var(--color-fg-default);
-	}
-
-	.card-expand {
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: var(--color-fg-muted);
-		font-size: 13px;
-		padding: 2px 4px;
-		border-radius: 3px;
-		opacity: 0;
-		flex-shrink: 0;
-		line-height: 1;
-		transition: opacity 0.1s;
-	}
-
-	.card:hover .card-expand {
-		opacity: 1;
-	}
-
-	.card-expand:hover {
-		color: var(--color-accent-fg);
-		background: color-mix(in srgb, var(--color-accent-fg) 10%, transparent);
-	}
-
-	.board.dragging-active .card {
-		cursor: grabbing;
-	}
-
-	.card.is-src {
-		opacity: 0.35;
-	}
-
-	/* Hide card content while shared editor overlays it */
-	.card.is-editing {
-		visibility: hidden;
-	}
-
-	.drop-line {
-		height: 3px;
-		border-radius: 2px;
-		background: var(--color-accent-fg);
-		margin: 0 2px;
-		flex-shrink: 0;
-	}
-
+	/* Non-standard font weights not expressible as Tailwind utilities */
 	.card-text {
 		font-size: 13px;
 		font-weight: 450;
-		color: var(--color-fg-default);
-		line-height: 1.45;
-		word-break: break-word;
-		letter-spacing: -0.01em;
-		flex: 1;
 	}
 
-	/* Markdown rendered inside cards */
 	.card-text :global(strong) { font-weight: 650; }
 	.card-text :global(em) { font-style: italic; }
 	.card-text :global(del),
@@ -918,60 +696,23 @@
 		text-decoration: underline;
 	}
 
-	.card-delete {
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: var(--color-fg-muted);
-		font-size: 11px;
-		padding: 2px 4px;
-		border-radius: 3px;
-		opacity: 0;
-		flex-shrink: 0;
-		line-height: 1;
-		transition: opacity 0.1s;
-	}
-
-	.card:hover .card-delete {
+	/* Show action buttons on card hover */
+	.kanban-card:hover .card-action {
 		opacity: 1;
 	}
 
-	.card-delete:hover {
-		color: #cf222e;
-		background: color-mix(in srgb, #cf222e 10%, transparent);
-	}
-
 	/* Shared CodeMirror card editor */
-	.shared-card-editor {
-		display: none;
-		position: fixed;
-		z-index: 1000;
-		background: var(--color-canvas-default);
-		border: 1px solid var(--color-accent-fg);
-		border-radius: 6px;
-		padding: 0.375rem 0.5rem;
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-		box-sizing: border-box;
-		min-height: 36px;
-		-webkit-user-select: text;
-		user-select: text;
-	}
-
-	.shared-card-editor.visible {
-		display: block;
-	}
-
-	.shared-card-editor :global(.cm-editor) {
+	.shared-editor :global(.cm-editor) {
 		outline: none;
 	}
 
-	.shared-card-editor :global(.cm-scroller) {
+	.shared-editor :global(.cm-scroller) {
 		padding: 0;
 		max-height: 180px;
 		overflow-y: auto;
 	}
 
-	.shared-card-editor :global(.cm-content) {
+	.shared-editor :global(.cm-content) {
 		font-size: 13px;
 		font-weight: 450;
 		font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -981,87 +722,7 @@
 		min-height: 20px;
 	}
 
-	.shared-card-editor :global(.cm-line) {
+	.shared-editor :global(.cm-line) {
 		padding: 0;
-	}
-
-	/* Backdrop to catch outside-click commits */
-	.editor-backdrop {
-		position: fixed;
-		inset: 0;
-		z-index: 999;
-	}
-
-	.card-edit-input {
-		width: 100%;
-		font-size: 13px;
-		font-weight: 450;
-		font-family: inherit;
-		letter-spacing: -0.01em;
-		line-height: 1.45;
-		border: 1px solid var(--color-accent-fg);
-		border-radius: 4px;
-		padding: 4px 6px;
-		background: var(--color-canvas-default);
-		color: var(--color-fg-default);
-		resize: none;
-		overflow: hidden;
-		outline: none;
-		box-sizing: border-box;
-	}
-
-	.add-card-btn {
-		margin: 0 0.5rem 0.5rem;
-		padding: 0.375rem 0.5rem;
-		background: none;
-		border: 1px dashed var(--color-border-default);
-		border-radius: 6px;
-		color: var(--color-fg-muted);
-		font-size: 12px;
-		cursor: pointer;
-		text-align: left;
-		transition: background 0.1s, color 0.1s;
-		flex-shrink: 0;
-	}
-
-	.add-card-btn:hover {
-		background: var(--color-neutral-muted);
-		color: var(--color-fg-default);
-	}
-
-	.add-column {
-		background: none;
-		border: 1px dashed var(--color-border-default);
-		min-height: 60px;
-		align-items: stretch;
-	}
-
-	.add-column-btn {
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: var(--color-fg-muted);
-		font-size: 13px;
-		padding: 1rem;
-		text-align: left;
-		width: 100%;
-	}
-
-	.add-column-btn:hover {
-		color: var(--color-fg-default);
-	}
-
-	.column-name-input {
-		flex: 1;
-		font-size: 13px;
-		font-weight: 600;
-		font-family: inherit;
-		border: 1px solid var(--color-accent-fg);
-		border-radius: 4px;
-		padding: 2px 6px;
-		background: var(--color-canvas-default);
-		color: var(--color-fg-default);
-		outline: none;
-		min-width: 0;
 	}
 </style>

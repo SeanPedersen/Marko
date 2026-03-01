@@ -1206,8 +1206,8 @@
 		{theme}
 		onSetTheme={(t) => (theme = t)}
 		ontoggleSettings={toggleSettings} />
-	<div class="loading-screen">
-		<svg class="spinner" viewBox="0 0 50 50">
+	<div class="fixed top-9 left-0 w-full h-[calc(100%-36px)] flex items-center justify-center bg-(--color-canvas-default) z-[5000]">
+		<svg class="spinner animate-rotate z-[2] w-[50px] h-[50px]" viewBox="0 0 50 50">
 			<circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
 		</svg>
 	</div>
@@ -1257,10 +1257,8 @@
 			editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
 		/>
 		<div
-			class="markdown-container"
-			class:sidebar-open={folderExplorerVisible}
-			class:sidebar-right={settings.sidebarPosition === 'right'}
-			style={zoomLevel !== 100 ? `transform: scale(${zoomLevel / 100}); transform-origin: top left; width: ${10000 / zoomLevel}%; height: ${10000 / zoomLevel}%;` : ''}
+			class="fixed top-9 left-0 right-0 bottom-0 overflow-hidden flex flex-col z-[10]"
+			style="{folderExplorerVisible && settings.sidebarPosition !== 'right' ? 'left: clamp(0px, 1184px - 100vw, calc(232px - 2rem));' : ''}{folderExplorerVisible && settings.sidebarPosition === 'right' ? 'right: clamp(0px, 1184px - 100vw, calc(232px - 2rem));' : ''}{zoomLevel !== 100 ? `transform: scale(${zoomLevel / 100}); transform-origin: top left; width: ${10000 / zoomLevel}%; height: ${10000 / zoomLevel}%;` : ''}"
 			role="presentation"
 		>
 			<EditorHeader
@@ -1305,13 +1303,16 @@
 			{/if}
 		</div>
 	{:else}
-		<div class="home-container" class:sidebar-open={folderExplorerVisible} class:sidebar-right={settings.sidebarPosition === 'right'}>
+		<div
+			class="fixed top-9 left-0 right-0 bottom-0 overflow-y-auto transition-[left,right] duration-[150ms] ease-out"
+			style="{folderExplorerVisible && settings.sidebarPosition !== 'right' ? 'left: clamp(0px, 1184px - 100vw, calc(232px - 2rem));' : ''}{folderExplorerVisible && settings.sidebarPosition === 'right' ? 'right: clamp(0px, 1184px - 100vw, calc(232px - 2rem));' : ''}"
+		>
 			<HomePage {recentFiles} {recentFolders} onselectFile={selectFile} onselectFolder={selectFolder} onloadFile={loadMarkdown} onopenFolder={openFolder} onremoveRecentFile={removeRecentFile} onremoveRecentFolder={removeRecentFolder} onnewFile={handleNewFile} onnewKanbanFile={handleNewKanbanFile} onnewMermaidFile={handleNewMermaidFile} />
 		</div>
 	{/if}
 
 	{#if tooltip.show}
-		<div class="tooltip" style="left: {tooltip.x}px; top: {tooltip.y}px;">
+		<div class="fixed bg-(--color-canvas-default) text-(--color-fg-default) px-[10px] py-[6px] rounded-[4px] text-[12px] pointer-events-none z-[10000] shadow-[0_4px_16px_rgba(0,0,0,0.15)] border border-(--color-border-default) [font-family:var(--font-win)] whitespace-nowrap max-w-[400px] overflow-hidden text-ellipsis -translate-x-1/2 -translate-y-full" style="left: {tooltip.x}px; top: {tooltip.y}px;">
 			{tooltip.text}
 		</div>
 	{/if}
@@ -1332,8 +1333,8 @@
 		onclose={() => (settingsVisible = false)} />
 
 	{#if isDragging}
-		<div class="drag-overlay" role="presentation">
-			<div class="drag-message">
+		<div class="fixed inset-0 bg-[rgba(0,120,212,0.15)] backdrop-blur-[4px] border-[3px] border-dashed border-[#0078d4] m-3 rounded-[12px] flex items-center justify-center z-[40000] pointer-events-none animate-fade-in" role="presentation">
+			<div class="flex flex-col items-center gap-4 text-[#0078d4] [font-family:var(--font-win)] font-medium text-[18px]">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="48"
@@ -1355,20 +1356,6 @@
 {/if}
 
 <style>
-	:root {
-		--animation: cubic-bezier(0.05, 0.95, 0.05, 0.95);
-		scroll-behavior: smooth !important;
-		background-color: var(--color-canvas-default);
-		--color-canvas-default: #ffffff;
-		--color-canvas-subtle: #f6f8fa;
-		--color-fg-default: #24292f;
-		--color-fg-muted: #656d76;
-		--color-border-default: #d1d9e0;
-		--color-accent-fg: #0969da;
-		--color-neutral-muted: rgba(175, 184, 193, 0.2);
-		--win-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-	}
-
 	:global(body) {
 		background-color: var(--color-canvas-default);
 		margin: 0;
@@ -1377,148 +1364,11 @@
 		overflow: hidden;
 	}
 
-	.markdown-container {
-		position: fixed;
-		top: 36px;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		overflow: hidden;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.markdown-container.sidebar-open {
-		left: clamp(0px, 1184px - 100vw, calc(232px - 2rem));
-	}
-
-	.markdown-container.sidebar-open.sidebar-right {
-		left: 0;
-		right: clamp(0px, 1184px - 100vw, calc(232px - 2rem));
-	}
-
-	.home-container {
-		position: fixed;
-		top: 36px;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		overflow-y: auto;
-		transition: left 0.15s ease-out, right 0.15s ease-out;
-	}
-
-	.home-container.sidebar-open {
-		left: clamp(0px, 1184px - 100vw, calc(232px - 2rem));
-	}
-
-	.home-container.sidebar-open.sidebar-right {
-		left: 0;
-		right: clamp(0px, 1184px - 100vw, calc(232px - 2rem));
-	}
-
-	.tooltip {
-		position: fixed;
-		background: var(--color-canvas-default);
-		color: var(--color-fg-default);
-		padding: 6px 10px;
-		border-radius: 4px;
-		font-size: 12px;
-		pointer-events: none;
-		z-index: 10000;
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-		border: 1px solid var(--color-border-default);
-		font-family: var(--win-font);
-		white-space: nowrap;
-		max-width: 400px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		transform: translate(-50%, -100%);
-		transition: opacity 0.15s ease-out;
-		opacity: 1;
-	}
-
-	.tooltip::after {
-		content: '';
-		position: absolute;
-		bottom: -6px;
-		left: 50%;
-		transform: translateX(-50%);
-		border-left: 6px solid transparent;
-		border-right: 6px solid transparent;
-		border-top: 6px solid var(--color-canvas-default);
-	}
-
-	.drag-overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(0, 120, 212, 0.15);
-		backdrop-filter: blur(4px);
-		border: 3px dashed #0078d4;
-		margin: 12px;
-		border-radius: 12px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 40000;
-		pointer-events: none;
-		animation: fadeIn 0.15s ease-out;
-	}
-
-	.drag-message {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 16px;
-		color: #0078d4;
-		font-family: var(--win-font);
-		font-weight: 500;
-		font-size: 18px;
-	}
-
-	@keyframes fadeIn {
-		from {
-			opacity: 0;
-			transform: scale(0.98);
-		}
-		to {
-			opacity: 1;
-			transform: scale(1);
-		}
-	}
-
-	.loading-screen {
-		position: fixed;
-		top: 36px;
-		left: 0;
-		width: 100%;
-		height: calc(100% - 36px);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--color-canvas-default);
-		z-index: 5000;
-	}
-
-	.spinner {
-		animation: rotate 2s linear infinite;
-		z-index: 2;
-		width: 50px;
-		height: 50px;
-	}
-
+	/* SVG spinner path animation — targets child element, must stay in CSS */
 	.spinner .path {
 		stroke: var(--color-accent-fg);
 		stroke-linecap: round;
 		animation: dash 1.5s ease-in-out infinite;
-	}
-
-	@keyframes rotate {
-		100% {
-			transform: rotate(360deg);
-		}
 	}
 
 	@keyframes dash {

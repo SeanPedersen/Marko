@@ -45,13 +45,13 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
-	class="modal-backdrop"
+	class="fixed inset-0 z-[500] bg-black/35 flex items-center justify-center"
 	role="presentation"
 	onpointerdown={handleClose}
 >
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<div
-		class="modal"
+		class="w-[660px] max-w-[90vw] h-[62vh] max-h-[680px] min-h-[300px] bg-(--color-canvas-default) border border-(--color-border-default) rounded-[10px] shadow-[0_12px_48px_rgba(0,0,0,0.28)] flex flex-col overflow-hidden"
 		transition:fly={{ y: 12, duration: 180, easing: cubicOut }}
 		role="dialog"
 		tabindex="-1"
@@ -59,21 +59,21 @@
 		aria-label="Card details"
 		onpointerdown={(e) => e.stopPropagation()}
 	>
-		<div class="modal-header">
+		<div class="flex items-center gap-2 px-4 py-3 border-b border-(--color-border-default) shrink-0">
 			{#if readonly}
-				<span class="modal-title-readonly">{card.text}</span>
+				<span class="flex-1 text-[14px] font-semibold text-(--color-fg-default) overflow-hidden text-ellipsis whitespace-nowrap">{card.text}</span>
 			{:else}
 				<input
-					class="modal-title"
+					class="flex-1 text-[14px] font-semibold [font-family:inherit] border-none bg-transparent text-(--color-fg-default) outline-none min-w-0 px-1 py-0.5 rounded-[3px] focus:bg-(--color-canvas-subtle)"
 					type="text"
 					bind:value={titleInput}
 					placeholder="Card title…"
 				/>
 			{/if}
-			<button class="modal-close" onclick={handleClose} title="Close" aria-label="Close">✕</button>
+			<button class="bg-none border-none cursor-pointer text-(--color-fg-muted) text-[13px] px-1.5 py-1 rounded-[4px] leading-none shrink-0 hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)" onclick={handleClose} title="Close" aria-label="Close">✕</button>
 		</div>
 
-		<div class="modal-body">
+		<div class="flex-1 overflow-hidden flex flex-col">
 			<CodeMirrorEditor
 				bind:this={editorRef}
 				value={bodyContent}
@@ -88,97 +88,11 @@
 </div>
 
 <style>
-	.modal-backdrop {
-		position: fixed;
-		inset: 0;
-		z-index: 500;
-		background: rgba(0, 0, 0, 0.35);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.modal {
-		width: 660px;
-		max-width: 90vw;
-		height: 62vh;
-		max-height: 680px;
-		min-height: 300px;
-		background: var(--color-canvas-default);
-		border: 1px solid var(--color-border-default);
-		border-radius: 10px;
-		box-shadow: 0 12px 48px rgba(0, 0, 0, 0.28);
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-	}
-
-	.modal-header {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--color-border-default);
-		flex-shrink: 0;
-	}
-
-	.modal-title {
-		flex: 1;
-		font-size: 14px;
-		font-weight: 600;
-		font-family: inherit;
-		border: none;
-		background: transparent;
-		color: var(--color-fg-default);
-		outline: none;
-		min-width: 0;
-		padding: 2px 4px;
-		border-radius: 3px;
-	}
-
-	.modal-title:focus {
-		background: var(--color-canvas-subtle);
-	}
-
-	.modal-title-readonly {
-		flex: 1;
-		font-size: 14px;
-		font-weight: 600;
-		color: var(--color-fg-default);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.modal-close {
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: var(--color-fg-muted);
-		font-size: 13px;
-		padding: 4px 6px;
-		border-radius: 4px;
-		line-height: 1;
-		flex-shrink: 0;
-	}
-
-	.modal-close:hover {
-		background: var(--color-neutral-muted);
-		color: var(--color-fg-default);
-	}
-
-	.modal-body {
-		flex: 1;
-		overflow: hidden;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.modal-body :global(.cm-scroller) {
+	div :global(.cm-scroller) {
 		padding: 1rem !important;
 	}
 
-	.modal-body :global(.cm-editor) {
+	div :global(.cm-editor) {
 		height: 100%;
 	}
 </style>

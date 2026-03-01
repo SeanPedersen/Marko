@@ -23,7 +23,6 @@
 	let showLeftArrow = $state(false);
 	let showRightArrow = $state(false);
 
-	// Drag state
 	let draggingId = $state<string | null>(null);
 	let justDragged = false;
 	let dragState = $state<{
@@ -36,13 +35,11 @@
 	} | null>(null);
 
 	function handleMouseDown(e: MouseEvent, tab: TabData, element: HTMLElement) {
-		if (e.button !== 0) return; // Only left click
-		if (tab.path === 'HOME') return; // HOME tab is not draggable
-		// e.preventDefault(); // allow click to propagate
-		e.stopPropagation(); // Stop window drag from triggering
+		if (e.button !== 0) return;
+		if (tab.path === 'HOME') return;
+		e.stopPropagation();
 
 		const rect = element.getBoundingClientRect();
-		// Don't set draggingId yet
 		dragState = {
 			startX: e.clientX,
 			currentX: e.clientX,
@@ -59,7 +56,6 @@
 	function handleWindowMouseMove(e: MouseEvent) {
 		if (!dragState || !scrollContainer) return;
 
-		// Check threshold
 		if (!dragState.isDragging) {
 			if (Math.abs(e.clientX - dragState.startX) > 5) {
 				dragState.isDragging = true;
@@ -72,7 +68,6 @@
 		dragState.currentX = e.clientX;
 		dragState.currentY = e.clientY;
 
-		// Auto scroll logic
 		const containerRect = scrollContainer.getBoundingClientRect();
 		const scrollZone = 50;
 		if (e.clientX < containerRect.left + scrollZone) {
@@ -81,14 +76,11 @@
 			scrollContainer.scrollLeft += 10;
 		}
 
-		// Reorder logic
-		// We iterate through tabs to find the best fit position
 		const children = Array.from(scrollContainer.children) as HTMLElement[];
 		let closestIndex = -1;
 		let minDist = Infinity;
 
 		children.forEach((child, index) => {
-			// Check if child corresponds to a tab (it should)
 			if (!child.classList.contains('tab-item-wrapper')) return;
 
 			const rect = child.getBoundingClientRect();
@@ -103,7 +95,6 @@
 
 		if (closestIndex !== -1) {
 			const currentIndex = tabManager.tabs.findIndex((t) => t.id === draggingId);
-			// We only reorder if the index actually changed
 			if (currentIndex !== -1 && currentIndex !== closestIndex) {
 				tabManager.reorderTabs(currentIndex, closestIndex);
 			}
@@ -124,10 +115,8 @@
 		window.removeEventListener('mouseup', handleWindowMouseUp);
 	}
 
-	// Scroll active tab into view logic
 	$effect(() => {
 		const activeId = tabManager.activeTabId;
-		// Don't scroll while dragging to avoid fighting the user
 		if (activeId && scrollContainer && !draggingId) {
 			const index = tabManager.tabs.findIndex((t) => t.id === activeId);
 			if (index !== -1) {
@@ -135,7 +124,6 @@
 					setTimeout(() => {
 						if (!scrollContainer) return;
 
-						// If it's the last tab, just scroll to the very end to be safe
 						if (index === tabManager.tabs.length - 1) {
 							scrollContainer.scrollTo({ left: 99999, behavior: 'smooth' });
 							return;
@@ -166,18 +154,16 @@
 	}
 </script>
 
-<div class="tab-list-wrapper">
-	<div class="scroll-viewport">
-		<div class="scroll-shadow left" class:visible={showLeftArrow}></div>
+<div class="flex items-center h-full overflow-hidden flex-1 min-w-0">
+	<div class="relative flex flex-[0_1_auto] h-full overflow-hidden min-w-0 max-w-full">
+		<div
+			class="absolute top-0 bottom-0 left-0 w-[40px] z-20 pointer-events-none opacity-0 transition-opacity duration-200 ease-linear bg-[linear-gradient(to_right,var(--color-canvas-default),transparent)]"
+			class:opacity-100={showLeftArrow}
+		></div>
 
-		<!-- 
-			data-tauri-drag-region allows dragging the window.
-			Because we stopPropagation in handleMouseDown, dragging tabs won't drag the window.
-			But clicking in the empty space between tabs will drag the window.
-		-->
 		<div
 			bind:this={scrollContainer}
-			class="tab-list-container"
+			class="tab-scroll-list flex flex-row items-center overflow-x-auto overflow-y-hidden gap-1 h-full pl-[10px] scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none]"
 			data-tauri-drag-region
 			role="tablist"
 			tabindex="-1"
@@ -191,10 +177,11 @@
 			{#each tabManager.tabs as tab, i (tab.id)}
 				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 				<div
-					class="tab-item-wrapper"
+					class="tab-item-wrapper transition-opacity duration-100"
 					animate:flip={{ duration: 200 }}
 					role="listitem"
-					class:drag-opacity={draggingId === tab.id}
+					class:opacity-0={draggingId === tab.id}
+					class:pointer-events-none={draggingId === tab.id}
 					onmousedown={(e) => handleMouseDown(e, tab, e.currentTarget as HTMLElement)}>
 					<Tab
 						{tab}
@@ -213,134 +200,30 @@
 		</div>
 
 		{#if draggingId && dragState}
-			<div class="drag-proxy" style:left="{dragState.initialRect.left + (dragState.currentX - dragState.startX)}px" style:top="{dragState.initialRect.top}px">
+			<div class="fixed z-[10000] pointer-events-none opacity-90 will-change-[left,top]" style:left="{dragState.initialRect.left + (dragState.currentX - dragState.startX)}px" style:top="{dragState.initialRect.top}px">
 				<Tab tab={dragState.tab} isActive={tabManager.activeTabId === dragState.tab.id} onclick={() => {}} onclose={() => {}} />
 			</div>
 		{/if}
 
-		<div class="scroll-shadow right" class:visible={showRightArrow}></div>
+		<div
+			class="absolute top-0 bottom-0 right-0 w-[40px] z-20 pointer-events-none opacity-0 transition-opacity duration-200 ease-linear bg-[linear-gradient(to_left,var(--color-canvas-default),transparent)]"
+			class:opacity-100={showRightArrow}
+		></div>
 	</div>
 
-	<button class="new-tab-btn" onclick={onnewTab} title="New tab (Ctrl+T)">
+	<button
+		class="flex items-center justify-center w-7 h-7 m-1 border-none bg-transparent text-(--color-fg-muted) rounded-[8px] cursor-pointer shrink-0 transition-[background,color] duration-100 z-[21] hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)"
+		onclick={onnewTab}
+		title="New tab (Ctrl+T)">
 		<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
 			><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
 	</button>
 
-	<div class="tab-list-spacer" data-tauri-drag-region></div>
+	<div class="tab-list-spacer flex-1 h-full min-w-[20px]" data-tauri-drag-region></div>
 </div>
 
 <style>
-	.tab-list-wrapper {
-		display: flex;
-		align-items: center;
-		height: 100%;
-		overflow: hidden;
-		flex: 1; /* Take all available space */
-		min-width: 0;
-	}
-
-	.scroll-viewport {
-		position: relative;
-		display: flex;
-		flex: 0 1 auto;
-		height: 100%;
-		overflow: hidden;
-		min-width: 0;
-		max-width: 100%;
-	}
-
-	.scroll-shadow {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		width: 40px;
-		z-index: 20;
-		pointer-events: none;
-		opacity: 0;
-		transition: opacity 0.2s ease;
-	}
-
-	.scroll-shadow.visible {
-		opacity: 1;
-	}
-
-	.scroll-shadow.left {
-		left: 0;
-		background: linear-gradient(to right, var(--color-canvas-default), transparent);
-	}
-
-	.scroll-shadow.right {
-		right: 0;
-		background: linear-gradient(to left, var(--color-canvas-default), transparent);
-	}
-
-	.tab-list-container {
-		display: flex;
-		flex-direction: row;
-		align-items: center;
-		overflow-x: auto;
-		overflow-y: hidden;
-		gap: 4px;
-		height: 100%;
-		padding-left: 10px;
-		scroll-behavior: smooth;
-		/* width: 100%; Removed to allow shrink */
-
-		/* Hide scrollbar */
-		scrollbar-width: none;
-		-ms-overflow-style: none;
-	}
-
-	.tab-list-container::-webkit-scrollbar {
+	:global(.tab-scroll-list::-webkit-scrollbar) {
 		display: none;
-	}
-
-	.new-tab-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 28px;
-		height: 28px;
-		margin: 4px 4px 4px 4px;
-		border: none;
-		background: transparent;
-		color: var(--color-fg-muted);
-		border-radius: 8px;
-		cursor: pointer;
-		flex-shrink: 0;
-		transition:
-			background 0.1s,
-			color 0.1s;
-		z-index: 21;
-	}
-
-	.new-tab-btn:hover {
-		background: var(--color-neutral-muted);
-		color: var(--color-fg-default);
-	}
-
-	.tab-list-spacer {
-		flex: 1;
-		height: 100%;
-		min-width: 20px;
-	}
-
-	/* Drag styles */
-	.tab-item-wrapper {
-		transition: opacity 0.1s;
-	}
-
-	.tab-item-wrapper.drag-opacity {
-		opacity: 0;
-		pointer-events: none;
-	}
-
-	.drag-proxy {
-		position: fixed;
-		z-index: 10000;
-		pointer-events: none;
-		opacity: 0.9;
-		/* Ensure smooth movement */
-		will-change: left, top;
 	}
 </style>

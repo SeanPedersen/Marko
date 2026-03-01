@@ -335,7 +335,7 @@
 
 <div
 	bind:this={container}
-	class="codemirror-container"
+	class="codemirror-container w-full h-full flex-1 min-h-0 overflow-hidden box-border"
 	style="--editor-max-width: {editorWidth};"
 ></div>
 

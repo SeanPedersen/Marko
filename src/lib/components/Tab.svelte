@@ -24,14 +24,12 @@
 	let inputRef = $state<HTMLInputElement | null>(null);
 	let editValue = $state(untrack(() => tab.title));
 
-	// When entering rename mode, focus input and select name without extension
 	$effect(() => {
 		if (tab.isRenaming && inputRef) {
 			editValue = tab.title;
 			tick().then(() => {
 				if (!inputRef) return;
 				inputRef.focus();
-				// Select only the filename without extension
 				const lastDot = editValue.lastIndexOf('.');
 				if (lastDot > 0) {
 					inputRef.setSelectionRange(0, lastDot);
@@ -92,17 +90,22 @@
 	}
 
 	let isHomeTab = $derived(tab.path === 'HOME');
-	// Hide dirty indicator when auto-save is enabled (file will be saved automatically)
 	let showDirtyIndicator = $derived(tab.isDirty && !(settings.autoSave && tab.path));
+	let forceShowActions = $derived(!tab.isRenaming && (isActive || showDirtyIndicator || !!tab.isDeleted));
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="tab {isActive ? 'active' : ''}" class:last={isLast} class:renaming={tab.isRenaming} class:home={isHomeTab} role="group" title={isHomeTab ? 'Home' : (tab.path || 'Untitled')} oncontextmenu={handleContextMenu}>
+<div
+	class="group relative flex items-center h-7 {isHomeTab ? 'min-w-[40px] max-w-[40px]' : 'min-w-[100px] max-w-[200px]'} p-0 m-0 {isActive ? 'bg-(--color-tab-active-bg) text-(--color-fg-default)' : 'bg-transparent text-(--color-fg-muted)'} select-none text-[12px] [font-family:var(--font-win,_'Segoe_UI',_sans-serif)] rounded-[8px] transition-[background-color,color] duration-[250ms] ease-[cubic-bezier(0.05,0.95,0.05,0.95)] hover:bg-(--color-neutral-muted)"
+	role="group"
+	title={isHomeTab ? 'Home' : (tab.path || 'Untitled')}
+	oncontextmenu={handleContextMenu}
+>
 	{#if tab.isRenaming}
 		<input
 			bind:this={inputRef}
-			class="tab-rename-input"
+			class="flex-1 h-5 mx-1 ml-2 px-1 border border-(--color-accent-fg) rounded-[4px] bg-(--color-canvas-default) text-(--color-fg-default) [font-family:inherit] text-[inherit] outline-none min-w-0"
 			type="text"
 			bind:value={editValue}
 			onkeydown={handleInputKeydown}
@@ -110,184 +113,43 @@
 			onclick={(e) => e.stopPropagation()}
 		/>
 	{:else}
-		<button class="tab-content-btn" {onclick} onmousedown={handleMiddleClick} ondblclick={handleDoubleClick}>
+		<button
+			class="appearance-none bg-transparent border-none text-inherit flex items-center gap-1.5 flex-1 w-full h-full overflow-hidden cursor-pointer [font-family:inherit] text-[inherit] text-left {isHomeTab ? 'px-0 justify-center' : 'pl-3 pr-1'}"
+			{onclick}
+			onmousedown={handleMiddleClick}
+			ondblclick={handleDoubleClick}
+		>
 			{#if isHomeTab}
 				<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Home">
 					<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
 					<polyline points="9 22 9 12 15 12 15 22"></polyline>
 				</svg>
 			{:else}
-				<span class="tab-label">{tab.title}</span>
+				<span class="whitespace-nowrap overflow-hidden text-ellipsis">{tab.title}</span>
 			{/if}
 		</button>
 	{/if}
 	{#if !isHomeTab}
-		<div class="tab-actions">
-			<button class="tab-close" class:dirty={showDirtyIndicator} class:deleted={tab.isDeleted} onclick={handleClose} onmousedown={(e) => e.stopPropagation()} title="Close (Ctrl+W)">
+		<div
+			class="flex items-center pr-1 opacity-0 transition-opacity group-hover:opacity-100"
+			class:opacity-100={forceShowActions}
+		>
+			<button
+				class="w-[18px] h-[18px] rounded-[4px] scale-[0.8] flex justify-center items-center bg-transparent border-none text-inherit cursor-pointer p-0 transition-[background] duration-100 relative hover:bg-(--color-neutral-muted)"
+				onclick={handleClose}
+				onmousedown={(e) => e.stopPropagation()}
+				title="Close (Ctrl+W)"
+			>
 				{#if tab.isDeleted}
-					<svg class="deleted-icon" width="12" height="12" viewBox="0 0 16 16">
+					<svg class="block group-hover:hidden text-[#d32f2f]" width="12" height="12" viewBox="0 0 16 16">
 						<path fill="currentColor" d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5m-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5M4.5 5.029l.5 8.5a.5.5 0 1 0 .998-.06l-.5-8.5a.5.5 0 1 0-.998.06m6.53-.528a.5.5 0 0 0-.528.47l-.5 8.5a.5.5 0 0 0 .998.058l.5-8.5a.5.5 0 0 0-.47-.528M8 4.5a.5.5 0 0 0-.5.5v8.5a.5.5 0 0 0 1 0V5a.5.5 0 0 0-.5-.5"/>
 					</svg>
 				{:else if showDirtyIndicator}
-					<span class="dirty-dot"></span>
+					<span class="w-2 h-2 bg-(--color-fg-default) rounded-full block group-hover:hidden"></span>
 				{/if}
-				<svg class="close-icon" width="12" height="12" viewBox="0 0 12 12"
+				<svg class="hidden group-hover:block" width="12" height="12" viewBox="0 0 12 12"
 					><path fill="currentColor" d="M11 1.7L10.3 1 6 5.3 1.7 1 1 1.7 5.3 6 1 10.3 1.7 11 6 6.7 10.3 11 11 10.3 6.7 6z" /></svg>
 			</button>
 		</div>
 	{/if}
 </div>
-
-<style>
-	.tab {
-		display: flex;
-		align-items: center;
-		height: 28px;
-		min-width: 100px;
-		max-width: 200px;
-		padding: 0;
-		margin: 0;
-		background: transparent;
-		color: var(--color-fg-muted);
-		user-select: none;
-		position: relative;
-		font-size: 12px;
-		font-family: var(--win-font, 'Segoe UI', sans-serif);
-		border-radius: 8px;
-		transition:
-			background-color 0.25s cubic-bezier(0.05, 0.95, 0.05, 0.95),
-			color 0.25s cubic-bezier(0.05, 0.95, 0.05, 0.95);
-	}
-
-	.tab.home {
-		min-width: 40px;
-		max-width: 40px;
-	}
-
-	.tab.home .tab-content-btn {
-		padding: 0;
-		justify-content: center;
-	}
-
-	.tab.last {
-		border-right: none;
-	}
-
-	/* wrapper styles */
-	.tab:hover {
-		background-color: var(--color-neutral-muted);
-	}
-
-	.tab.active {
-		background-color: var(--tab-active-bg);
-		color: var(--color-fg-default);
-	}
-
-	.tab-content-btn {
-		appearance: none;
-		background: transparent;
-		border: none;
-		color: inherit;
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		flex: 1;
-		width: 100%;
-		height: 100%;
-		padding: 0 4px 0 12px;
-		overflow: hidden;
-		cursor: pointer;
-		font-family: inherit;
-		font-size: inherit;
-		text-align: left;
-	}
-
-	.tab-label {
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.tab-actions {
-		display: flex;
-		align-items: center;
-		padding-right: 4px;
-		opacity: 0;
-	}
-
-	.tab:hover .tab-actions,
-	.tab.active .tab-actions,
-	.tab-actions:has(.dirty),
-	.tab-actions:has(.deleted) {
-		opacity: 1;
-	}
-
-	.tab-close {
-		width: 18px;
-		height: 18px;
-		border-radius: 4px;
-		display: flex;
-		scale: 0.8;
-		justify-content: center;
-		align-items: center;
-		background: transparent;
-		border: none;
-		color: inherit;
-		cursor: pointer;
-		padding: 0;
-		transition: background 0.1s;
-		position: relative;
-	}
-
-	.close-icon {
-		display: none;
-	}
-
-	.tab:hover .close-icon {
-		display: block;
-	}
-
-	.tab:hover .deleted-icon {
-		display: none;
-	}
-
-	.tab:hover .dirty-dot {
-		display: none;
-	}
-
-	.dirty-dot {
-		width: 8px;
-		height: 8px;
-		background-color: var(--color-fg-default);
-		border-radius: 50%;
-		display: block;
-	}
-
-	.deleted-icon {
-		color: #d32f2f;
-		display: block;
-	}
-
-	.tab-close:hover {
-		background-color: var(--color-neutral-muted);
-	}
-
-	.tab-rename-input {
-		flex: 1;
-		height: 20px;
-		margin: 0 4px 0 8px;
-		padding: 0 4px;
-		border: 1px solid var(--color-accent-fg);
-		border-radius: 4px;
-		background: var(--color-canvas-default);
-		color: var(--color-fg-default);
-		font-family: inherit;
-		font-size: inherit;
-		outline: none;
-		min-width: 0;
-	}
-
-	.tab.renaming .tab-actions {
-		opacity: 0;
-	}
-</style>

@@ -44,7 +44,6 @@
 			e.preventDefault();
 			onclose();
 		}
-		// Focus trap
 		if (e.key === 'Tab') {
 			const focusableElements = modalContent?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])') || [];
 			if (focusableElements.length === 0) return;
@@ -83,9 +82,9 @@
 </script>
 
 {#if show}
-	<div class="modal-backdrop" transition:fade={{ duration: 150 }} onclick={handleBackdropClick} role="presentation">
+	<div class="fixed inset-0 bg-black/40 flex items-center justify-center z-[30000]" transition:fade={{ duration: 150 }} onclick={handleBackdropClick} role="presentation">
 		<div
-			class="modal-content"
+			class="bg-(--color-canvas-default) border border-(--color-border-default) rounded-[8px] w-[420px] max-w-[90vw] max-h-[80vh] shadow-[0_20px_50px_rgba(0,0,0,0.3)] overflow-hidden [font-family:var(--font-win)] flex flex-col"
 			bind:this={modalContent}
 			transition:scale={{ duration: 200, start: 0.95 }}
 			onclick={(e) => e.stopPropagation()}
@@ -93,23 +92,30 @@
 			aria-modal="true"
 			tabindex="-1"
 			onkeydown={handleKeydown}>
-			<div class="modal-header">
-				<h3>Settings</h3>
-				<button class="close-btn" onclick={onclose} aria-label="Close">
+			<div class="px-5 py-4 flex items-center justify-between border-b border-(--color-border-default)">
+				<h3 class="m-0 text-[15px] font-semibold text-(--color-fg-default)">Settings</h3>
+				<button
+					class="bg-transparent border-none p-1 cursor-pointer text-(--color-fg-muted) rounded-[4px] flex items-center justify-center transition-all duration-100 hover:bg-(--color-canvas-subtle) hover:text-(--color-fg-default)"
+					onclick={onclose}
+					aria-label="Close">
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<line x1="18" y1="6" x2="6" y2="18"></line>
 						<line x1="6" y1="6" x2="18" y2="18"></line>
 					</svg>
 				</button>
 			</div>
-			<div class="modal-body">
-				<div class="setting-group">
-					<div class="setting-label">Editor Width</div>
-					<p class="setting-description">Set the maximum width of the text editor content area.</p>
-					<div class="segmented-control">
+			<div class="p-5 overflow-y-auto flex flex-col gap-6">
+				<div class="flex flex-col gap-2">
+					<div class="text-[13px] font-semibold text-(--color-fg-default)">Editor Width</div>
+					<p class="text-[12px] text-(--color-fg-muted) m-0 leading-[1.4]">Set the maximum width of the text editor content area.</p>
+					<div class="flex border border-(--color-border-default) rounded-[6px] overflow-hidden bg-(--color-canvas-subtle)">
 						{#each editorWidthOptions as option}
 							<button
-								class="segment {settings.editorWidth === option.value ? 'active' : ''}"
+								class="flex-1 py-2 px-3 border-none bg-transparent text-(--color-fg-muted) text-[13px] font-medium cursor-pointer transition-all duration-150 [font-family:inherit] border-r border-r-(--color-border-default) last:border-r-0 hover:[&:not(.active)]:bg-(--color-neutral-muted) hover:[&:not(.active)]:text-(--color-fg-default)"
+								class:bg-(--color-canvas-default)={settings.editorWidth === option.value}
+								class:text-(--color-accent-fg)={settings.editorWidth === option.value}
+								class:font-semibold={settings.editorWidth === option.value}
+								class:shadow-[0_1px_3px_rgba(0,0,0,0.1)]={settings.editorWidth === option.value}
 								onclick={() => settings.setEditorWidth(option.value)}
 								title={option.description}>
 								{option.label}
@@ -118,13 +124,17 @@
 					</div>
 				</div>
 
-				<div class="setting-group">
-					<div class="setting-label">Sidebar Position</div>
-					<p class="setting-description">Choose which side of the window to display the sidebar.</p>
-					<div class="segmented-control">
+				<div class="flex flex-col gap-2">
+					<div class="text-[13px] font-semibold text-(--color-fg-default)">Sidebar Position</div>
+					<p class="text-[12px] text-(--color-fg-muted) m-0 leading-[1.4]">Choose which side of the window to display the sidebar.</p>
+					<div class="flex border border-(--color-border-default) rounded-[6px] overflow-hidden bg-(--color-canvas-subtle)">
 						{#each sidebarPositionOptions as option}
 							<button
-								class="segment {settings.sidebarPosition === option.value ? 'active' : ''}"
+								class="flex-1 py-2 px-3 border-none bg-transparent text-(--color-fg-muted) text-[13px] font-medium cursor-pointer transition-all duration-150 [font-family:inherit] border-r border-r-(--color-border-default) last:border-r-0 hover:[&:not(.active)]:bg-(--color-neutral-muted) hover:[&:not(.active)]:text-(--color-fg-default)"
+								class:bg-(--color-canvas-default)={settings.sidebarPosition === option.value}
+								class:text-(--color-accent-fg)={settings.sidebarPosition === option.value}
+								class:font-semibold={settings.sidebarPosition === option.value}
+								class:shadow-[0_1px_3px_rgba(0,0,0,0.1)]={settings.sidebarPosition === option.value}
 								onclick={() => settings.setSidebarPosition(option.value)}>
 								{option.label}
 							</button>
@@ -132,12 +142,12 @@
 					</div>
 				</div>
 
-				<div class="setting-group">
-					<div class="setting-label">Terminal Command</div>
-					<p class="setting-description">Install the <code>marko</code> command to open files from the terminal.</p>
-					<div class="cli-install-row">
+				<div class="flex flex-col gap-2">
+					<div class="text-[13px] font-semibold text-(--color-fg-default)">Terminal Command</div>
+					<p class="text-[12px] text-(--color-fg-muted) m-0 leading-[1.4]">Install the <code class="bg-(--color-canvas-subtle) px-1 py-px rounded-[3px] [font-family:'SF_Mono',Monaco,Consolas,monospace] text-[11px]">marko</code> command to open files from the terminal.</p>
+					<div class="flex items-center gap-3">
 						<button
-							class="install-btn {cliInstallStatus}"
+							class="inline-flex items-center gap-2 px-4 py-2 rounded-[6px] text-[13px] font-medium cursor-pointer transition-all duration-150 [font-family:inherit] border border-(--color-border-default) bg-(--color-canvas-subtle) text-(--color-fg-default) hover:enabled:bg-(--color-neutral-muted) disabled:cursor-default disabled:opacity-70 {cliInstallStatus === 'success' ? 'bg-[#d4edda] border-[#28a745] text-[#155724]' : ''} {cliInstallStatus === 'error' ? 'border-[#dc3545]' : ''}"
 							onclick={installCli}
 							disabled={cliInstallStatus === 'installing' || cliInstallStatus === 'success'}>
 							{#if cliInstallStatus === 'idle'}
@@ -147,7 +157,7 @@
 								</svg>
 								Install Command
 							{:else if cliInstallStatus === 'installing'}
-								<svg class="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<svg class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 									<circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32"></circle>
 								</svg>
 								Installing...
@@ -166,218 +176,14 @@
 							{/if}
 						</button>
 						{#if cliInstallStatus === 'success'}
-							<span class="cli-hint">Run <code>marko &lt;file&gt;</code> in your terminal</span>
+							<span class="text-[12px] text-(--color-fg-muted)">Run <code class="bg-(--color-canvas-subtle) px-1 py-px rounded-[3px] [font-family:'SF_Mono',Monaco,Consolas,monospace] text-[11px]">marko &lt;file&gt;</code> in your terminal</span>
 						{/if}
 					</div>
 					{#if cliInstallStatus === 'error' && cliErrorMessage}
-						<p class="error-message">{cliErrorMessage}</p>
+						<p class="text-[12px] text-[#dc3545] mt-1 mb-0">{cliErrorMessage}</p>
 					{/if}
 				</div>
 			</div>
 		</div>
 	</div>
 {/if}
-
-<style>
-	.modal-backdrop {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(0, 0, 0, 0.4);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 30000;
-	}
-
-	.modal-content {
-		background: var(--color-canvas-default);
-		border: 1px solid var(--color-border-default);
-		border-radius: 8px;
-		width: 420px;
-		max-width: 90vw;
-		max-height: 80vh;
-		box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-		overflow: hidden;
-		font-family: var(--win-font);
-		display: flex;
-		flex-direction: column;
-	}
-
-	.modal-header {
-		padding: 16px 20px;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		border-bottom: 1px solid var(--color-border-default);
-	}
-
-	.modal-header h3 {
-		margin: 0;
-		font-size: 15px;
-		font-weight: 600;
-		color: var(--color-fg-default);
-	}
-
-	.close-btn {
-		background: transparent;
-		border: none;
-		padding: 4px;
-		cursor: pointer;
-		color: var(--color-fg-muted);
-		border-radius: 4px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: all 0.1s;
-	}
-
-	.close-btn:hover {
-		background: var(--color-canvas-subtle);
-		color: var(--color-fg-default);
-	}
-
-	.modal-body {
-		padding: 20px;
-		overflow-y: auto;
-		display: flex;
-		flex-direction: column;
-		gap: 24px;
-	}
-
-	.setting-group {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.setting-label {
-		font-size: 13px;
-		font-weight: 600;
-		color: var(--color-fg-default);
-	}
-
-	.setting-description {
-		font-size: 12px;
-		color: var(--color-fg-muted);
-		margin: 0;
-		line-height: 1.4;
-	}
-
-	.setting-description code {
-		background: var(--color-canvas-subtle);
-		padding: 1px 4px;
-		border-radius: 3px;
-		font-family: 'SF Mono', Monaco, Consolas, monospace;
-		font-size: 11px;
-	}
-
-	.segmented-control {
-		display: flex;
-		border: 1px solid var(--color-border-default);
-		border-radius: 6px;
-		overflow: hidden;
-		background: var(--color-canvas-subtle);
-	}
-
-	.segment {
-		flex: 1;
-		padding: 8px 12px;
-		border: none;
-		background: transparent;
-		color: var(--color-fg-muted);
-		font-size: 13px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.15s;
-		font-family: inherit;
-		border-right: 1px solid var(--color-border-default);
-	}
-
-	.segment:last-child {
-		border-right: none;
-	}
-
-	.segment:hover:not(.active) {
-		background: var(--color-neutral-muted);
-		color: var(--color-fg-default);
-	}
-
-	.segment.active {
-		background: var(--color-canvas-default);
-		color: var(--color-accent-fg);
-		font-weight: 600;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-	}
-
-	.cli-install-row {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-	}
-
-	.install-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-		padding: 8px 16px;
-		border-radius: 6px;
-		font-size: 13px;
-		font-weight: 500;
-		cursor: pointer;
-		transition: all 0.15s;
-		font-family: inherit;
-		border: 1px solid var(--color-border-default);
-		background: var(--color-canvas-subtle);
-		color: var(--color-fg-default);
-	}
-
-	.install-btn:hover:not(:disabled) {
-		background: var(--color-neutral-muted);
-	}
-
-	.install-btn:disabled {
-		cursor: default;
-		opacity: 0.7;
-	}
-
-	.install-btn.success {
-		background: #d4edda;
-		border-color: #28a745;
-		color: #155724;
-	}
-
-	.install-btn.error {
-		border-color: #dc3545;
-	}
-
-	.cli-hint {
-		font-size: 12px;
-		color: var(--color-fg-muted);
-	}
-
-	.cli-hint code {
-		background: var(--color-canvas-subtle);
-		padding: 1px 4px;
-		border-radius: 3px;
-		font-family: 'SF Mono', Monaco, Consolas, monospace;
-		font-size: 11px;
-	}
-
-	.error-message {
-		font-size: 12px;
-		color: #dc3545;
-		margin: 4px 0 0 0;
-	}
-
-	.spinner {
-		animation: spin 1s linear infinite;
-	}
-
-	@keyframes spin {
-		from { transform: rotate(0deg); }
-		to { transform: rotate(360deg); }
-	}
-</style>
