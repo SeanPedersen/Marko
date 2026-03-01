@@ -7,7 +7,7 @@ A Tauri-based markdown editor with Obsidian-style WYSIWYG inline editor.
 - **Frontend**: Svelte 5 (with runes), TypeScript, Vite
 - **Backend**: Tauri 2 (Rust)
 - **Editor**: CodeMirror 6 with custom live preview extension
-- **Styling**: CSS variables for theming (light/dark/system)
+- **Styling**: Tailwind CSS v4 (`@tailwindcss/vite`) + CSS variables for theming
 
 ## Project Structure
 
@@ -154,7 +154,27 @@ src/
 - `TabManager` class: `addTab`, `closeTab`, `setActive`, `cycleTab`, `navigate`, `goBack`/`goForward`, `updateTabRawContent`, `setTabRawContent`
 - Exported singleton: `tabManager`
 
-## CSS Variables
+## Styling
+
+### Tailwind CSS v4
+
+All components use Tailwind utility classes. No `<style>` blocks except for:
+- **CodeMirrorEditor.svelte**: all `:global(.cm-*)` rules (CodeMirror internals)
+- **FolderExplorer / TableOfContents / TabList**: `::-webkit-scrollbar` rules
+- **KanbanBoard.svelte**: `:global()` rules + non-standard `font-weight: 450/650`
+
+**CSS variable syntax**: always `(--varname)` — e.g. `text-(--color-fg-default)`. Using `[--varname]` generates empty `{}` rules in Tailwind v4.
+
+**Dark mode**: configured via `@custom-variant dark` in `styles.css`, supporting `light/dark/system`.
+
+**Component classes**: `btn-icon` defined in `@layer components` in `styles.css`.
+
+**Complex dynamic styles kept as inline `style=`**:
+- Sidebar clamp positioning: `style="left: clamp(0px, 1184px - 100vw, calc(232px - 2rem))"`
+- Git status badge colors: `style="color: {badge.color}"`
+- Tooltip transforms: computed via `$derived` JS state → inline style
+
+### CSS Variables
 
 Theme colors defined in `MarkdownViewer.svelte`:
 - `--color-canvas-default` — background
