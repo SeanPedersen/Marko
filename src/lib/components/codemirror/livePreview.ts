@@ -593,6 +593,12 @@ class MermaidWidget extends WidgetType {
   }
 }
 
+// Shared module-level flag: true while mouse is down in the editor.
+// All decoration sources must skip rebuilds during mouse drag to prevent
+// layout shifts that corrupt CodeMirror's height oracle (causing wrong
+// posAtCoords results in wrapped lines).
+let isMouseDragging = false;
+
 // Hide decoration - makes text invisible but keeps it in the document
 const hideDecoration = Decoration.mark({ class: 'cm-hide' });
 
@@ -1788,28 +1794,38 @@ function buildDecorations(view: EditorView): DecorationSet {
 export const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
-    private mouseDown = false;
     private view: EditorView;
+    private rafId = 0;
 
     constructor(view: EditorView) {
       this.view = view;
       this.decorations = buildDecorations(view);
       this.onMouseDown = this.onMouseDown.bind(this);
       this.onMouseUp = this.onMouseUp.bind(this);
-      view.scrollDOM.addEventListener('mousedown', this.onMouseDown);
+      // Use capture phase so the flag is set before CodeMirror's own mousedown
+      // handler runs and triggers update(). This ensures the initial click is
+      // treated the same as a drag and decorations are not rebuilt mid-interaction,
+      // which would make CodeMirror's height oracle stale and cause the "one row up
+      // selects the entire lower row" bug.
+      view.scrollDOM.addEventListener('mousedown', this.onMouseDown, { capture: true });
       window.addEventListener('mouseup', this.onMouseUp);
     }
 
     onMouseDown() {
-      this.mouseDown = true;
+      isMouseDragging = true;
     }
 
     onMouseUp() {
-      if (!this.mouseDown) return;
-      this.mouseDown = false;
-      // Rebuild after mouse release so cursor-line styling reflects final position
-      this.decorations = buildDecorations(this.view);
-      this.view.update([]);
+      if (!isMouseDragging) return;
+      isMouseDragging = false;
+      // Defer decoration rebuild to the next frame so it doesn't interfere
+      // with CodeMirror's mouseup processing or cause synchronous layout thrash.
+      cancelAnimationFrame(this.rafId);
+      this.rafId = requestAnimationFrame(() => {
+        this.decorations = buildDecorations(this.view);
+        // Empty dispatch forces the view to re-read all decoration accessors
+        this.view.dispatch({});
+      });
     }
 
     update(update: ViewUpdate) {
@@ -1817,19 +1833,22 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
       if (update.docChanged || update.viewportChanged) {
         this.decorations = buildDecorations(update.view);
       } else if (update.selectionSet) {
-        // Skip rebuilds during pointer-drag to prevent layout shifts that cause
-        // accidental text selection. Widget-dispatched selections (e.g. math click)
-        // are not pointer events and must always rebuild.
-        const isPointerDrag = this.mouseDown &&
-          update.transactions.some(tr => tr.isUserEvent('select.pointer'));
-        if (!isPointerDrag) {
+        // Skip rebuilds during any mouse interaction (initial click or drag) to
+        // prevent layout shifts that corrupt CodeMirror's height oracle and cause
+        // accidental/wrong text selection. Widget-dispatched selections (e.g. math
+        // click) use no userEvent and must always rebuild.
+        const isPointerInteraction = isMouseDragging &&
+          update.transactions.some(tr => tr.isUserEvent('select'));
+        if (!isPointerInteraction) {
           this.decorations = buildDecorations(update.view);
         }
       }
     }
 
     destroy() {
-      this.view.scrollDOM.removeEventListener('mousedown', this.onMouseDown);
+      cancelAnimationFrame(this.rafId);
+      isMouseDragging = false;
+      this.view.scrollDOM.removeEventListener('mousedown', this.onMouseDown, { capture: true });
       window.removeEventListener('mouseup', this.onMouseUp);
     }
   },
@@ -1847,6 +1866,7 @@ const tableDecorationField = StateField.define<DecorationSet>({
   update(prev, tr) {
     const selectionChanged = !tr.newSelection.eq(tr.startState.selection);
     if (!tr.docChanged && !selectionChanged) return prev.map(tr.changes);
+    if (isMouseDragging && !tr.docChanged) return prev;
 
     const cursorPos = tr.state.selection.main.head;
     const decorations: Range<Decoration>[] = [];
@@ -1882,6 +1902,7 @@ const mermaidDecorationField = StateField.define<DecorationSet>({
   update(prev, tr) {
     const selectionChanged = !tr.newSelection.eq(tr.startState.selection);
     if (!tr.docChanged && !selectionChanged) return prev.map(tr.changes);
+    if (isMouseDragging && !tr.docChanged) return prev;
 
     const cursorPos = tr.state.selection.main.head;
     const decorations: Range<Decoration>[] = [];
@@ -2235,7 +2256,9 @@ const plainUrlPlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged || update.selectionSet) {
+      if (update.docChanged || update.viewportChanged) {
+        this.decorations = buildPlainUrlDecorations(update.view);
+      } else if (update.selectionSet && !isMouseDragging) {
         this.decorations = buildPlainUrlDecorations(update.view);
       }
     }

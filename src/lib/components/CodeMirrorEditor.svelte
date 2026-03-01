@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import { EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine, rectangularSelection, ViewPlugin } from '@codemirror/view';
+	import { EditorView, keymap, lineNumbers, highlightActiveLine, rectangularSelection, ViewPlugin } from '@codemirror/view';
 	import { EditorState, Compartment } from '@codemirror/state';
 	import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 	import { search, searchKeymap } from '@codemirror/search';
@@ -75,7 +75,6 @@
 		const extensions = [
 			// Basic editing
 			history(),
-			drawSelection(),
 			EditorState.allowMultipleSelections.of(true),
 			rectangularSelection(),
 			bracketMatching(),
