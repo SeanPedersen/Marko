@@ -144,9 +144,10 @@ src/
 ### Settings Store (`src/lib/stores/settings.svelte.ts`)
 - Svelte 5 runes-based class with `$state` properties
 - All settings persisted to localStorage under `editor.*` keys
-- Settings: `minimap`, `wordWrap`, `lineNumbers`, `vimMode`, `statusBar`, `wordCount`, `renderLineHighlight`, `showTabs`, `zenMode`, `occurrencesHighlight`, `autoSave`, `editorWidth`, `sidebarPosition`
+- Settings: `minimap`, `wordWrap`, `lineNumbers`, `vimMode`, `statusBar`, `wordCount`, `renderLineHighlight`, `showTabs`, `zenMode`, `occurrencesHighlight`, `autoSave`, `editorWidth`, `explorerPosition`, `tocPosition`
 - `editorWidth`: `'compact' | 'default' | 'wide' | 'full'` (maps to 600px, 720px, 900px, 100%)
-- `sidebarPosition`: `'left' | 'right'` — controls which side TOC/FolderExplorer appear
+- `explorerPosition`: `'left' | 'right'` — controls which side the file explorer appears
+- `tocPosition`: `'left' | 'right'` — controls which side the table of contents appears
 - Each setting has a `toggle*()` or `set*()` method
 
 ### Tab Manager (`src/lib/stores/tabs.svelte.ts`)

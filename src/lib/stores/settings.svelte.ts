@@ -12,11 +12,24 @@ const SIDEBAR_WIDTH_MIN = 160;
 const SIDEBAR_WIDTH_MAX = 480;
 const SIDEBAR_WIDTH_DEFAULT = 220;
 
+const VALID_POSITIONS: SidebarPosition[] = ['left', 'right'];
+
+function loadPosition(key: string, fallbackKey?: string): SidebarPosition {
+	const saved = localStorage.getItem(key);
+	if (saved !== null && VALID_POSITIONS.includes(saved as SidebarPosition)) return saved as SidebarPosition;
+	if (fallbackKey) {
+		const fallback = localStorage.getItem(fallbackKey);
+		if (fallback !== null && VALID_POSITIONS.includes(fallback as SidebarPosition)) return fallback as SidebarPosition;
+	}
+	return 'left';
+}
+
 export class SettingsStore {
 	showTabs = $state(true);
 	autoSave = $state(true);
 	editorWidth = $state<EditorWidth>('default');
-	sidebarPosition = $state<SidebarPosition>('left');
+	explorerPosition = $state<SidebarPosition>('left');
+	tocPosition = $state<SidebarPosition>('right');
 	folderExplorerWidth = $state(SIDEBAR_WIDTH_DEFAULT);
 
 	constructor() {
@@ -24,7 +37,6 @@ export class SettingsStore {
 			const savedShowTabs = localStorage.getItem('editor.showTabs');
 			const savedAutoSave = localStorage.getItem('editor.autoSave');
 			const savedEditorWidth = localStorage.getItem('editor.editorWidth');
-			const savedSidebarPosition = localStorage.getItem('editor.sidebarPosition');
 			const savedExplorerWidth = localStorage.getItem('editor.folderExplorerWidth');
 
 			if (savedShowTabs !== null) this.showTabs = savedShowTabs === 'true';
@@ -32,9 +44,9 @@ export class SettingsStore {
 			if (savedEditorWidth !== null && ['compact', 'default', 'wide', 'full'].includes(savedEditorWidth)) {
 				this.editorWidth = savedEditorWidth as EditorWidth;
 			}
-			if (savedSidebarPosition !== null && ['left', 'right'].includes(savedSidebarPosition)) {
-				this.sidebarPosition = savedSidebarPosition as SidebarPosition;
-			}
+			// Fall back to legacy 'editor.sidebarPosition' if the new keys haven't been saved yet
+			this.explorerPosition = loadPosition('editor.explorerPosition', 'editor.sidebarPosition');
+			this.tocPosition = loadPosition('editor.tocPosition');
 			if (savedExplorerWidth !== null) {
 				const parsed = parseInt(savedExplorerWidth, 10);
 				if (!isNaN(parsed)) {
@@ -47,7 +59,8 @@ export class SettingsStore {
 					localStorage.setItem('editor.showTabs', String(this.showTabs));
 					localStorage.setItem('editor.autoSave', String(this.autoSave));
 					localStorage.setItem('editor.editorWidth', this.editorWidth);
-					localStorage.setItem('editor.sidebarPosition', this.sidebarPosition);
+					localStorage.setItem('editor.explorerPosition', this.explorerPosition);
+					localStorage.setItem('editor.tocPosition', this.tocPosition);
 					localStorage.setItem('editor.folderExplorerWidth', String(this.folderExplorerWidth));
 				});
 			});
@@ -66,8 +79,12 @@ export class SettingsStore {
 		this.editorWidth = width;
 	}
 
-	setSidebarPosition(position: SidebarPosition) {
-		this.sidebarPosition = position;
+	setExplorerPosition(position: SidebarPosition) {
+		this.explorerPosition = position;
+	}
+
+	setTocPosition(position: SidebarPosition) {
+		this.tocPosition = position;
 	}
 }
 

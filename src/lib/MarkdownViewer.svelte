@@ -65,7 +65,7 @@
 		const breakpoint = 720 + 2 * (w + 12);
 		const maxShift = w + 12;
 		const clamp = `clamp(0px, ${breakpoint}px - 100vw, calc(${maxShift}px - 2rem))`;
-		return settings.sidebarPosition === 'right' ? `right: ${clamp};` : `left: ${clamp};`;
+		return settings.explorerPosition === 'right' ? `right: ${clamp};` : `left: ${clamp};`;
 	});
 	let tocVisible = $state(localStorage.getItem('toc-visible') !== 'false');
 	let folderExplorerVisible = $state(false); // Don't restore on startup - only show when explicitly opened
@@ -700,6 +700,10 @@
 			e.preventDefault();
 			toggleFolderExplorer();
 		}
+		if (cmdOrCtrl && !e.shiftKey && key === 't') {
+			e.preventDefault();
+			toggleToc();
+		}
 	}
 
 	function handleGoBack() {
@@ -1259,7 +1263,7 @@
 		onopenfile={loadMarkdown}
 		onfileschanged={handleFilesChanged}
 		refreshKey={folderRefreshKey}
-		sidebarPosition={settings.sidebarPosition}
+		sidebarPosition={settings.explorerPosition}
 	/>
 
 	{#if tabManager.activeTab && tabManager.activeTab.path !== 'HOME'}
@@ -1267,7 +1271,7 @@
 			rawContent={tabManager.activeTab?.rawContent ?? ''}
 			visible={tocVisible && currentFileType === 'markdown' && !isKanban}
 			onscrollto={handleTocScroll}
-			sidebarPosition={settings.sidebarPosition}
+			sidebarPosition={settings.tocPosition}
 			editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
 		/>
 		<div

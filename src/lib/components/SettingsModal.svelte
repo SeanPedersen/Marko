@@ -23,7 +23,7 @@
 		{ value: 'full', label: 'Full', description: '100%' },
 	];
 
-	const sidebarPositionOptions: { value: SidebarPosition; label: string }[] = [
+	const positionOptions: { value: SidebarPosition; label: string }[] = [
 		{ value: 'left', label: 'Left' },
 		{ value: 'right', label: 'Right' },
 	];
@@ -129,21 +129,43 @@
 				</div>
 
 				<div class="flex flex-col gap-2">
-					<div class="text-[13px] font-semibold text-(--color-fg-default)">Sidebar Position</div>
-					<p class="text-[12px] text-(--color-fg-muted) m-0 leading-[1.4]">Choose which side of the window to display the sidebar.</p>
+					<div class="text-[13px] font-semibold text-(--color-fg-default)">File Explorer Position</div>
+					<p class="text-[12px] text-(--color-fg-muted) m-0 leading-[1.4]">Choose which side of the window to display the file explorer.</p>
 					<div class="flex border border-(--color-border-default) rounded-[6px] overflow-hidden bg-(--color-canvas-subtle)">
-						{#each sidebarPositionOptions as option}
+						{#each positionOptions as option}
 							<button
 								class="flex-1 py-2 px-3 border-none text-[13px] cursor-pointer transition-all duration-150 [font-family:inherit] border-r border-r-(--color-border-default) last:border-r-0 hover:[&:not(.active)]:bg-(--color-neutral-muted) hover:[&:not(.active)]:text-(--color-fg-default)"
-								class:active={settings.sidebarPosition === option.value}
-								class:bg-(--color-canvas-default)={settings.sidebarPosition === option.value}
-								class:bg-transparent={settings.sidebarPosition !== option.value}
-								class:text-(--color-accent-fg)={settings.sidebarPosition === option.value}
-								class:text-(--color-fg-muted)={settings.sidebarPosition !== option.value}
-								class:font-semibold={settings.sidebarPosition === option.value}
-								class:font-medium={settings.sidebarPosition !== option.value}
-								class:shadow-[0_1px_3px_rgba(0,0,0,0.1)]={settings.sidebarPosition === option.value}
-								onclick={() => settings.setSidebarPosition(option.value)}>
+								class:active={settings.explorerPosition === option.value}
+								class:bg-(--color-canvas-default)={settings.explorerPosition === option.value}
+								class:bg-transparent={settings.explorerPosition !== option.value}
+								class:text-(--color-accent-fg)={settings.explorerPosition === option.value}
+								class:text-(--color-fg-muted)={settings.explorerPosition !== option.value}
+								class:font-semibold={settings.explorerPosition === option.value}
+								class:font-medium={settings.explorerPosition !== option.value}
+								class:shadow-[0_1px_3px_rgba(0,0,0,0.1)]={settings.explorerPosition === option.value}
+								onclick={() => settings.setExplorerPosition(option.value)}>
+								{option.label}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<div class="flex flex-col gap-2">
+					<div class="text-[13px] font-semibold text-(--color-fg-default)">Table of Contents Position</div>
+					<p class="text-[12px] text-(--color-fg-muted) m-0 leading-[1.4]">Choose which side of the window to display the table of contents.</p>
+					<div class="flex border border-(--color-border-default) rounded-[6px] overflow-hidden bg-(--color-canvas-subtle)">
+						{#each positionOptions as option}
+							<button
+								class="flex-1 py-2 px-3 border-none text-[13px] cursor-pointer transition-all duration-150 [font-family:inherit] border-r border-r-(--color-border-default) last:border-r-0 hover:[&:not(.active)]:bg-(--color-neutral-muted) hover:[&:not(.active)]:text-(--color-fg-default)"
+								class:active={settings.tocPosition === option.value}
+								class:bg-(--color-canvas-default)={settings.tocPosition === option.value}
+								class:bg-transparent={settings.tocPosition !== option.value}
+								class:text-(--color-accent-fg)={settings.tocPosition === option.value}
+								class:text-(--color-fg-muted)={settings.tocPosition !== option.value}
+								class:font-semibold={settings.tocPosition === option.value}
+								class:font-medium={settings.tocPosition !== option.value}
+								class:shadow-[0_1px_3px_rgba(0,0,0,0.1)]={settings.tocPosition === option.value}
+								onclick={() => settings.setTocPosition(option.value)}>
 								{option.label}
 							</button>
 						{/each}
