@@ -1242,6 +1242,7 @@
 	<FolderExplorer
 		folderPath={currentFolder}
 		visible={folderExplorerVisible && !!currentFolder}
+		activePath={currentFile}
 		onopenfile={loadMarkdown}
 		onfileschanged={handleFilesChanged}
 		refreshKey={folderRefreshKey}

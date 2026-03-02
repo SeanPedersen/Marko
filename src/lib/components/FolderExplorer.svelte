@@ -20,6 +20,7 @@
 	let {
 		folderPath = '',
 		visible = true,
+		activePath = '',
 		onopenfile,
 		onfileschanged,
 		refreshKey = 0,
@@ -27,6 +28,7 @@
 	} = $props<{
 		folderPath: string;
 		visible?: boolean;
+		activePath?: string;
 		onopenfile?: (path: string, options?: { newTab?: boolean }) => void;
 		onfileschanged?: (removed: string[], added: string[]) => void;
 		refreshKey?: number;
@@ -542,6 +544,7 @@
 	{@const isLoading = loadingDirs.has(entry.path)}
 	{@const entryGitStatus = getEntryStatus(entry)}
 	{@const badge = entryGitStatus ? statusBadge(entryGitStatus) : null}
+	{@const isActive = !entry.is_dir && entry.path === activePath}
 	<li class="relative" style="padding-left: {depth * 12 + 8}px">
 		{#if entry.is_dir}
 			<div
@@ -581,7 +584,7 @@
 			</div>
 		{:else}
 			<button
-				class="flex items-center w-full py-[3px] px-2 border-none bg-none text-[12.5px] leading-[1.4] text-left overflow-hidden transition-[color,background] duration-100 gap-[6px] {isMarkdown ? 'text-(--color-fg-muted) cursor-pointer hover:text-(--color-accent-fg) hover:bg-(--color-neutral-muted)' : 'text-(--color-fg-muted) opacity-50 cursor-default'}"
+				class="flex items-center w-full py-[3px] px-2 border-none text-[12.5px] leading-[1.4] text-left overflow-hidden transition-[color,background] duration-100 gap-[6px] {isMarkdown ? (isActive ? 'text-(--color-accent-fg) bg-(--color-neutral-muted) cursor-pointer' : 'text-(--color-fg-muted) bg-none cursor-pointer hover:text-(--color-accent-fg) hover:bg-(--color-neutral-muted)') : 'text-(--color-fg-muted) bg-none opacity-50 cursor-default'}"
 				onclick={(event) => handleFileClick(event, entry)}
 				onauxclick={(event) => { if (event.button === 1) handleFileClick(event, entry); }}
 				oncontextmenu={(event) => handleContextMenu(event, entry)}
@@ -744,9 +747,10 @@
 							{@const badge = gitStatuses.get(entry.path) ? statusBadge(gitStatuses.get(entry.path)!) : null}
 							{@const relPath = getRelativePath(entry.path)}
 							{@const hl = highlightName(entry.name, searchQuery)}
+							{@const isActiveResult = entry.path === activePath}
 							<li>
 								<button
-									class="flex items-center w-full py-[3px] px-2 border-none bg-none text-[12.5px] leading-[1.4] text-left overflow-hidden gap-[6px] text-(--color-fg-muted) cursor-pointer hover:text-(--color-accent-fg) hover:bg-(--color-neutral-muted)"
+									class="flex items-center w-full py-[3px] px-2 border-none text-[12.5px] leading-[1.4] text-left overflow-hidden gap-[6px] cursor-pointer {isActiveResult ? 'text-(--color-accent-fg) bg-(--color-neutral-muted)' : 'text-(--color-fg-muted) bg-none hover:text-(--color-accent-fg) hover:bg-(--color-neutral-muted)'}"
 									onclick={(e) => handleFileClick(e, entry)}
 									onauxclick={(e) => { if (e.button === 1) handleFileClick(e, entry); }}
 									oncontextmenu={(e) => handleContextMenu(e, entry)}
