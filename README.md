@@ -6,7 +6,7 @@ A simple, lightweight WYSIWYG Markdown editor for Windows, macOS and Linux.
 ## Features
 
 - WYSIWYG Markdown inline editor (CodeMirror)
-- Open and view folders (file tree in sidebar)
+- Open, view and search folders (dir tree in sidebar)
 - Obsidian Kanban plugin support
 - Obsidian like file linking syntax: [[file_name]]
 - Basic git integration (commit, revert, pull+push)
