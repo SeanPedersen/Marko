@@ -54,7 +54,7 @@
 
 {#if hasHeadings && visible}
 	<nav
-		class="toc-nav fixed top-[69px] bottom-0 w-[260px] overflow-y-auto overflow-x-hidden z-50 [font-family:var(--font-win)] pt-2 animate-fade-in {sidebarPosition === 'right' ? 'right-auto' : ''}"
+		class="toc-nav fixed top-[69px] bottom-0 w-[260px] overflow-y-auto overflow-x-hidden z-40 [font-family:var(--font-win)] pt-2 animate-fade-in {sidebarPosition === 'right' ? 'right-auto' : ''}"
 		style="--editor-max-width: {editorWidth}; {sidebarPosition === 'right' ? `left: calc(50% + var(--editor-max-width, 720px) / 2 + 16px)` : `right: calc(50% + var(--editor-max-width, 720px) / 2 + 16px)`};"
 		aria-label="Table of contents">
 		<ul class="list-none m-0 p-0">
