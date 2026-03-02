@@ -609,7 +609,9 @@
 		}
 	}
 
-	let zoomLevel = $state(100);
+	const ZOOM_STORAGE_KEY = 'editor.zoomLevel';
+	let zoomLevel = $state(parseInt(localStorage.getItem(ZOOM_STORAGE_KEY) ?? '100', 10));
+	$effect(() => { localStorage.setItem(ZOOM_STORAGE_KEY, String(zoomLevel)); });
 
 	function resolvePath(basePath: string, relativePath: string) {
 		if (relativePath.match(/^[a-zA-Z]:/) || relativePath.startsWith('/')) return relativePath;
@@ -1273,7 +1275,7 @@
 		/>
 		<div
 			class="fixed top-9 left-0 right-0 bottom-0 overflow-hidden flex flex-col z-[10]"
-			style="{explorerClampStyle}{zoomLevel !== 100 ? `transform: scale(${zoomLevel / 100}); transform-origin: top left; width: ${10000 / zoomLevel}%; height: ${10000 / zoomLevel}%;` : ''}"
+			style="{explorerClampStyle}zoom: {zoomLevel / 100};"
 			role="presentation"
 		>
 			<EditorHeader
