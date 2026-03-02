@@ -692,6 +692,10 @@
 			e.preventDefault();
 			toggleToc();
 		}
+		if (cmdOrCtrl && key === 'd') {
+			e.preventDefault();
+			toggleFolderExplorer();
+		}
 	}
 
 	function handleGoBack() {
