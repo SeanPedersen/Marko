@@ -111,10 +111,14 @@
 					<div class="flex border border-(--color-border-default) rounded-[6px] overflow-hidden bg-(--color-canvas-subtle)">
 						{#each editorWidthOptions as option}
 							<button
-								class="flex-1 py-2 px-3 border-none bg-transparent text-(--color-fg-muted) text-[13px] font-medium cursor-pointer transition-all duration-150 [font-family:inherit] border-r border-r-(--color-border-default) last:border-r-0 hover:[&:not(.active)]:bg-(--color-neutral-muted) hover:[&:not(.active)]:text-(--color-fg-default)"
+								class="flex-1 py-2 px-3 border-none text-[13px] cursor-pointer transition-all duration-150 [font-family:inherit] border-r border-r-(--color-border-default) last:border-r-0 hover:[&:not(.active)]:bg-(--color-neutral-muted) hover:[&:not(.active)]:text-(--color-fg-default)"
+								class:active={settings.editorWidth === option.value}
 								class:bg-(--color-canvas-default)={settings.editorWidth === option.value}
+								class:bg-transparent={settings.editorWidth !== option.value}
 								class:text-(--color-accent-fg)={settings.editorWidth === option.value}
+								class:text-(--color-fg-muted)={settings.editorWidth !== option.value}
 								class:font-semibold={settings.editorWidth === option.value}
+								class:font-medium={settings.editorWidth !== option.value}
 								class:shadow-[0_1px_3px_rgba(0,0,0,0.1)]={settings.editorWidth === option.value}
 								onclick={() => settings.setEditorWidth(option.value)}
 								title={option.description}>
@@ -130,10 +134,14 @@
 					<div class="flex border border-(--color-border-default) rounded-[6px] overflow-hidden bg-(--color-canvas-subtle)">
 						{#each sidebarPositionOptions as option}
 							<button
-								class="flex-1 py-2 px-3 border-none bg-transparent text-(--color-fg-muted) text-[13px] font-medium cursor-pointer transition-all duration-150 [font-family:inherit] border-r border-r-(--color-border-default) last:border-r-0 hover:[&:not(.active)]:bg-(--color-neutral-muted) hover:[&:not(.active)]:text-(--color-fg-default)"
+								class="flex-1 py-2 px-3 border-none text-[13px] cursor-pointer transition-all duration-150 [font-family:inherit] border-r border-r-(--color-border-default) last:border-r-0 hover:[&:not(.active)]:bg-(--color-neutral-muted) hover:[&:not(.active)]:text-(--color-fg-default)"
+								class:active={settings.sidebarPosition === option.value}
 								class:bg-(--color-canvas-default)={settings.sidebarPosition === option.value}
+								class:bg-transparent={settings.sidebarPosition !== option.value}
 								class:text-(--color-accent-fg)={settings.sidebarPosition === option.value}
+								class:text-(--color-fg-muted)={settings.sidebarPosition !== option.value}
 								class:font-semibold={settings.sidebarPosition === option.value}
+								class:font-medium={settings.sidebarPosition !== option.value}
 								class:shadow-[0_1px_3px_rgba(0,0,0,0.1)]={settings.sidebarPosition === option.value}
 								onclick={() => settings.setSidebarPosition(option.value)}>
 								{option.label}
