@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
 	import { onMount, tick } from 'svelte';
+	import { debounce } from '$lib/utils/debounce';
 
 	type SortMode = 'az' | 'modified';
 
@@ -9,6 +10,11 @@
 		path: string;
 		is_dir: boolean;
 		modified_at: number;
+	}
+
+	interface ContentSearchResult {
+		path: string;
+		hits: number;
 	}
 
 	let {
@@ -44,6 +50,8 @@
 	let isGitRepo = $state(false);
 	let gitAhead = $state(0);
 	let gitBehind = $state(0);
+	let contentResults = $state<ContentSearchResult[]>([]);
+	let contentSearching = $state(false);
 
 	function getSortPrefsMap(): Record<string, SortMode> {
 		try {
@@ -328,6 +336,19 @@
 		return path.split(/[/\\]/).pop() || path;
 	}
 
+	function getRelativePath(filePath: string): string {
+		if (!folderPath) return '';
+		const rel = filePath.slice(folderPath.length).replace(/^[/\\]/, '');
+		const parts = rel.split(/[/\\]/);
+		return parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+	}
+
+	function highlightName(name: string, query: string): { before: string; match: string; after: string } | null {
+		const idx = name.toLowerCase().indexOf(query.toLowerCase());
+		if (idx === -1) return null;
+		return { before: name.slice(0, idx), match: name.slice(idx, idx + query.length), after: name.slice(idx + query.length) };
+	}
+
 	function toggleSearch() {
 		searchOpen = !searchOpen;
 		if (searchOpen) {
@@ -406,6 +427,60 @@
 		}
 		walk(entries);
 		return dirs;
+	});
+
+	// Flat list of all loaded files whose name matches the query
+	const nameMatchFiles = $derived.by(() => {
+		if (!searchQuery) return [];
+		const query = searchQuery.toLowerCase();
+		const matches: DirEntry[] = [];
+		function walk(items: DirEntry[]) {
+			for (const entry of items) {
+				if (entry.is_dir) {
+					const children = dirContents.get(entry.path);
+					if (children) walk(children);
+				} else if (entry.name.toLowerCase().includes(query)) {
+					matches.push(entry);
+				}
+			}
+		}
+		walk(entries);
+		return matches;
+	});
+
+	// Content results excluding files already surfaced by name match
+	const filteredContentResults = $derived.by(() => {
+		const nameMatchPaths = new Set(nameMatchFiles.map((f) => f.path));
+		return contentResults.filter((r) => !nameMatchPaths.has(r.path));
+	});
+
+	const contentSearchDebounce = debounce(async (query: string, folder: string) => {
+		try {
+			const results = await invoke<ContentSearchResult[]>('search_file_content', {
+				folderPath: folder,
+				query,
+			});
+			contentResults = results;
+		} catch (e) {
+			console.error('Content search failed:', e);
+			contentResults = [];
+		} finally {
+			contentSearching = false;
+		}
+	}, 300);
+
+	$effect(() => {
+		const query = searchQuery;
+		const folder = folderPath;
+		if (!query) {
+			contentSearchDebounce.cancel();
+			contentResults = [];
+			contentSearching = false;
+			return;
+		}
+		contentSearching = true;
+		contentSearchDebounce.call(query, folder);
+		return () => contentSearchDebounce.cancel();
 	});
 
 	function isExpanded(path: string): boolean {
@@ -657,36 +732,123 @@
 				</button>
 			{/if}
 		</div>
-		<ul class="list-none m-0 p-0">
-			{#if newFileDir === folderPath}
-				<li class="relative flex items-center gap-[6px] pt-[2px] pb-[2px] pr-2" style="padding-left: 8px">
-					<span class="flex items-center justify-center shrink-0">
-						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-							<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-							<polyline points="14 2 14 8 20 8" />
+		{#if searchQuery}
+			<!-- FLAT SEARCH RESULTS -->
+			<div class="px-2 pb-2">
+				<div class="text-[10px] font-semibold uppercase tracking-[0.5px] text-(--color-fg-muted) px-2 pt-3 pb-1">
+					Name matches
+				</div>
+				{#if nameMatchFiles.length > 0}
+					<ul class="list-none m-0 p-0">
+						{#each nameMatchFiles as entry}
+							{@const badge = gitStatuses.get(entry.path) ? statusBadge(gitStatuses.get(entry.path)!) : null}
+							{@const relPath = getRelativePath(entry.path)}
+							{@const hl = highlightName(entry.name, searchQuery)}
+							<li>
+								<button
+									class="flex items-center w-full py-[3px] px-2 border-none bg-none text-[12.5px] leading-[1.4] text-left overflow-hidden gap-[6px] text-(--color-fg-muted) cursor-pointer hover:text-(--color-accent-fg) hover:bg-(--color-neutral-muted)"
+									onclick={(e) => handleFileClick(e, entry)}
+									onauxclick={(e) => { if (e.button === 1) handleFileClick(e, entry); }}
+									oncontextmenu={(e) => handleContextMenu(e, entry)}
+									title={entry.path}
+								>
+									<svg class="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" />
+									</svg>
+									<span class="flex-1 min-w-0 overflow-hidden">
+										<span class="block overflow-hidden text-ellipsis whitespace-nowrap" style={badge ? `color: ${badge.color}` : ''}>
+											{#if hl}{hl.before}<span class="text-(--color-fg-default) font-semibold">{hl.match}</span>{hl.after}{:else}{entry.name}{/if}
+										</span>
+										{#if relPath}
+											<span class="block text-[10.5px] text-(--color-fg-muted) opacity-60 overflow-hidden text-ellipsis whitespace-nowrap">{relPath}</span>
+										{/if}
+									</span>
+									{#if badge}
+										<span class="text-[10px] font-bold shrink-0" style="color: {badge.color}">{badge.letter}</span>
+									{/if}
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="text-(--color-fg-muted) text-[11px] italic px-2 py-1 m-0">No name matches</p>
+				{/if}
+
+				<div class="text-[10px] font-semibold uppercase tracking-[0.5px] text-(--color-fg-muted) px-2 pt-3 pb-1 flex items-center gap-2">
+					<span>Content matches</span>
+					{#if contentSearching}
+						<svg class="animate-spin shrink-0" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+							<circle cx="12" cy="12" r="10" stroke-dasharray="30 60" />
 						</svg>
-					</span>
-					<input
-						bind:this={newFileInputEl}
-						bind:value={newFileName}
-						onkeydown={handleNewFileKeydown}
-						onblur={cancelNewFile}
-						class="flex-1 min-w-0 border border-(--color-accent-fg) rounded-[3px] bg-(--color-canvas-subtle) text-(--color-fg-default) text-[12.5px] [font-family:inherit] outline-none py-[1px] px-[5px]"
-						type="text"
-						placeholder="filename.md"
-						spellcheck="false"
-					/>
-				</li>
-			{/if}
-			{#each sortEntries(entries).filter(matchesSearch) as entry}
-				{@render renderEntry(entry, 0)}
-			{/each}
-			{#if sortEntries(entries).filter(matchesSearch).length === 0}
-				<li class="relative py-2 px-3">
-					<span class="text-(--color-fg-muted) text-[11px] italic">{searchQuery ? 'No matches' : 'No files found'}</span>
-				</li>
-			{/if}
-		</ul>
+					{/if}
+				</div>
+				{#if !contentSearching && filteredContentResults.length === 0}
+					<p class="text-(--color-fg-muted) text-[11px] italic px-2 py-1 m-0">No content matches</p>
+				{/if}
+				{#if filteredContentResults.length > 0}
+					<ul class="list-none m-0 p-0">
+						{#each filteredContentResults as result}
+							{@const fileName = result.path.split(/[/\\]/).pop() ?? result.path}
+							{@const badge = gitStatuses.get(result.path) ? statusBadge(gitStatuses.get(result.path)!) : null}
+							{@const relPath = getRelativePath(result.path)}
+							<li>
+								<button
+									class="flex items-center w-full py-[3px] px-2 border-none bg-none text-[12.5px] leading-[1.4] text-left overflow-hidden gap-[6px] text-(--color-fg-muted) cursor-pointer hover:text-(--color-accent-fg) hover:bg-(--color-neutral-muted)"
+									onclick={() => onopenfile?.(result.path)}
+									title={result.path}
+								>
+									<svg class="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" />
+									</svg>
+									<span class="flex-1 min-w-0 overflow-hidden">
+										<span class="block overflow-hidden text-ellipsis whitespace-nowrap" style={badge ? `color: ${badge.color}` : ''}>{fileName}</span>
+										{#if relPath}
+											<span class="block text-[10.5px] text-(--color-fg-muted) opacity-60 overflow-hidden text-ellipsis whitespace-nowrap">{relPath}</span>
+										{/if}
+									</span>
+									<span class="text-[10px] font-semibold shrink-0 text-(--color-fg-muted) font-mono">{result.hits}</span>
+									{#if badge}
+										<span class="text-[10px] font-bold shrink-0" style="color: {badge.color}">{badge.letter}</span>
+									{/if}
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+		{:else}
+			<!-- EXISTING TREE VIEW -->
+			<ul class="list-none m-0 p-0">
+				{#if newFileDir === folderPath}
+					<li class="relative flex items-center gap-[6px] pt-[2px] pb-[2px] pr-2" style="padding-left: 8px">
+						<span class="flex items-center justify-center shrink-0">
+							<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+								<polyline points="14 2 14 8 20 8" />
+							</svg>
+						</span>
+						<input
+							bind:this={newFileInputEl}
+							bind:value={newFileName}
+							onkeydown={handleNewFileKeydown}
+							onblur={cancelNewFile}
+							class="flex-1 min-w-0 border border-(--color-accent-fg) rounded-[3px] bg-(--color-canvas-subtle) text-(--color-fg-default) text-[12.5px] [font-family:inherit] outline-none py-[1px] px-[5px]"
+							type="text"
+							placeholder="filename.md"
+							spellcheck="false"
+						/>
+					</li>
+				{/if}
+				{#each sortEntries(entries).filter(matchesSearch) as entry}
+					{@render renderEntry(entry, 0)}
+				{/each}
+				{#if sortEntries(entries).filter(matchesSearch).length === 0}
+					<li class="relative py-2 px-3">
+						<span class="text-(--color-fg-muted) text-[11px] italic">{searchQuery ? 'No matches' : 'No files found'}</span>
+					</li>
+				{/if}
+			</ul>
+		{/if}
 	</nav>
 {/if}
 

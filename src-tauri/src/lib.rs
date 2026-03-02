@@ -126,6 +126,12 @@ struct DirEntry {
     modified_at: u64,
 }
 
+#[derive(Serialize)]
+struct ContentSearchResult {
+    path: String,
+    hits: usize,
+}
+
 #[tauri::command]
 fn is_directory(path: String) -> bool {
     // Normalize path - remove trailing /. or /./
@@ -177,6 +183,62 @@ fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
     });
 
     Ok(entries)
+}
+
+#[tauri::command]
+fn search_file_content(
+    folder_path: String,
+    query: String,
+) -> Result<Vec<ContentSearchResult>, String> {
+    const SEARCHABLE_EXTENSIONS: &[&str] = &["md", "txt"];
+    let query_lower = query.to_lowercase();
+    let mut results: Vec<ContentSearchResult> = Vec::new();
+
+    fn walk(
+        dir: &Path,
+        query_lower: &str,
+        extensions: &[&str],
+        results: &mut Vec<ContentSearchResult>,
+    ) {
+        let entries = match fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with('.') {
+                continue;
+            }
+            if path.is_dir() {
+                walk(&path, query_lower, extensions, results);
+                continue;
+            }
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if !extensions.contains(&ext.as_str()) {
+                continue;
+            }
+            let content = match fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            let hits = content.to_lowercase().matches(query_lower).count();
+            if hits > 0 {
+                results.push(ContentSearchResult {
+                    path: path.to_string_lossy().to_string(),
+                    hits,
+                });
+            }
+        }
+    }
+
+    walk(Path::new(&folder_path), &query_lower, SEARCHABLE_EXTENSIONS, &mut results);
+    results.sort_by(|a, b| b.hits.cmp(&a.hits));
+    Ok(results)
 }
 
 #[tauri::command]
@@ -1258,7 +1320,8 @@ pub fn run() {
             git_commit_file,
             git_sync,
             get_git_ahead_behind,
-            git_revert_file
+            git_revert_file,
+            search_file_content
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
