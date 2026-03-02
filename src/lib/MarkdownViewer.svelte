@@ -55,6 +55,16 @@
 	let showHome = $derived(tabManager.activeTab?.path === 'HOME');
 	let folderRefreshKey = $state(0);
 	let isDragging = $state(false);
+
+	// Dynamic sidebar offset: breakpoint = 720 + 2*(w+12), maxShift = w+12
+	let explorerClampStyle = $derived.by(() => {
+		if (!folderExplorerVisible) return '';
+		const w = settings.folderExplorerWidth;
+		const breakpoint = 720 + 2 * (w + 12);
+		const maxShift = w + 12;
+		const clamp = `clamp(0px, ${breakpoint}px - 100vw, calc(${maxShift}px - 2rem))`;
+		return settings.sidebarPosition === 'right' ? `right: ${clamp};` : `left: ${clamp};`;
+	});
 	let tocVisible = $state(localStorage.getItem('toc-visible') !== 'false');
 	let folderExplorerVisible = $state(false); // Don't restore on startup - only show when explicitly opened
 	let currentFolder = $state(localStorage.getItem('current-folder') || '');
@@ -1259,7 +1269,7 @@
 		/>
 		<div
 			class="fixed top-9 left-0 right-0 bottom-0 overflow-hidden flex flex-col z-[10]"
-			style="{folderExplorerVisible && settings.sidebarPosition !== 'right' ? 'left: clamp(0px, 1184px - 100vw, calc(232px - 2rem));' : ''}{folderExplorerVisible && settings.sidebarPosition === 'right' ? 'right: clamp(0px, 1184px - 100vw, calc(232px - 2rem));' : ''}{zoomLevel !== 100 ? `transform: scale(${zoomLevel / 100}); transform-origin: top left; width: ${10000 / zoomLevel}%; height: ${10000 / zoomLevel}%;` : ''}"
+			style="{explorerClampStyle}{zoomLevel !== 100 ? `transform: scale(${zoomLevel / 100}); transform-origin: top left; width: ${10000 / zoomLevel}%; height: ${10000 / zoomLevel}%;` : ''}"
 			role="presentation"
 		>
 			<EditorHeader
@@ -1306,7 +1316,7 @@
 	{:else}
 		<div
 			class="fixed top-9 left-0 right-0 bottom-0 overflow-y-auto transition-[left,right] duration-[150ms] ease-out"
-			style="{folderExplorerVisible && settings.sidebarPosition !== 'right' ? 'left: clamp(0px, 1184px - 100vw, calc(232px - 2rem));' : ''}{folderExplorerVisible && settings.sidebarPosition === 'right' ? 'right: clamp(0px, 1184px - 100vw, calc(232px - 2rem));' : ''}"
+			style="{explorerClampStyle}"
 		>
 			<HomePage {recentFiles} {recentFolders} onselectFile={selectFile} onselectFolder={selectFolder} onloadFile={loadMarkdown} onopenFolder={openFolder} onremoveRecentFile={removeRecentFile} onremoveRecentFolder={removeRecentFolder} onnewFile={handleNewFile} onnewKanbanFile={handleNewKanbanFile} onnewMermaidFile={handleNewMermaidFile} />
 		</div>

@@ -2,6 +2,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { onMount, tick } from 'svelte';
 	import { debounce } from '$lib/utils/debounce';
+	import { settings } from '$lib/stores/settings.svelte';
 
 	type SortMode = 'az' | 'modified';
 
@@ -54,6 +55,35 @@
 	let gitBehind = $state(0);
 	let contentResults = $state<ContentSearchResult[]>([]);
 	let contentSearching = $state(false);
+	let isResizing = $state(false);
+
+	const RESIZE_MIN = 160;
+	const RESIZE_MAX = 480;
+
+	function handleResizeStart(e: MouseEvent) {
+		e.preventDefault();
+		isResizing = true;
+		document.body.style.userSelect = 'none';
+		document.body.style.cursor = 'col-resize';
+		const startX = e.clientX;
+		const startWidth = settings.folderExplorerWidth;
+
+		function onMouseMove(e: MouseEvent) {
+			const delta = sidebarPosition === 'right' ? startX - e.clientX : e.clientX - startX;
+			settings.folderExplorerWidth = Math.max(RESIZE_MIN, Math.min(RESIZE_MAX, startWidth + delta));
+		}
+
+		function onMouseUp() {
+			isResizing = false;
+			document.body.style.userSelect = '';
+			document.body.style.cursor = '';
+			window.removeEventListener('mousemove', onMouseMove);
+			window.removeEventListener('mouseup', onMouseUp);
+		}
+
+		window.addEventListener('mousemove', onMouseMove);
+		window.addEventListener('mouseup', onMouseUp);
+	}
 
 	function getSortPrefsMap(): Record<string, SortMode> {
 		try {
@@ -637,9 +667,20 @@
 {/snippet}
 
 {#if visible && folderPath}
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+	<div
+		class="fixed top-9 bottom-0 w-[5px] z-[51] cursor-col-resize outline-none"
+		style="{sidebarPosition === 'right' ? `right: ${settings.folderExplorerWidth - 2}px` : `left: ${settings.folderExplorerWidth - 2}px`}"
+		onmousedown={handleResizeStart}
+		role="separator"
+		tabindex="-1"
+		aria-label="Resize sidebar"
+		aria-orientation="vertical"
+	></div>
 	<nav
-		class="explorer-nav fixed top-9 bottom-0 w-[220px] overflow-y-auto overflow-x-hidden z-50 [font-family:var(--font-win)] pt-2 {sidebarPosition === 'right' ? 'left-auto right-0 border-l border-(--color-border-default) animate-slide-in-right' : 'left-0 border-r border-(--color-border-default) animate-slide-in'}"
-		style="background-color: var(--color-canvas-default)"
+		class="explorer-nav fixed top-9 bottom-0 overflow-y-auto overflow-x-hidden z-50 [font-family:var(--font-win)] pt-2 {sidebarPosition === 'right' ? 'left-auto right-0 border-l border-(--color-border-default) animate-slide-in-right' : 'left-0 border-r border-(--color-border-default) animate-slide-in'}"
+		style="background-color: var(--color-canvas-default); width: {settings.folderExplorerWidth}px"
 		aria-label="File explorer"
 	>
 		<div class="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.5px] text-(--color-fg-muted) flex items-center gap-[6px]">
