@@ -738,7 +738,7 @@
 		if (isDir) {
 			openFolder(path);
 		} else {
-			loadMarkdown(path);
+			loadMarkdown(path, { newTab: true });
 		}
 	}
 
