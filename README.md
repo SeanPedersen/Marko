@@ -1,7 +1,8 @@
-
 # Marko
 
 A simple, lightweight WYSIWYG Markdown editor for Windows, macOS and Linux.
+
+![Marko](marko.png)
 
 ## Features
 
