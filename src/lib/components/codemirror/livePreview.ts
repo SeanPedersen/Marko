@@ -5,8 +5,9 @@ import {
   WidgetType,
 } from '@codemirror/view';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { RangeSetBuilder, StateField } from '@codemirror/state';
+import { RangeSetBuilder, StateField, Facet, Compartment } from '@codemirror/state';
 import type { Range } from '@codemirror/state';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { syntaxTree } from '@codemirror/language';
 import type { SyntaxNodeRef } from '@lezer/common';
 import { LanguageDescription } from '@codemirror/language';
@@ -15,6 +16,43 @@ import { highlightTree, classHighlighter } from '@lezer/highlight';
 import { render } from 'katex';
 import 'katex/dist/katex.min.css';
 import mermaid from 'mermaid';
+
+// Facet + compartment for passing the active file path to the live preview extension
+export const currentFileFacet = Facet.define<string, string>({
+  combine: (values) => values[0] ?? '',
+});
+export const currentFileCompartment = new Compartment();
+
+export function updateCurrentFile(view: EditorView, filePath: string) {
+  view.dispatch({
+    effects: currentFileCompartment.reconfigure(currentFileFacet.of(filePath)),
+  });
+}
+
+// Resolve a markdown image URL to a loadable src.
+// Remote/data URLs are returned as-is; relative/absolute local paths are
+// converted to the Tauri asset:// protocol so the webview can read them.
+function resolveImageUrl(url: string, currentFilePath: string): string {
+  if (/^https?:\/\/|^data:|^asset:\/\//.test(url)) return url;
+  if (!currentFilePath) return url;
+
+  const lastSlash = Math.max(currentFilePath.lastIndexOf('/'), currentFilePath.lastIndexOf('\\'));
+  const dir = lastSlash >= 0 ? currentFilePath.slice(0, lastSlash) : '';
+
+  // Windows absolute paths start with a drive letter (e.g. C:\)
+  const isAbsolute = url.startsWith('/') || /^[A-Za-z]:[/\\]/.test(url);
+  const joined = isAbsolute ? url : dir + '/' + url;
+
+  // Normalise . and .. segments
+  const parts = joined.split(/[/\\]/);
+  const normalized: string[] = [];
+  for (const part of parts) {
+    if (part === '..') normalized.pop();
+    else if (part !== '.') normalized.push(part);
+  }
+
+  return convertFileSrc(normalized.join('/'));
+}
 
 // Cache of loaded language parsers: name → parser (null while loading or unavailable)
 const languageCache = new Map<string, ReturnType<LanguageDescription['load']> extends Promise<infer T> ? T : never>();
@@ -1642,9 +1680,11 @@ function buildDecorations(view: EditorView): DecorationSet {
           const startLine = view.state.doc.lineAt(el.from).number;
           const endLine = view.state.doc.lineAt(el.to).number;
           if (startLine === endLine) {
+            const currentFile = view.state.facet(currentFileFacet);
+            const resolvedUrl = resolveImageUrl(el.url, currentFile);
             decorations.push(
               Decoration.replace({
-                widget: new ImageWidget(el.text, el.url),
+                widget: new ImageWidget(el.text, resolvedUrl),
               }).range(el.from, el.to)
             );
           }
@@ -2248,8 +2288,14 @@ export const livePreviewStyles = EditorView.baseTheme({
 
 });
 
-export function livePreview() {
-  return [livePreviewPlugin, tableDecorationField, mermaidDecorationField, livePreviewStyles];
+export function livePreview(filePath = '') {
+  return [
+    currentFileCompartment.of(currentFileFacet.of(filePath)),
+    livePreviewPlugin,
+    tableDecorationField,
+    mermaidDecorationField,
+    livePreviewStyles,
+  ];
 }
 
 // Lightweight URL detection for plain text files (no markdown parsing)

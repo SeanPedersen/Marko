@@ -1316,6 +1316,7 @@
 					fileType={currentFileType}
 					onchange={handleEditorChange}
 					editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
+					filePath={currentFile}
 					{fileIndex}
 				/>
 			{/if}

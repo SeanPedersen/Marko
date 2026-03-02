@@ -8,7 +8,7 @@
 	import { languages } from '@codemirror/language-data';
 	import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language';
 	import { createTheme } from './codemirror/theme.js';
-	import { livePreview, plainUrlDetection } from './codemirror/livePreview.js';
+	import { livePreview, plainUrlDetection, updateCurrentFile } from './codemirror/livePreview.js';
 	import { wikiLinkCompletion, fileIndexFacet, fileIndexCompartment, updateFileIndex } from './codemirror/wikiLinkCompletion.js';
 	import type { FileIndex } from '$lib/utils/wikiLinks';
 	import type { Extension } from '@codemirror/state';
@@ -50,6 +50,7 @@
 		onchange,
 		fileType = 'markdown', // 'markdown' or 'text'
 		editorWidth = '720px',
+		filePath = '',
 		fileIndex = { entries: [], byBasename: new Map(), byFilename: new Map() } as FileIndex,
 	} = $props<{
 		value?: string;
@@ -58,6 +59,7 @@
 		onchange?: (value: string) => void;
 		fileType?: 'markdown' | 'text';
 		editorWidth?: string;
+		filePath?: string;
 		fileIndex?: FileIndex;
 	}>();
 
@@ -190,7 +192,7 @@ function createExtensions() {
 				syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
 
 				// Live preview (Obsidian-style)
-				livePreview(),
+				livePreview(filePath),
 
 				// Wiki-link autocomplete
 				wikiLinkCompletion(),
@@ -282,6 +284,12 @@ function createExtensions() {
 	$effect(() => {
 		if (!view || fileType !== 'markdown') return;
 		updateFileIndex(view, fileIndex);
+	});
+
+	// Update current file path for image URL resolution
+	$effect(() => {
+		if (!view || fileType !== 'markdown') return;
+		updateCurrentFile(view, filePath);
 	});
 
 	// Export function to scroll to a specific line (for TOC integration)
