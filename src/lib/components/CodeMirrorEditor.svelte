@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { EditorView, keymap, lineNumbers, highlightActiveLine, rectangularSelection, ViewPlugin } from '@codemirror/view';
-	import { EditorState, Compartment } from '@codemirror/state';
+	import { EditorState, EditorSelection, Compartment } from '@codemirror/state';
 	import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 	import { search, searchKeymap } from '@codemirror/search';
 	import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -71,7 +71,35 @@
 	const themeCompartment = new Compartment();
 
 
-	function createExtensions() {
+		function toggleMarker(view: EditorView, marker: string): boolean {
+		const changes = view.state.changeByRange((range) => {
+			if (range.empty) {
+				return {
+					changes: { from: range.from, insert: marker + marker },
+					range: EditorSelection.cursor(range.from + marker.length),
+				};
+			}
+			const text = view.state.sliceDoc(range.from, range.to);
+			if (text.startsWith(marker) && text.endsWith(marker) && text.length > marker.length * 2) {
+				return {
+					changes: [
+						{ from: range.from, to: range.from + marker.length, insert: '' },
+						{ from: range.to - marker.length, to: range.to, insert: '' },
+					],
+					range: EditorSelection.range(range.from, range.to - marker.length * 2),
+				};
+			}
+			return {
+				changes: [{ from: range.from, insert: marker }, { from: range.to, insert: marker }],
+				range: EditorSelection.range(range.from, range.to + marker.length * 2),
+			};
+		});
+		view.dispatch(view.state.update(changes, { userEvent: 'input' }));
+		return true;
+	}
+
+
+function createExtensions() {
 		const extensions = [
 			// Basic editing
 			history(),
@@ -99,6 +127,7 @@
 						return true;
 					},
 				},
+				{ key: 'Mod-b', run: (view) => toggleMarker(view, '**') },
 				...searchKeymap,
 				...defaultKeymap,
 				...historyKeymap,
