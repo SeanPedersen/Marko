@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { type Tab as TabData, tabManager } from '../stores/tabs.svelte.js';
+	import { invoke } from '@tauri-apps/api/core';
 	import Tab from './Tab.svelte';
 
 	import { flip } from 'svelte/animate';
@@ -144,7 +145,6 @@
 		if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains('tab-list-spacer')) return;
 		e.preventDefault();
 
-		const { invoke } = await import('@tauri-apps/api/core');
 		invoke('show_context_menu', {
 			menuType: 'tab_bar',
 			path: null,

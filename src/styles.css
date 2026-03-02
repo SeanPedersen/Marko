@@ -494,7 +494,7 @@
 	cursor: pointer;
 }
 
-.markdown-body details summary:marker {
+.markdown-body details summary::marker {
 	display: none;
 }
 

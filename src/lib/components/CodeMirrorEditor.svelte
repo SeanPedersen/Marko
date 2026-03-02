@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import { EditorView, keymap, lineNumbers, highlightActiveLine, rectangularSelection, ViewPlugin } from '@codemirror/view';
+	import { EditorView, keymap, highlightActiveLine, rectangularSelection, ViewPlugin } from '@codemirror/view';
 	import { EditorState, EditorSelection, Compartment } from '@codemirror/state';
 	import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 	import { search, searchKeymap } from '@codemirror/search';

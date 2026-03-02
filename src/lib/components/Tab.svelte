@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Tab } from '../stores/tabs.svelte.js';
+	import { invoke } from '@tauri-apps/api/core';
 	import { settings } from '../stores/settings.svelte.js';
 	import { tick, untrack } from 'svelte';
 
@@ -57,7 +58,6 @@
 		e.preventDefault();
 		e.stopPropagation();
 
-		const { invoke } = await import('@tauri-apps/api/core');
 		invoke('show_context_menu', {
 			menuType: 'tab',
 			path: tab.path || null,

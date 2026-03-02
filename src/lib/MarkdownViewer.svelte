@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
+	import { getCurrentWindow } from '@tauri-apps/api/window';
+	import { listen } from '@tauri-apps/api/event';
 	import { onMount, tick } from 'svelte';
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { open, save } from '@tauri-apps/plugin-dialog';
@@ -807,16 +809,11 @@
 		unlisteners.push(() => document.removeEventListener('marko:link', handleLink));
 
 		const init = async () => {
-			// Fire get_app_mode and module imports in parallel — neither blocks the other
 			const appModePromise: Promise<string> = Promise.race([
 				invoke('get_app_mode') as Promise<string>,
 				new Promise<string>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000)),
 			]).catch(() => 'app');
 
-			const [{ getCurrentWindow }, { listen }] = await Promise.all([
-				import('@tauri-apps/api/window'),
-				import('@tauri-apps/api/event'),
-			]);
 			const appWindow = getCurrentWindow();
 
 			// Register all event listeners in parallel
