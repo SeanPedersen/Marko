@@ -8,7 +8,7 @@ import type { DecorationSet, ViewUpdate } from '@codemirror/view';
 import { RangeSetBuilder, StateField, Facet, Compartment } from '@codemirror/state';
 import type { Range } from '@codemirror/state';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { syntaxTree } from '@codemirror/language';
+import { syntaxTree, ensureSyntaxTree } from '@codemirror/language';
 import type { SyntaxNodeRef } from '@lezer/common';
 import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
@@ -658,19 +658,6 @@ const headingDecorations = [
   Decoration.line({ class: 'cm-live-h6' }),
 ];
 
-// When cursor is on an ATX heading, pull "## " left into the padding gutter by
-// making the marker span 0-width and shifting it with position:relative.
-// The heading text stays at padding-left:Nch in normal flow — no text-indent,
-// no letter-spacing redistribution.
-const MARKER_BASE = 'display:inline-block;width:0;overflow:visible;white-space:pre;position:relative';
-const headingActiveMarkerDecorations = [
-  Decoration.mark({ attributes: { style: `${MARKER_BASE};left:-2ch` } }), // H1: "# "
-  Decoration.mark({ attributes: { style: `${MARKER_BASE};left:-3ch` } }), // H2: "## "
-  Decoration.mark({ attributes: { style: `${MARKER_BASE};left:-4ch` } }), // H3: "### "
-  Decoration.mark({ attributes: { style: `${MARKER_BASE};left:-5ch` } }), // H4: "#### "
-  Decoration.mark({ attributes: { style: `${MARKER_BASE};left:-6ch` } }), // H5: "##### "
-  Decoration.mark({ attributes: { style: `${MARKER_BASE};left:-7ch` } }), // H6: "###### "
-];
 
 
 const normalizeHeadingDecoration = Decoration.line({ class: 'cm-live-normalize-heading' });
@@ -1007,7 +994,11 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
   const elements: ParsedElement[] = [];
   const doc = view.state.doc;
 
-  syntaxTree(view.state).iterate({
+  // Force a synchronous parse up to the viewport end so that newly-typed
+  // headings and other block elements are detected immediately rather than
+  // waiting for the background parser to complete its async pass.
+  const tree = ensureSyntaxTree(view.state, view.viewport.to, 50) ?? syntaxTree(view.state);
+  tree.iterate({
     enter(node: SyntaxNodeRef) {
       const { from, to, name } = node;
       const line = getLineNumber(view, from);
@@ -1533,13 +1524,8 @@ function buildDecorations(view: EditorView): DecorationSet {
           decorations.push(headingDecorations[el.level - 1].range(lineObj.from));
         }
 
-        const isAtxHeading = el.markerFrom !== undefined && el.markerFrom === el.from;
         if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined) {
-          // Hide the # markers when cursor is not on this line (line-level element)
           decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
-        } else if (isAtxHeading && isOnCursorLine && el.level && el.markerFrom !== undefined && el.markerTo !== undefined) {
-          // Cursor on line: render marker in the left padding gutter (0-width span shifted left)
-          decorations.push(headingActiveMarkerDecorations[el.level - 1].range(el.markerFrom, el.markerTo));
         }
         break;
       }
@@ -1889,7 +1875,12 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
 
     update(update: ViewUpdate) {
       this.view = update.view;
-      if (update.docChanged || update.viewportChanged) {
+      // Also rebuild when background parsing completes and updates the syntax tree.
+      // Without this, newly typed headings won't get styling until the next
+      // docChanged/viewportChanged event, because the tree update arrives as a
+      // separate transaction with none of those flags set.
+      const treeChanged = syntaxTree(update.startState) !== syntaxTree(update.state);
+      if (update.docChanged || update.viewportChanged || treeChanged) {
         this.decorations = buildDecorations(update.view);
       } else if (update.selectionSet) {
         // Skip rebuilds during any mouse interaction (initial click or drag) to
@@ -2012,44 +2003,36 @@ export const livePreviewStyles = EditorView.baseTheme({
 
   // Headings - use line-height for spacing instead of margins
   // (margins break CodeMirror's click position calculations).
-  // padding-left reserves gutter space for the "## " marker so heading text
-  // stays at a fixed x-position whether the cursor is on the line or not.
   '.cm-live-h1': {
     fontSize: '1.5em',
     fontWeight: '700',
     lineHeight: '1.8',
-    paddingLeft: '2ch',
   },
   '.cm-live-h2': {
     fontSize: '1.3em',
     fontWeight: '600',
     lineHeight: '1.7',
-    paddingLeft: '3ch',
   },
   '.cm-live-h3': {
     fontSize: '1.15em',
     fontWeight: '600',
     lineHeight: '1.6',
-    paddingLeft: '4ch',
   },
   '.cm-live-h4': {
     fontSize: '1.05em',
     fontWeight: '600',
     lineHeight: '1.5',
-    paddingLeft: '5ch',
   },
   '.cm-live-h5': {
     fontSize: '1em',
     fontWeight: '600',
     lineHeight: '1.5',
-    paddingLeft: '6ch',
   },
   '.cm-live-h6': {
     fontSize: '0.95em',
     fontWeight: '600',
     color: 'var(--color-fg-muted)',
     lineHeight: '1.5',
-    paddingLeft: '7ch',
   },
 
   // Text formatting
