@@ -658,6 +658,17 @@ const headingDecorations = [
   Decoration.line({ class: 'cm-live-h6' }),
 ];
 
+// When cursor is on an ATX heading, pull "## " left into the padding gutter by
+// making the marker span 0-width and shifting it with position:relative.
+const MARKER_BASE = 'display:inline-block;width:0;overflow:visible;white-space:pre;position:relative';
+const headingActiveMarkerDecorations = [
+  Decoration.mark({ attributes: { style: `${MARKER_BASE};left:-2ch` } }), // H1: "# "
+  Decoration.mark({ attributes: { style: `${MARKER_BASE};left:-3ch` } }), // H2: "## "
+  Decoration.mark({ attributes: { style: `${MARKER_BASE};left:-4ch` } }), // H3: "### "
+  Decoration.mark({ attributes: { style: `${MARKER_BASE};left:-5ch` } }), // H4: "#### "
+  Decoration.mark({ attributes: { style: `${MARKER_BASE};left:-6ch` } }), // H5: "##### "
+  Decoration.mark({ attributes: { style: `${MARKER_BASE};left:-7ch` } }), // H6: "###### "
+];
 
 
 const normalizeHeadingDecoration = Decoration.line({ class: 'cm-live-normalize-heading' });
@@ -994,10 +1005,11 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
   const elements: ParsedElement[] = [];
   const doc = view.state.doc;
 
-  // Force a synchronous parse up to the viewport end so that newly-typed
-  // headings and other block elements are detected immediately rather than
-  // waiting for the background parser to complete its async pass.
-  const tree = ensureSyntaxTree(view.state, view.viewport.to, 50) ?? syntaxTree(view.state);
+  // Force a synchronous parse so that newly-typed headings and other block
+  // elements are detected immediately. After setState() the viewport may not
+  // be laid out yet (viewport.to === 0), so fall back to the full doc length.
+  const parseUpTo = view.viewport.to || doc.length;
+  const tree = ensureSyntaxTree(view.state, parseUpTo, 50) ?? syntaxTree(view.state);
   tree.iterate({
     enter(node: SyntaxNodeRef) {
       const { from, to, name } = node;
@@ -1524,8 +1536,13 @@ function buildDecorations(view: EditorView): DecorationSet {
           decorations.push(headingDecorations[el.level - 1].range(lineObj.from));
         }
 
-        if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined) {
+        const isAtxHeading = el.markerFrom !== undefined && el.markerFrom === el.from;
+        if (!isOnCursorLine && el.markerFrom !== undefined && el.markerTo !== undefined && el.markerFrom < el.markerTo) {
+          // Hide the # markers when cursor is not on this line
           decorations.push(hideDecoration.range(el.markerFrom, el.markerTo));
+        } else if (isAtxHeading && isOnCursorLine && el.level && el.markerFrom !== undefined && el.markerTo !== undefined && el.markerFrom < el.markerTo) {
+          // Cursor on line: render marker in the left padding gutter (0-width span shifted left)
+          decorations.push(headingActiveMarkerDecorations[el.level - 1].range(el.markerFrom, el.markerTo));
         }
         break;
       }
@@ -2003,36 +2020,44 @@ export const livePreviewStyles = EditorView.baseTheme({
 
   // Headings - use line-height for spacing instead of margins
   // (margins break CodeMirror's click position calculations).
+  // padding-left reserves gutter space for the "## " marker so heading text
+  // stays at a fixed x-position whether the cursor is on the line or not.
   '.cm-live-h1': {
     fontSize: '1.5em',
     fontWeight: '700',
     lineHeight: '1.8',
+    paddingLeft: '2ch',
   },
   '.cm-live-h2': {
     fontSize: '1.3em',
     fontWeight: '600',
     lineHeight: '1.7',
+    paddingLeft: '3ch',
   },
   '.cm-live-h3': {
     fontSize: '1.15em',
     fontWeight: '600',
     lineHeight: '1.6',
+    paddingLeft: '4ch',
   },
   '.cm-live-h4': {
     fontSize: '1.05em',
     fontWeight: '600',
     lineHeight: '1.5',
+    paddingLeft: '5ch',
   },
   '.cm-live-h5': {
     fontSize: '1em',
     fontWeight: '600',
     lineHeight: '1.5',
+    paddingLeft: '6ch',
   },
   '.cm-live-h6': {
     fontSize: '0.95em',
     fontWeight: '600',
     color: 'var(--color-fg-muted)',
     lineHeight: '1.5',
+    paddingLeft: '7ch',
   },
 
   // Text formatting
