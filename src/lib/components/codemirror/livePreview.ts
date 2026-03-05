@@ -5,7 +5,7 @@ import {
   WidgetType,
 } from '@codemirror/view';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { RangeSetBuilder, StateField, Facet, Compartment } from '@codemirror/state';
+import { RangeSetBuilder, StateField, Facet, Compartment, Transaction } from '@codemirror/state';
 import type { Range } from '@codemirror/state';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { syntaxTree, ensureSyntaxTree } from '@codemirror/language';
@@ -632,13 +632,15 @@ class MermaidWidget extends WidgetType {
 }
 
 // Shared module-level flag: true while mouse is down in the editor.
-// All decoration sources must skip rebuilds during mouse drag to prevent
-// layout shifts that corrupt CodeMirror's height oracle (causing wrong
-// posAtCoords results in wrapped lines).
+// All decoration sources skip rebuilds during mouse drag to prevent
+// layout shifts mid-interaction.
 let isMouseDragging = false;
 
-// Hide decoration - makes text invisible but keeps it in the document
-const hideDecoration = Decoration.mark({ class: 'cm-hide' });
+// Hide decoration — replaces text with nothing (zero-width).
+// Decoration.replace tells CM about the size change so its height oracle
+// stays accurate (unlike mark + display:none which hides content without
+// CM's knowledge).
+const hideDecoration = Decoration.replace({});
 
 // Styling decorations
 const boldDecoration = Decoration.mark({ class: 'cm-live-bold' });
@@ -1005,10 +1007,13 @@ function parseMarkdownElements(view: EditorView): ParsedElement[] {
   const elements: ParsedElement[] = [];
   const doc = view.state.doc;
 
-  // Force a synchronous parse so that newly-typed headings and other block
-  // elements are detected immediately. After setState() the viewport may not
-  // be laid out yet (viewport.to === 0), so fall back to the full doc length.
-  const parseUpTo = view.viewport.to || doc.length;
+  // Parse the entire document so decorations are viewport-independent.
+  // This prevents viewport-change decoration rebuilds during scrollbar
+  // scrolling from desynchronizing CM's height oracle (root cause of the
+  // scroll-jump / selection-flash bug). The 50ms timeout ensures we don't
+  // block for very large files; partial results are fine — treeChanged
+  // triggers a rebuild when background parsing catches up.
+  const parseUpTo = doc.length;
   const tree = ensureSyntaxTree(view.state, parseUpTo, 50) ?? syntaxTree(view.state);
   tree.iterate({
     enter(node: SyntaxNodeRef) {
@@ -1858,52 +1863,147 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
     decorations: DecorationSet;
     private view: EditorView;
     private rafId = 0;
+    private lastWheelTime = 0;
+    private scrollbarUsed = false;
 
     constructor(view: EditorView) {
       this.view = view;
       this.decorations = buildDecorations(view);
       this.onMouseDown = this.onMouseDown.bind(this);
       this.onMouseUp = this.onMouseUp.bind(this);
-      // Use capture phase so the flag is set before CodeMirror's own mousedown
-      // handler runs and triggers update(). This ensures the initial click is
-      // treated the same as a drag and decorations are not rebuilt mid-interaction,
-      // which would make CodeMirror's height oracle stale and cause the "one row up
-      // selects the entire lower row" bug.
+      this.onWheel = this.onWheel.bind(this);
+      this.onScrollTrack = this.onScrollTrack.bind(this);
       view.scrollDOM.addEventListener('mousedown', this.onMouseDown, { capture: true });
+      view.scrollDOM.addEventListener('wheel', this.onWheel, { passive: true });
+      view.scrollDOM.addEventListener('scroll', this.onScrollTrack, { passive: true });
       window.addEventListener('mouseup', this.onMouseUp);
     }
 
-    onMouseDown() {
+    onWheel() {
+      this.lastWheelTime = Date.now();
+      this.scrollbarUsed = false;
+    }
+
+    onScrollTrack() {
+      // Scroll without a recent wheel event = scrollbar (or keyboard/programmatic).
+      // Ignore scroll events during mouse drag (those come from our own corrections).
+      if (isMouseDragging) return;
+      const WHEEL_DEBOUNCE_MS = 150;
+      if (Date.now() - this.lastWheelTime > WHEEL_DEBOUNCE_MS) {
+        this.scrollbarUsed = true;
+      }
+    }
+
+    onMouseDown(e: MouseEvent) {
+      if (!this.view.contentDOM.contains(e.target as Node)) return;
       isMouseDragging = true;
+
+      // --- Scroll guard ---
+      // After scrollbar scrolling, CM's height estimates for off-screen
+      // lines are inaccurate (live preview decorations change heights).
+      // When CM measures newly visible lines in its next rAF, the height
+      // correction shifts scrollTop. Guard by reverting large jumps.
+      const scrollBefore = this.view.scrollDOM.scrollTop;
+      const threshold = this.view.defaultLineHeight * 3;
+
+      const onScroll = (ev: Event) => {
+        clearTimeout(scrollTimerId);
+        if (Math.abs(this.view.scrollDOM.scrollTop - scrollBefore) > threshold) {
+          ev.stopImmediatePropagation();
+          this.view.scrollDOM.scrollTop = scrollBefore;
+        }
+      };
+
+      const scrollTimerId = setTimeout(() => {
+        this.view.scrollDOM.removeEventListener('scroll', onScroll, true);
+      }, 150);
+
+      this.view.scrollDOM.addEventListener('scroll', onScroll,
+        { capture: true, once: true });
+
+      // --- Scrollbar click takeover ---
+      // After scrollbar scrolling, CM's stale height map causes
+      // posAtCoords to resolve wrong positions and MouseSelection's
+      // scroll-event tracking creates spurious range selections.
+      // Take over click handling entirely: preventDefault stops CM from
+      // starting mouse tracking, and we place the cursor ourselves.
+      if (!this.scrollbarUsed) return;
+      this.scrollbarUsed = false;
+
+      const pos = this.view.posAtCoords({ x: e.clientX, y: e.clientY });
+      if (pos == null) return;
+
+      e.preventDefault();
+
+      const anchor = pos;
+      let selection;
+      if (e.detail >= 3) {
+        const line = this.view.state.doc.lineAt(pos);
+        selection = { anchor: line.from, head: line.to };
+      } else if (e.detail === 2) {
+        const word = this.view.state.wordAt(pos);
+        selection = word
+          ? { anchor: word.from, head: word.to }
+          : { anchor: pos };
+      } else {
+        selection = { anchor: pos };
+      }
+
+      this.view.dispatch({
+        selection,
+        scrollIntoView: false,
+        annotations: Transaction.userEvent.of('select.pointer'),
+      });
+      this.view.focus();
+
+      // Drag-to-select: track mousemove to extend selection from anchor
+      if (e.detail <= 1) {
+        const onMove = (me: MouseEvent) => {
+          const head = this.view.posAtCoords({ x: me.clientX, y: me.clientY });
+          if (head != null && head !== anchor) {
+            this.view.dispatch({
+              selection: { anchor, head },
+              scrollIntoView: false,
+              annotations: Transaction.userEvent.of('select.pointer'),
+            });
+          }
+        };
+
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        };
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp, { once: true });
+      }
     }
 
     onMouseUp() {
       if (!isMouseDragging) return;
       isMouseDragging = false;
-      // Defer decoration rebuild to the next frame so it doesn't interfere
-      // with CodeMirror's mouseup processing or cause synchronous layout thrash.
+      // Deferred decoration rebuild for cursor-line reveal.
+      // Preserve scrollTop: changing decorations on the old cursor line
+      // (now far off-screen) alters heights above the viewport.
       cancelAnimationFrame(this.rafId);
       this.rafId = requestAnimationFrame(() => {
+        const scrollBefore = this.view.scrollDOM.scrollTop;
         this.decorations = buildDecorations(this.view);
-        // Empty dispatch forces the view to re-read all decoration accessors
         this.view.dispatch({});
+        this.view.scrollDOM.scrollTop = scrollBefore;
       });
     }
 
     update(update: ViewUpdate) {
       this.view = update.view;
-      // Also rebuild when background parsing completes and updates the syntax tree.
-      // Without this, newly typed headings won't get styling until the next
-      // docChanged/viewportChanged event, because the tree update arrives as a
-      // separate transaction with none of those flags set.
+      // Decorations are viewport-independent (full-document parse), so
+      // viewportChanged is intentionally NOT a rebuild trigger. This
+      // prevents scrollbar scrolling from changing line heights and
+      // desynchronizing CM's height oracle.
       const treeChanged = syntaxTree(update.startState) !== syntaxTree(update.state);
-      if (update.docChanged || update.viewportChanged || treeChanged) {
+      if (update.docChanged || treeChanged) {
         this.decorations = buildDecorations(update.view);
       } else if (update.selectionSet) {
-        // Skip rebuilds during any mouse interaction (initial click or drag) to
-        // prevent layout shifts that corrupt CodeMirror's height oracle and cause
-        // accidental/wrong text selection. Widget-dispatched selections (e.g. math
-        // click) use no userEvent and must always rebuild.
         const isPointerInteraction = isMouseDragging &&
           update.transactions.some(tr => tr.isUserEvent('select'));
         if (!isPointerInteraction) {
@@ -1916,6 +2016,8 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
       cancelAnimationFrame(this.rafId);
       isMouseDragging = false;
       this.view.scrollDOM.removeEventListener('mousedown', this.onMouseDown, { capture: true });
+      this.view.scrollDOM.removeEventListener('wheel', this.onWheel);
+      this.view.scrollDOM.removeEventListener('scroll', this.onScrollTrack);
       window.removeEventListener('mouseup', this.onMouseUp);
     }
   },
@@ -2006,11 +2108,6 @@ const mermaidDecorationField = StateField.define<DecorationSet>({
 
 // Styles for live preview elements
 export const livePreviewStyles = EditorView.baseTheme({
-  // Hide syntax markers
-  '.cm-hide': {
-    display: 'none',
-  },
-
   // Reset heading token styles when a setext marker is a single '-'
   // !important needed to beat HighlightStyle's direct token-level font-size
   '.cm-live-normalize-heading span': {
@@ -2337,7 +2434,7 @@ const plainUrlPlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged || update.viewportChanged) {
+      if (update.docChanged) {
         this.decorations = buildPlainUrlDecorations(update.view);
       } else if (update.selectionSet && !isMouseDragging) {
         this.decorations = buildPlainUrlDecorations(update.view);
