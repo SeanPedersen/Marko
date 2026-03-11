@@ -24,16 +24,20 @@
 		activePath = '',
 		onopenfile,
 		onfileschanged,
+		onswitchfolder,
 		refreshKey = 0,
 		sidebarPosition = 'left',
+		recentFolders = [],
 	} = $props<{
 		folderPath: string;
 		visible?: boolean;
 		activePath?: string;
 		onopenfile?: (path: string, options?: { newTab?: boolean }) => void;
 		onfileschanged?: (removed: string[], added: string[]) => void;
+		onswitchfolder?: (path: string) => void;
 		refreshKey?: number;
 		sidebarPosition?: 'left' | 'right';
+		recentFolders?: string[];
 	}>();
 
 	let entries = $state<DirEntry[]>([]);
@@ -56,6 +60,34 @@
 	let contentResults = $state<ContentSearchResult[]>([]);
 	let contentSearching = $state(false);
 	let isResizing = $state(false);
+	let folderPickerOpen = $state(false);
+	let folderPickerEl = $state<HTMLDivElement | null>(null);
+
+	// Other recent folders (exclude current)
+	let otherFolders = $derived(recentFolders.filter((f: string) => f !== folderPath));
+
+	function toggleFolderPicker() {
+		if (otherFolders.length === 0) return;
+		folderPickerOpen = !folderPickerOpen;
+	}
+
+	function handlePickerFolder(path: string) {
+		folderPickerOpen = false;
+		onswitchfolder?.(path);
+	}
+
+	function handlePickerClickOutside(e: MouseEvent) {
+		if (folderPickerOpen && folderPickerEl && !folderPickerEl.contains(e.target as Node)) {
+			folderPickerOpen = false;
+		}
+	}
+
+	$effect(() => {
+		if (folderPickerOpen) {
+			document.addEventListener('mousedown', handlePickerClickOutside);
+			return () => document.removeEventListener('mousedown', handlePickerClickOutside);
+		}
+	});
 
 	const RESIZE_MIN = 160;
 	const RESIZE_MAX = 480;
@@ -735,7 +767,36 @@
 						</svg>
 					</button>
 				{/if}
-				<span class="overflow-hidden text-ellipsis whitespace-nowrap flex-1" title={folderPath}>{getFolderName(folderPath)}</span>
+				<div class="relative flex-1 min-w-0" bind:this={folderPickerEl}>
+					<button
+						class="overflow-hidden text-ellipsis whitespace-nowrap w-full text-left bg-none border-none p-0 text-inherit font-inherit tracking-inherit uppercase text-[11px] font-semibold {otherFolders.length > 0 ? 'cursor-pointer hover:text-(--color-fg-default)' : 'cursor-default'} flex items-center gap-[3px]"
+						onclick={toggleFolderPicker}
+						title={folderPath}
+					>
+						<span class="overflow-hidden text-ellipsis whitespace-nowrap">{getFolderName(folderPath)}</span>
+						{#if otherFolders.length > 0}
+							<svg class="shrink-0 transition-transform duration-150 {folderPickerOpen ? 'rotate-180' : ''}" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+								<polyline points="6 9 12 15 18 9" />
+							</svg>
+						{/if}
+					</button>
+					{#if folderPickerOpen}
+						<div class="absolute top-full left-0 mt-1 min-w-[180px] max-w-[280px] bg-(--color-canvas-default) border border-(--color-border-default) rounded-[6px] shadow-[0_4px_12px_rgba(0,0,0,0.15)] z-[100] py-1 animate-menu-fade normal-case tracking-normal font-normal">
+							{#each otherFolders as folder}
+								<button
+									class="flex items-center gap-2 w-full text-left bg-none border-none px-3 py-[5px] text-[12px] text-(--color-fg-muted) cursor-pointer hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default) transition-[color,background] duration-100"
+									onclick={() => handlePickerFolder(folder)}
+									title={folder}
+								>
+									<svg class="shrink-0 opacity-60" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+									</svg>
+									<span class="overflow-hidden text-ellipsis whitespace-nowrap">{getFolderName(folder)}</span>
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
 				<button
 					class="flex items-center justify-center shrink-0 w-7 h-[22px] p-0 border-none rounded-[4px] bg-none text-(--color-fg-muted) cursor-pointer transition-[color,background] duration-100 hover:text-(--color-fg-default) hover:bg-(--color-neutral-muted)"
 					onclick={handleNewFileClickRoot}

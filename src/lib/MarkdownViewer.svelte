@@ -1262,8 +1262,10 @@
 		activePath={currentFile}
 		onopenfile={loadMarkdown}
 		onfileschanged={handleFilesChanged}
+		onswitchfolder={openFolder}
 		refreshKey={folderRefreshKey}
 		sidebarPosition={settings.explorerPosition}
+		{recentFolders}
 	/>
 
 	{#if tabManager.activeTab && tabManager.activeTab.path !== 'HOME'}
