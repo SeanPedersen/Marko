@@ -393,7 +393,7 @@ function createExtensions() {
 
 	.codemirror-container :global(.cm-scroller) {
 		padding: 2rem;
-		overflow: auto;
+		overflow-y: scroll;
 	}
 
 	.codemirror-container :global(.cm-content) {

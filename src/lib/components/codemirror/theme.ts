@@ -33,7 +33,7 @@ const baseTheme = EditorView.theme({
     backgroundColor: 'transparent',
   },
   '.cm-scroller': {
-    overflow: 'auto',
+    overflowY: 'scroll',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     lineHeight: '1.6',
   },
