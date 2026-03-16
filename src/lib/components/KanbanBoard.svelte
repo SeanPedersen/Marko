@@ -103,11 +103,42 @@
 
 	// --- Markdown rendering ---
 
+	function renderWikiLinks(html: string): string {
+		return html.replace(/\[\[([^\]]+?)(?:\|([^\]]+?))?\]\]/g, (_, target, display) => {
+			const label = display || target;
+			const escaped = target.replace(/"/g, '&quot;');
+			return `<a class="wiki-link" data-target="${escaped}">${label}</a>`;
+		});
+	}
+
 	function renderCardMarkdown(text: string): string {
 		const html = parseInline(text) as string;
-		return DOMPurify.sanitize(html, {
+		const sanitized = DOMPurify.sanitize(html, {
 			ALLOWED_TAGS: ['strong', 'em', 'code', 'del', 's', 'a', 'br'],
 		});
+		return renderWikiLinks(sanitized);
+	}
+
+	function handleCardClick(e: MouseEvent) {
+		const link = (e.target as HTMLElement).closest<HTMLAnchorElement>('a.wiki-link');
+		if (!link) return;
+		e.preventDefault();
+		e.stopPropagation();
+		const target = link.dataset.target;
+		if (!target) return;
+		const newTab = e.ctrlKey || e.metaKey || e.button === 1;
+		document.dispatchEvent(new CustomEvent('marko:wiki-link', { detail: { target, newTab } }));
+	}
+
+	function handleCardAuxClick(e: MouseEvent) {
+		if (e.button !== 1) return;
+		const link = (e.target as HTMLElement).closest<HTMLAnchorElement>('a.wiki-link');
+		if (!link) return;
+		e.preventDefault();
+		e.stopPropagation();
+		const target = link.dataset.target;
+		if (!target) return;
+		document.dispatchEvent(new CustomEvent('marko:wiki-link', { detail: { target, newTab: true } }));
 	}
 
 	function bodyPreview(body: string): string {
@@ -563,6 +594,8 @@
 											class="card-text flex-1 text-(--color-fg-default) leading-[1.45] break-words tracking-[-0.01em]"
 											role="button"
 											tabindex={readonly ? -1 : 0}
+											onclick={handleCardClick}
+											onauxclick={handleCardAuxClick}
 											ondblclick={() => startEditCard(colIdx, cardIdx)}
 											onkeydown={(e) => { if (e.key === 'Enter') startEditCard(colIdx, cardIdx); }}
 										>{@html renderCardMarkdown(card.text)}</span>
@@ -691,9 +724,16 @@
 	.card-text :global(a) {
 		color: var(--color-accent-fg);
 		text-decoration: none;
+		cursor: pointer;
 	}
 	.card-text :global(a:hover) {
 		text-decoration: underline;
+	}
+	.card-text :global(a.wiki-link) {
+		border-bottom: 1px dashed var(--color-accent-fg);
+	}
+	.card-text :global(a.wiki-link:hover) {
+		border-bottom-style: solid;
 	}
 
 	/* Show action buttons on card hover */
