@@ -165,7 +165,12 @@
 			const isOnHome = tabManager.activeTab?.path === 'HOME';
 
 			if (options.navigate && tabManager.activeTab && !isOnHome) {
-				tabManager.navigate(tabManager.activeTab.id, filePath);
+				const existing = tabManager.tabs.find((t) => t.path === filePath);
+				if (existing) {
+					tabManager.setActive(existing.id);
+				} else {
+					tabManager.navigate(tabManager.activeTab.id, filePath);
+				}
 			} else if (!options.skipTabManagement) {
 				const existing = tabManager.tabs.find((t) => t.path === filePath);
 				if (existing) {
