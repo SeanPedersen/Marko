@@ -51,8 +51,8 @@
 	// Card delete confirmation
 	let confirmDeleteCard = $state<{ colIdx: number; cardIdx: number } | null>(null);
 
-	// Add card state per column
-	let addingCard = $state<number | null>(null);
+	// Add card state per column ('top' or 'bottom' position)
+	let addingCard = $state<{ colIdx: number; position: 'top' | 'bottom' } | null>(null);
 	let newCardText = $state('');
 
 	// Inline card editing
@@ -386,9 +386,9 @@
 
 	// --- Add card ---
 
-	function startAddCard(colIdx: number) {
+	function startAddCard(colIdx: number, position: 'top' | 'bottom' = 'bottom') {
 		if (readonly) return;
-		addingCard = colIdx;
+		addingCard = { colIdx, position };
 		newCardText = '';
 	}
 
@@ -396,7 +396,11 @@
 		if (addingCard === null) return;
 		const trimmed = newCardText.trim();
 		if (trimmed) {
-			columns[addingCard].cards.push(createCard(trimmed));
+			if (addingCard.position === 'top') {
+				columns[addingCard.colIdx].cards.unshift(createCard(trimmed));
+			} else {
+				columns[addingCard.colIdx].cards.push(createCard(trimmed));
+			}
 			commit();
 		}
 		addingCard = null;
@@ -551,6 +555,14 @@
 						<span class="font-semibold text-[12px] tracking-[0.04em] uppercase text-(--color-fg-muted) flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{col.name}</span>
 						<span class="text-[11px] bg-(--color-neutral-muted) text-(--color-fg-muted) rounded-[10px] px-[7px] py-[1px] font-medium">{col.cards.length}</span>
 						<div class="flex gap-[2px]">
+							{#if !readonly && !col.collapsed}
+								<button
+									class="bg-none border-none cursor-pointer text-(--color-fg-muted) text-[14px] px-[5px] py-[2px] rounded-[3px] leading-none hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)"
+									onclick={() => startAddCard(colIdx, 'top')}
+									title="Add card to top"
+									aria-label="Add card to top"
+								>+</button>
+							{/if}
 							<button
 								class="bg-none border-none cursor-pointer text-(--color-fg-muted) text-[11px] px-[5px] py-[2px] rounded-[3px] leading-none hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)"
 								onclick={() => toggleCollapse(colIdx)}
@@ -572,6 +584,23 @@
 
 					{#if !col.collapsed}
 						<div class="p-2 flex flex-col gap-[6px] overflow-y-auto flex-1 min-h-[40px]">
+							{#if addingCard?.colIdx === colIdx && addingCard.position === 'top'}
+								<div class="bg-(--color-canvas-default) border border-(--color-border-default) rounded-[6px] px-[10px] py-2 flex flex-col">
+									<!-- svelte-ignore a11y_autofocus -->
+									<textarea
+										class="w-full text-[13px] [font-family:inherit] tracking-[-0.01em] leading-[1.45] border border-(--color-accent-fg) rounded-[4px] px-[6px] py-1 bg-(--color-canvas-default) text-(--color-fg-default) resize-none overflow-hidden outline-none box-border"
+										use:autoresize
+										bind:value={newCardText}
+										placeholder="Card title…"
+										onkeydown={handleNewCardKeydown}
+										onblur={commitAddCard}
+										autofocus
+										autocomplete="off"
+										autocapitalize="off"
+										spellcheck="false"
+									></textarea>
+								</div>
+							{/if}
 							{#each col.cards as card, cardIdx (card.id)}
 								{@const isSrc = dragSrc?.colIdx === colIdx && dragSrc?.cardIdx === cardIdx}
 								{@const isEditing = editingCard?.colIdx === colIdx && editingCard?.cardIdx === cardIdx}
@@ -629,7 +658,7 @@
 								<div class="h-[3px] rounded-[2px] bg-(--color-accent-fg) mx-[2px] shrink-0"></div>
 							{/if}
 
-							{#if addingCard === colIdx}
+							{#if addingCard?.colIdx === colIdx && addingCard.position === 'bottom'}
 								<div class="bg-(--color-canvas-default) border border-(--color-border-default) rounded-[6px] px-[10px] py-2 flex flex-col">
 									<!-- svelte-ignore a11y_autofocus -->
 									<textarea
@@ -649,7 +678,7 @@
 						</div>
 
 						{#if !readonly}
-							<button class="mx-2 mb-2 px-2 py-[6px] bg-none border border-dashed border-(--color-border-default) rounded-[6px] text-(--color-fg-muted) text-[12px] cursor-pointer text-left transition-[background,color] duration-100 shrink-0 hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)" onclick={() => startAddCard(colIdx)}>
+							<button class="mx-2 mb-2 px-2 py-[6px] bg-none border border-dashed border-(--color-border-default) rounded-[6px] text-(--color-fg-muted) text-[12px] cursor-pointer text-left transition-[background,color] duration-100 shrink-0 hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)" onclick={() => startAddCard(colIdx, 'bottom')}>
 								+ Add card
 							</button>
 						{/if}
