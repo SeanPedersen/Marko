@@ -552,17 +552,17 @@
 					aria-label={col.name}
 				>
 					<div class="flex items-center gap-2 px-3 py-[10px] border-b border-(--color-border-default) shrink-0">
+						{#if !readonly && !col.collapsed}
+							<button
+								class="bg-none border-none cursor-pointer text-(--color-fg-muted) text-[14px] px-[5px] py-[2px] rounded-[3px] leading-none hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)"
+								onclick={() => startAddCard(colIdx, 'top')}
+								title="Add card to top"
+								aria-label="Add card to top"
+							>+</button>
+						{/if}
 						<span class="font-semibold text-[12px] tracking-[0.04em] uppercase text-(--color-fg-muted) flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{col.name}</span>
 						<span class="text-[11px] bg-(--color-neutral-muted) text-(--color-fg-muted) rounded-[10px] px-[7px] py-[1px] font-medium">{col.cards.length}</span>
 						<div class="flex gap-[2px]">
-							{#if !readonly && !col.collapsed}
-								<button
-									class="bg-none border-none cursor-pointer text-(--color-fg-muted) text-[14px] px-[5px] py-[2px] rounded-[3px] leading-none hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)"
-									onclick={() => startAddCard(colIdx, 'top')}
-									title="Add card to top"
-									aria-label="Add card to top"
-								>+</button>
-							{/if}
 							<button
 								class="bg-none border-none cursor-pointer text-(--color-fg-muted) text-[11px] px-[5px] py-[2px] rounded-[3px] leading-none hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)"
 								onclick={() => toggleCollapse(colIdx)}
