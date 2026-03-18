@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
-	import { parseKanban, serializeKanban, detectKanbanFormat, createCard, type KanbanColumn, type KanbanFormat } from '$lib/utils/kanban.js';
+	import { parseKanban, serializeKanban, detectKanbanFormat, createCard, type KanbanCard, type KanbanColumn, type KanbanFormat } from '$lib/utils/kanban.js';
 	import { serializeMarkoKanban, upgradeToMarko } from '$lib/utils/markoKanban.js';
+	import { debounce } from '$lib/utils/debounce.js';
+	import type { FileIndex } from '$lib/utils/wikiLinks';
 	import CodeMirrorEditor from './CodeMirrorEditor.svelte';
 	import CardDetailPane from './CardDetailPane.svelte';
 	import Modal from './Modal.svelte';
@@ -20,12 +22,14 @@
 		readonly = false,
 		theme = 'system',
 		rawMode = $bindable(false),
+		fileIndex = { entries: [], byBasename: new Map(), byFilename: new Map() } as FileIndex,
 	}: {
 		content: string;
 		onchange: (s: string) => void;
 		readonly?: boolean;
 		theme?: 'system' | 'dark' | 'light';
 		rawMode?: boolean;
+		fileIndex?: FileIndex;
 	} = $props();
 
 	let columns = $state<KanbanColumn[]>([]);
@@ -61,6 +65,7 @@
 
 	// Detail pane
 	let paneCard = $state<{ colIdx: number; cardIdx: number } | null>(null);
+	let paneCardRef: KanbanCard | null = null;
 
 	// Add column state
 	let addingColumn = $state(false);
@@ -154,6 +159,7 @@
 	onDestroy(() => {
 		sharedView?.destroy();
 		sharedView = null;
+		debouncedPaneCommit.cancel();
 	});
 
 	function initSharedEditor() {
@@ -246,18 +252,30 @@
 	function openPane(colIdx: number, cardIdx: number) {
 		if (readonly) return;
 		if (editorVisible) cancelEditCard();
+		paneCardRef = columns[colIdx].cards[cardIdx];
 		paneCard = { colIdx, cardIdx };
 	}
 
+	const PANE_AUTO_SAVE_DELAY_MS = 1000;
+	const debouncedPaneCommit = debounce(() => commit(), PANE_AUTO_SAVE_DELAY_MS);
+
+	function onPaneChange(updatedTitle: string, updatedBody: string) {
+		if (!paneCardRef) return;
+		paneCardRef.text = updatedTitle;
+		paneCardRef.body = updatedBody;
+		debouncedPaneCommit.call();
+	}
+
 	function closePane(updatedTitle: string, updatedBody: string) {
-		if (!paneCard) return;
-		const card = columns[paneCard.colIdx].cards[paneCard.cardIdx];
-		if (updatedTitle !== card.text || updatedBody !== card.body) {
-			card.text = updatedTitle;
-			card.body = updatedBody;
+		if (!paneCard || !paneCardRef) return;
+		debouncedPaneCommit.cancel();
+		if (updatedTitle !== paneCardRef.text || updatedBody !== paneCardRef.body) {
+			paneCardRef.text = updatedTitle;
+			paneCardRef.body = updatedBody;
 			commit();
 		}
 		paneCard = null;
+		paneCardRef = null;
 	}
 
 	// --- Pointer drag & drop ---
@@ -721,7 +739,9 @@
 		card={columns[paneCard.colIdx].cards[paneCard.cardIdx]}
 		{theme}
 		{readonly}
+		{fileIndex}
 		onclose={closePane}
+		onchange={onPaneChange}
 	/>
 {/if}
 

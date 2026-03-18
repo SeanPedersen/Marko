@@ -3,25 +3,37 @@
 	import { fly } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import type { KanbanCard } from '$lib/utils/kanban.js';
+	import type { FileIndex } from '$lib/utils/wikiLinks';
 	import CodeMirrorEditor from './CodeMirrorEditor.svelte';
 
 	let {
 		card,
 		theme = 'system',
 		readonly = false,
+		fileIndex = { entries: [], byBasename: new Map(), byFilename: new Map() } as FileIndex,
 		onclose,
+		onchange,
 	}: {
 		card: KanbanCard;
 		theme?: 'system' | 'dark' | 'light';
 		readonly?: boolean;
+		fileIndex?: FileIndex;
 		onclose: (updatedTitle: string, updatedBody: string) => void;
+		onchange?: (updatedTitle: string, updatedBody: string) => void;
 	} = $props();
 
 	let titleInput = $state(untrack(() => card.text));
 	let bodyContent = $state(untrack(() => card.body));
 	let editorRef: ReturnType<typeof CodeMirrorEditor>;
+	let closed = false;
+
+	function emitChange() {
+		onchange?.(titleInput.trim() || card.text, bodyContent);
+	}
 
 	function handleClose() {
+		if (closed) return;
+		closed = true;
 		onclose(titleInput.trim() || card.text, bodyContent);
 	}
 
@@ -40,6 +52,7 @@
 
 	onDestroy(() => {
 		document.removeEventListener('keydown', handleKeydown, { capture: true });
+		handleClose();
 	});
 </script>
 
@@ -67,6 +80,7 @@
 					class="flex-1 text-[14px] font-semibold [font-family:inherit] border-none bg-transparent text-(--color-fg-default) outline-none min-w-0 px-1 py-0.5 rounded-[3px] focus:bg-(--color-canvas-subtle)"
 					type="text"
 					bind:value={titleInput}
+					oninput={emitChange}
 					placeholder="Card title…"
 				/>
 			{/if}
@@ -81,7 +95,8 @@
 				editorWidth="full"
 				{theme}
 				{readonly}
-				onchange={(v) => { bodyContent = v; }}
+				{fileIndex}
+				onchange={(v) => { bodyContent = v; emitChange(); }}
 			/>
 		</div>
 	</div>

@@ -1312,6 +1312,7 @@
 					onchange={handleEditorChange}
 					readonly={false}
 					{theme}
+					{fileIndex}
 					bind:rawMode={kanbanRawMode}
 				/>
 			{:else}
