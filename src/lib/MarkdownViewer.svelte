@@ -289,11 +289,14 @@
 	async function saveTab(tab: Tab): Promise<boolean> {
 		if (!tab.path) return false;
 		try {
+			ignoringFileChange = true;
 			await invoke('save_file_content', { path: tab.path, content: tab.rawContent });
+			setTimeout(() => { ignoringFileChange = false; }, 500);
 			tab.isDirty = false;
 			tab.isDeleted = false;
 			return true;
 		} catch (e) {
+			ignoringFileChange = false;
 			console.error('Failed to save file', e);
 			return false;
 		}
@@ -351,7 +354,10 @@
 		}
 
 		try {
+			ignoringFileChange = true;
 			await invoke('save_file_content', { path: targetPath, content: tab.rawContent });
+			// Allow watcher events to settle before re-enabling reload
+			setTimeout(() => { ignoringFileChange = false; }, 500);
 			if (tab.path === '') {
 				// We just saved an untitled tab for the first time
 				tabManager.updateTabPath(tab.id, targetPath);
@@ -365,6 +371,7 @@
 			}).catch(() => {});
 			return true;
 		} catch (e) {
+			ignoringFileChange = false;
 			console.error('Failed to save file', e);
 			return false;
 		}
@@ -844,6 +851,7 @@
 					navigator.clipboard.writeText(event.payload).catch(console.error);
 				}),
 				listen('folder-changed', () => { debouncedFolderRefresh.call(); }),
+				listen('file-changed', () => { debouncedFileReload.call(); }),
 				listen<string>('menu-file-trash', async (event) => {
 					const path = event.payload;
 					try {
@@ -932,7 +940,9 @@
 		return () => {
 			unlisteners.forEach((u) => u());
 			debouncedFolderRefresh.cancel();
+			debouncedFileReload.cancel();
 			invoke('unwatch_folder').catch(console.error);
+			invoke('unwatch_file').catch(console.error);
 		};
 	});
 
@@ -941,6 +951,15 @@
 			invoke('watch_folder', { path: currentFolder }).catch(console.error);
 		} else {
 			invoke('unwatch_folder').catch(console.error);
+		}
+	});
+
+	// Watch the active file for external modifications
+	$effect(() => {
+		if (currentFile && currentFile !== 'HOME') {
+			invoke('watch_file', { path: currentFile }).catch(console.error);
+		} else {
+			invoke('unwatch_file').catch(console.error);
 		}
 	});
 
@@ -1020,6 +1039,25 @@
 
 	const FOLDER_REFRESH_DELAY_MS = 500;
 	const debouncedFolderRefresh = debounce(() => { folderRefreshKey++; }, FOLDER_REFRESH_DELAY_MS);
+
+	// File-change watcher: reload file when modified on disk by external tools
+	let ignoringFileChange = false;
+	const FILE_RELOAD_DELAY_MS = 300;
+	const debouncedFileReload = debounce(async () => {
+		if (ignoringFileChange) return;
+		const tab = tabManager.activeTab;
+		if (!tab || !tab.path || tab.path === 'HOME') return;
+		// Skip reload if user has unsaved edits (their changes take priority)
+		if (tab.isDirty) return;
+		try {
+			const diskContent = await invoke('read_file_content', { path: tab.path }) as string;
+			if (diskContent !== tab.rawContent) {
+				tabManager.setTabRawContent(tab.id, diskContent);
+			}
+		} catch {
+			// File may have been deleted — handled by folder watcher
+		}
+	}, FILE_RELOAD_DELAY_MS);
 
 	// --- Session persistence ---
 
@@ -1101,10 +1139,22 @@
 		}
 	}
 
-	// Cancel pending auto-save when switching tabs
+	// Cancel pending auto-save/reload and check for stale content when switching tabs
 	$effect(() => {
-		const _ = tabManager.activeTabId;
+		const activeId = tabManager.activeTabId;
 		debouncedSave.cancel();
+		debouncedFileReload.cancel();
+		// Check if the file changed on disk while this tab was inactive
+		if (activeId) {
+			const tab = tabManager.tabs.find((t) => t.id === activeId);
+			if (tab && tab.path && tab.path !== 'HOME' && !tab.isDirty) {
+				invoke('read_file_content', { path: tab.path }).then((diskContent) => {
+					if (typeof diskContent === 'string' && diskContent !== tab.rawContent) {
+						tabManager.setTabRawContent(tab.id, diskContent);
+					}
+				}).catch(() => {});
+			}
+		}
 	});
 
 	// Handle CodeMirror content changes

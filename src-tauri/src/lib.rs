@@ -1,6 +1,6 @@
 use comrak::{markdown_to_html, ComrakExtensionOptions, ComrakOptions};
 use git2::{Repository, StatusOptions};
-use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use regex::{Captures, Regex};
 use serde::Serialize;
 use std::borrow::Cow;
@@ -251,13 +251,30 @@ fn watch_file(
 
     *watcher_lock = None;
 
-    let path_to_watch = path.clone();
+    let file_path = Path::new(&path);
+    let watch_dir = file_path.parent().ok_or("No parent directory")?.to_path_buf();
+    let file_name = file_path
+        .file_name()
+        .ok_or("No file name")?
+        .to_os_string();
     let app_handle = handle.clone();
 
     let mut watcher = RecommendedWatcher::new(
         move |res: Result<notify::Event, notify::Error>| {
-            if let Ok(_) = res {
-                let _ = app_handle.emit("file-changed", ());
+            if let Ok(event) = res {
+                if !matches!(
+                    event.kind,
+                    EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
+                ) {
+                    return;
+                }
+                let matches = event
+                    .paths
+                    .iter()
+                    .any(|p| p.file_name().map_or(false, |n| n == file_name));
+                if matches {
+                    let _ = app_handle.emit("file-changed", ());
+                }
             }
         },
         Config::default(),
@@ -265,7 +282,7 @@ fn watch_file(
     .map_err(|e| e.to_string())?;
 
     watcher
-        .watch(Path::new(&path_to_watch), RecursiveMode::NonRecursive)
+        .watch(&watch_dir, RecursiveMode::NonRecursive)
         .map_err(|e| e.to_string())?;
 
     *watcher_lock = Some(watcher);
