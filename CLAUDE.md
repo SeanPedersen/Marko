@@ -59,7 +59,8 @@ src/
 
 ### MarkdownViewer (`src/lib/MarkdownViewer.svelte`)
 - Main app shell: manages layout, file loading/saving, keyboard shortcuts, drag-and-drop
-- Auto-save: debounced (1s) via `debounce` utility, controlled by `settings.autoSave`
+- Auto-save: debounced (300ms) via `debounce` utility, controlled by `settings.autoSave`
+- **File watching**: watches the active file via `watch_file` (notify crate); on external change, re-reads from disk and updates editor (debounced 300ms). Save guard (`ignoringFileChange` flag, 500ms cooldown) prevents feedback loops. Tabs with unsaved edits skip reload. On tab switch, stale content is detected by comparing disk vs in-memory content.
 - Sidebar layout: TOC and FolderExplorer overlay the editor; editor reflows only when viewport is narrow (uses `clamp()` on `left` to account for 720px content max-width + 2rem padding)
 - TOC button visibility depends on `hasHeadings` derived (only shown when document has headings)
 - Wiki-links: builds file index from folder contents, handles `marko:wiki-link` click events, resolves links and creates missing files
@@ -109,16 +110,27 @@ src/
 - **Backward compat**: Obsidian files parse and round-trip without change; upgrade is one-way and triggered automatically
 
 ### Git Integration
-- **Backend**: Three Rust commands using `git2` crate in `src-tauri/src/lib.rs`:
+- **Backend**: Rust commands using `git2` crate in `src-tauri/src/lib.rs`:
   - `get_git_status(path)` — returns map of absolute file paths → status strings for an entire repo
   - `get_file_git_status(path)` — returns git status of a single file (or null if clean/not in repo)
   - `git_commit_file(path, message)` — stages and commits a single file
   - `git_sync(path)` — runs `git pull --ff-only` then `git push` via CLI
   - `get_git_ahead_behind(path)` — returns `{ ahead, behind }` commit counts vs remote
+  - `git_revert_file(path)` — discards working tree changes (checks out from HEAD; deletes untracked files)
 - **FolderExplorer**: Fetches git status on load/refresh, shows colored letter badges (M/A/U/D/C) with filename tinting; sync button (pull+push) with ahead/behind counters
 - **EditorHeader**: Shows current file's git status badge + commit button with inline message input
 - **MarkdownViewer**: Wires git status fetching (on file change + after save) and commit handler
 - Status values: `modified`, `staged`, `staged_modified`, `untracked`, `deleted`, `renamed`, `conflicted`
+
+### File & Folder Watching
+- **Backend**: `notify` crate (v6) with `RecommendedWatcher` in `src-tauri/src/lib.rs`:
+  - `watch_file(path)` — watches the file's parent directory, filters events by filename match; emits `"file-changed"` on Modify/Create/Remove
+  - `unwatch_file()` — stops watching; called on tab switch and unmount
+  - `watch_folder(path)` — watches entire folder tree recursively; emits `"folder-changed"`
+  - `unwatch_folder()` — stops folder watcher
+  - `search_file_content(folder_path, query)` — full-text search across `.md`/`.txt` files
+- **State**: `WatcherState` (single file) and `FolderWatcherState` (folder tree) are Mutex-protected Tauri managed state
+- **Frontend**: MarkdownViewer listens for both events; folder-changed triggers debounced folder refresh, file-changed triggers debounced content reload
 
 ### Table of Contents (`src/lib/components/TableOfContents.svelte`)
 - Fixed width: 220px, overlays editor (does not push content)
@@ -127,7 +139,7 @@ src/
 - Supports `sidebarPosition` prop for left/right positioning
 
 ### FolderExplorer (`src/lib/components/FolderExplorer.svelte`)
-- Fixed width: 220px, overlays editor (does not push content)
+- Resizable width (default 220px, min 160px, max 480px via `settings.folderExplorerWidth`), overlays editor (does not push content)
 - Recursive directory tree with expand/collapse (persisted to localStorage)
 - Opens markdown files on click; mutually exclusive with TOC
 - Tracks `knownFiles` to detect file additions/removals and notify parent via `onfileschanged`
@@ -144,15 +156,15 @@ src/
 ### Settings Store (`src/lib/stores/settings.svelte.ts`)
 - Svelte 5 runes-based class with `$state` properties
 - All settings persisted to localStorage under `editor.*` keys
-- Settings: `minimap`, `wordWrap`, `lineNumbers`, `vimMode`, `statusBar`, `wordCount`, `renderLineHighlight`, `showTabs`, `zenMode`, `occurrencesHighlight`, `autoSave`, `editorWidth`, `explorerPosition`, `tocPosition`
+- Settings: `showTabs`, `autoSave`, `editorWidth`, `explorerPosition`, `tocPosition`, `folderExplorerWidth`
 - `editorWidth`: `'compact' | 'default' | 'wide' | 'full'` (maps to 600px, 720px, 900px, 100%)
-- `explorerPosition`: `'left' | 'right'` — controls which side the file explorer appears
-- `tocPosition`: `'left' | 'right'` — controls which side the table of contents appears
-- Each setting has a `toggle*()` or `set*()` method
+- `explorerPosition` / `tocPosition`: `'left' | 'right'` — controls which side each sidebar appears
+- `folderExplorerWidth`: resizable sidebar width (min 160px, default 220px, max 480px)
+- Methods: `toggleTabs()`, `toggleAutoSave()`, `setEditorWidth()`, `setExplorerPosition()`, `setTocPosition()`
 
 ### Tab Manager (`src/lib/stores/tabs.svelte.ts`)
-- `Tab` interface: `id`, `path`, `title`, `rawContent`, `isDirty`, `isEditing`, `history[]`, `scrollTop`, etc.
-- `TabManager` class: `addTab`, `closeTab`, `setActive`, `cycleTab`, `navigate`, `goBack`/`goForward`, `updateTabRawContent`, `setTabRawContent`
+- `Tab` interface: `id`, `path`, `title`, `content`, `rawContent`, `originalContent`, `scrollTop`, `isDirty`, `isEditing`, `isRenaming`, `history[]`, `historyIndex`, `scrollPercentage`, `anchorLine`, `editorViewState?`, `isSplit?`, `isDeleted?`
+- `TabManager` class: `addTab`, `addNewTab`, `closeTab`, `closeAll`, `closeOthers`, `closeToRight`, `setActive`, `cycleTab`, `reorderTabs`, `navigate`, `navigateHome`, `goBack`/`goForward`/`canGoBack`/`canGoForward`, `updateTabRawContent`, `setTabRawContent`, `updateTabPath`, `renameTab`, `startRenaming`/`cancelRenaming`/`commitRenameTitle`, `toggleSplit`, `popRecentlyClosed`
 - Exported singleton: `tabManager`
 
 ## Styling
