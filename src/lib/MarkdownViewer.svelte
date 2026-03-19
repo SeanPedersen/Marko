@@ -2,7 +2,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { listen } from '@tauri-apps/api/event';
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { open, save } from '@tauri-apps/plugin-dialog';
 	import Installer from './Installer.svelte';
@@ -1051,6 +1051,8 @@
 		if (tab.isDirty) return;
 		try {
 			const diskContent = await invoke('read_file_content', { path: tab.path }) as string;
+			// Re-check: user may have started typing while the read was in flight
+			if (tab.isDirty) return;
 			if (diskContent !== tab.rawContent) {
 				tabManager.setTabRawContent(tab.id, diskContent);
 			}
@@ -1139,21 +1141,26 @@
 		}
 	}
 
-	// Cancel pending auto-save/reload and check for stale content when switching tabs
+	// Cancel pending auto-save/reload and check for stale content when switching tabs.
+	// Use untrack() so this only re-runs on actual tab switches (activeTabId change),
+	// NOT when isDirty/rawContent change — otherwise auto-save flipping isDirty to
+	// false triggers an async disk read that can race with user typing.
 	$effect(() => {
 		const activeId = tabManager.activeTabId;
 		debouncedSave.cancel();
 		debouncedFileReload.cancel();
 		// Check if the file changed on disk while this tab was inactive
 		if (activeId) {
-			const tab = tabManager.tabs.find((t) => t.id === activeId);
-			if (tab && tab.path && tab.path !== 'HOME' && !tab.isDirty) {
-				invoke('read_file_content', { path: tab.path }).then((diskContent) => {
-					if (typeof diskContent === 'string' && diskContent !== tab.rawContent) {
-						tabManager.setTabRawContent(tab.id, diskContent);
-					}
-				}).catch(() => {});
-			}
+			untrack(() => {
+				const tab = tabManager.tabs.find((t) => t.id === activeId);
+				if (tab && tab.path && tab.path !== 'HOME' && !tab.isDirty) {
+					invoke('read_file_content', { path: tab.path }).then((diskContent) => {
+						if (typeof diskContent === 'string' && diskContent !== tab.rawContent && !tab.isDirty) {
+							tabManager.setTabRawContent(tab.id, diskContent);
+						}
+					}).catch(() => {});
+				}
+			});
 		}
 	});
 

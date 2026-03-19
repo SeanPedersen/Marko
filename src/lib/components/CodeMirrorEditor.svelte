@@ -246,19 +246,17 @@ function createExtensions() {
 		}
 	});
 
-	// Sync external value changes (e.g. switching tabs/files)
+	// Sync external value changes (e.g. switching tabs/files).
+	// Compare against actual editor content — this is more reliable than
+	// tracking internalValue, which can drift due to reactive batching.
 	$effect(() => {
 		if (!view) return;
 		const newValue = value;
 
-		// Skip if value matches internal state
-		if (newValue === internalValue) return;
-
-		// Fallback: compare against actual editor content. internalValue can
-		// get out of sync in rare timing windows (e.g. reactive batching
-		// ordering). If the editor already holds the right content, just
-		// re-sync the tracking variable — do NOT reset the editor state
-		// (which would move the cursor to position 0).
+		// The editor already holds the right content — nothing to do.
+		// This covers both the normal typing roundtrip (value set from
+		// editor's own onchange) and any edge case where internalValue
+		// got out of sync.
 		if (newValue === view.state.doc.toString()) {
 			internalValue = newValue;
 			return;
