@@ -254,6 +254,16 @@ function createExtensions() {
 		// Skip if value matches internal state
 		if (newValue === internalValue) return;
 
+		// Fallback: compare against actual editor content. internalValue can
+		// get out of sync in rare timing windows (e.g. reactive batching
+		// ordering). If the editor already holds the right content, just
+		// re-sync the tracking variable — do NOT reset the editor state
+		// (which would move the cursor to position 0).
+		if (newValue === view.state.doc.toString()) {
+			internalValue = newValue;
+			return;
+		}
+
 		// Use setState to cleanly replace the editor state.
 		// A transaction-based replacement can race with ongoing mouse
 		// interactions, causing the selection to map to the end of the
