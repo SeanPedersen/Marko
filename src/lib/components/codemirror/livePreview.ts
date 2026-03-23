@@ -504,12 +504,29 @@ class TableWidget extends WidgetType {
     const lines = this.rawText.split('\n').filter((l) => l.trim());
     if (lines.length < 2) return container;
 
-    const parseRow = (row: string): string[] =>
-      row
-        .replace(/^\|/, '')
-        .replace(/\|$/, '')
-        .split('|')
-        .map((c) => c.trim());
+    const parseRow = (row: string): string[] => {
+      const trimmed = row.replace(/^\|/, '').replace(/\|$/, '');
+      const cells: string[] = [];
+      let current = '';
+      let inCode = false;
+      for (let i = 0; i < trimmed.length; i++) {
+        const ch = trimmed[i];
+        if (ch === '`') {
+          inCode = !inCode;
+          current += ch;
+        } else if (ch === '\\' && i + 1 < trimmed.length && trimmed[i + 1] === '|') {
+          current += '|';
+          i++;
+        } else if (ch === '|' && !inCode) {
+          cells.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      cells.push(current.trim());
+      return cells;
+    };
 
     const headerCells = parseRow(lines[0]);
     const alignRow = parseRow(lines[1]);
@@ -2029,12 +2046,29 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
 // StateField for table decorations (block replacements that span line breaks
 // cannot be provided via ViewPlugin — they require a StateField)
 const tableDecorationField = StateField.define<DecorationSet>({
-  create() {
-    return Decoration.none;
+  create(state) {
+    const cursorPos = state.selection.main.head;
+    const decorations: Range<Decoration>[] = [];
+    syntaxTree(state).iterate({
+      enter(node: SyntaxNodeRef) {
+        if (node.name !== 'Table') return;
+        if (cursorPos >= node.from && cursorPos <= node.to) return;
+        const rawText = state.doc.sliceString(node.from, node.to);
+        decorations.push(
+          Decoration.replace({
+            widget: new TableWidget(rawText, node.from, node.to),
+            block: true,
+          }).range(node.from, node.to)
+        );
+      },
+    });
+    decorations.sort((a, b) => a.from - b.from);
+    return Decoration.set(decorations);
   },
   update(prev, tr) {
     const selectionChanged = !tr.newSelection.eq(tr.startState.selection);
-    if (!tr.docChanged && !selectionChanged) return prev.map(tr.changes);
+    const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state);
+    if (!tr.docChanged && !selectionChanged && !treeChanged) return prev.map(tr.changes);
     if (isMouseDragging && !tr.docChanged) return prev;
 
     const cursorPos = tr.state.selection.main.head;
@@ -2070,7 +2104,8 @@ const mermaidDecorationField = StateField.define<DecorationSet>({
   },
   update(prev, tr) {
     const selectionChanged = !tr.newSelection.eq(tr.startState.selection);
-    if (!tr.docChanged && !selectionChanged) return prev.map(tr.changes);
+    const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state);
+    if (!tr.docChanged && !selectionChanged && !treeChanged) return prev.map(tr.changes);
     if (isMouseDragging && !tr.docChanged) return prev;
 
     const cursorPos = tr.state.selection.main.head;

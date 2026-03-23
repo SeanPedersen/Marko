@@ -5,6 +5,7 @@
 	import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 	import { search, searchKeymap } from '@codemirror/search';
 	import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+	import { Table } from '@lezer/markdown';
 	import { languages } from '@codemirror/language-data';
 	import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language';
 	import { createTheme } from './codemirror/theme.js';
@@ -186,6 +187,7 @@ function createExtensions() {
 				markdown({
 					base: markdownLanguage,
 					codeLanguages: languages,
+					extensions: [Table],
 				}),
 
 				// Syntax highlighting
