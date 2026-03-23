@@ -492,9 +492,45 @@ class HorizontalRuleWidget extends WidgetType {
   }
 }
 
+// Flag to suppress table widget rebuild during inline cell edits
+let isTableCellEditing = false;
+
+function parseTableRow(row: string): string[] {
+  const trimmed = row.replace(/^\|/, '').replace(/\|$/, '');
+  const cells: string[] = [];
+  let current = '';
+  let inCode = false;
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (ch === '`') {
+      inCode = !inCode;
+      current += ch;
+    } else if (ch === '\\' && i + 1 < trimmed.length && trimmed[i + 1] === '|') {
+      current += '|';
+      i++;
+    } else if (ch === '|' && !inCode) {
+      cells.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function serializeTableRow(cells: string[]): string {
+  return '| ' + cells.join(' | ') + ' |';
+}
+
 class TableWidget extends WidgetType {
-  constructor(readonly rawText: string, readonly from: number, readonly to: number) {
+  from: number;
+  to: number;
+
+  constructor(readonly rawText: string, from: number, to: number) {
     super();
+    this.from = from;
+    this.to = to;
   }
 
   toDOM(view: EditorView): HTMLElement {
@@ -504,32 +540,9 @@ class TableWidget extends WidgetType {
     const lines = this.rawText.split('\n').filter((l) => l.trim());
     if (lines.length < 2) return container;
 
-    const parseRow = (row: string): string[] => {
-      const trimmed = row.replace(/^\|/, '').replace(/\|$/, '');
-      const cells: string[] = [];
-      let current = '';
-      let inCode = false;
-      for (let i = 0; i < trimmed.length; i++) {
-        const ch = trimmed[i];
-        if (ch === '`') {
-          inCode = !inCode;
-          current += ch;
-        } else if (ch === '\\' && i + 1 < trimmed.length && trimmed[i + 1] === '|') {
-          current += '|';
-          i++;
-        } else if (ch === '|' && !inCode) {
-          cells.push(current.trim());
-          current = '';
-        } else {
-          current += ch;
-        }
-      }
-      cells.push(current.trim());
-      return cells;
-    };
-
-    const headerCells = parseRow(lines[0]);
-    const alignRow = parseRow(lines[1]);
+    const headerCells = parseTableRow(lines[0]);
+    const alignRow = parseTableRow(lines[1]);
+    const colCount = headerCells.length;
 
     const alignments: ('left' | 'center' | 'right' | null)[] = alignRow.map((cell) => {
       const left = cell.startsWith(':');
@@ -540,39 +553,171 @@ class TableWidget extends WidgetType {
       return null;
     });
 
+    // Build a mutable grid of cell values (row 0 = header, row 1+ = body)
+    const grid: string[][] = [headerCells];
+    for (let r = 2; r < lines.length; r++) {
+      const cells = parseTableRow(lines[r]);
+      // Pad or truncate to match column count
+      while (cells.length < colCount) cells.push('');
+      grid.push(cells.slice(0, colCount));
+    }
+
     const table = document.createElement('table');
+    table.style.tableLayout = 'fixed';
+
+    // Colgroup for resizable widths
+    const colgroup = document.createElement('colgroup');
+    const defaultWidth = 100 / colCount;
+    for (let i = 0; i < colCount; i++) {
+      const col = document.createElement('col');
+      col.style.width = defaultWidth + '%';
+      colgroup.appendChild(col);
+    }
+    table.appendChild(colgroup);
+
+    // Commit a cell edit back to the markdown source
+    const commitCell = (rowIdx: number, colIdx: number, newText: string) => {
+      const oldText = grid[rowIdx][colIdx];
+      if (newText === oldText) return;
+      grid[rowIdx][colIdx] = newText;
+
+      // Rebuild the full table markdown
+      const newLines: string[] = [];
+      newLines.push(serializeTableRow(grid[0]));
+      newLines.push(lines[1]); // keep alignment row as-is
+      for (let r = 1; r < grid.length; r++) {
+        newLines.push(serializeTableRow(grid[r]));
+      }
+      const newRaw = newLines.join('\n');
+      isTableCellEditing = true;
+      view.dispatch({
+        changes: { from: this.from, to: this.to, insert: newRaw },
+      });
+      // Update range for subsequent edits within same widget instance
+      this.to = this.from + newRaw.length;
+      isTableCellEditing = false;
+    };
+
+    // Create an editable cell
+    const makeCell = (tag: 'th' | 'td', rowIdx: number, colIdx: number) => {
+      const cell = document.createElement(tag);
+      cell.contentEditable = 'true';
+      cell.spellcheck = false;
+      renderInlineMarkdown(cell, grid[rowIdx][colIdx]);
+      if (alignments[colIdx]) cell.style.textAlign = alignments[colIdx]!;
+
+      cell.addEventListener('focus', () => {
+        // Show raw markdown text for editing
+        cell.textContent = grid[rowIdx][colIdx];
+        // Move caret to end
+        const range = document.createRange();
+        range.selectNodeContents(cell);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      });
+
+      cell.addEventListener('blur', () => {
+        const newText = cell.textContent?.trim() ?? '';
+        commitCell(rowIdx, colIdx, newText);
+        // Re-render inline markdown
+        cell.innerHTML = '';
+        renderInlineMarkdown(cell, newText);
+      });
+
+      cell.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          cell.blur();
+        }
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          // Move to next/prev cell
+          const nextCol = e.shiftKey ? colIdx - 1 : colIdx + 1;
+          const nextRow = nextCol < 0 ? rowIdx - 1 : nextCol >= colCount ? rowIdx + 1 : rowIdx;
+          const wrappedCol = nextCol < 0 ? colCount - 1 : nextCol >= colCount ? 0 : nextCol;
+          if (nextRow >= 0 && nextRow < grid.length) {
+            const target = table.querySelector(`[data-row="${nextRow}"][data-col="${wrappedCol}"]`) as HTMLElement;
+            target?.focus();
+          }
+        }
+        if (e.key === 'Escape') {
+          // Restore original text, blur
+          cell.textContent = grid[rowIdx][colIdx];
+          cell.blur();
+        }
+      });
+
+      cell.dataset.row = String(rowIdx);
+      cell.dataset.col = String(colIdx);
+      return cell;
+    };
+
+    // Header
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
-    for (let i = 0; i < headerCells.length; i++) {
-      const th = document.createElement('th');
-      renderInlineMarkdown(th, headerCells[i]);
-      if (alignments[i]) th.style.textAlign = alignments[i]!;
+    for (let i = 0; i < colCount; i++) {
+      const th = makeCell('th', 0, i);
+      // Resize handle (except after last column)
+      if (i < colCount - 1) {
+        const handle = document.createElement('div');
+        handle.className = 'cm-table-resize-handle';
+        handle.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const cols = colgroup.children;
+          const leftCol = cols[i] as HTMLElement;
+          const rightCol = cols[i + 1] as HTMLElement;
+          const tableRect = table.getBoundingClientRect();
+          const tableWidth = tableRect.width;
+          const startX = e.clientX;
+          const startLeftPct = parseFloat(leftCol.style.width);
+          const startRightPct = parseFloat(rightCol.style.width);
+          const MIN_COL_PCT = 5;
+
+          const onMove = (ev: MouseEvent) => {
+            const dx = ev.clientX - startX;
+            const deltaPct = (dx / tableWidth) * 100;
+            const newLeft = Math.max(MIN_COL_PCT, startLeftPct + deltaPct);
+            const newRight = Math.max(MIN_COL_PCT, startRightPct - deltaPct);
+            // Only apply if both stay above minimum
+            if (newLeft >= MIN_COL_PCT && newRight >= MIN_COL_PCT) {
+              leftCol.style.width = newLeft + '%';
+              rightCol.style.width = newRight + '%';
+            }
+          };
+          const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+        th.style.position = 'relative';
+        th.appendChild(handle);
+      }
       headerRow.appendChild(th);
     }
     thead.appendChild(headerRow);
     table.appendChild(thead);
 
-    if (lines.length > 2) {
+    // Body
+    if (grid.length > 1) {
       const tbody = document.createElement('tbody');
-      for (let r = 2; r < lines.length; r++) {
-        const cells = parseRow(lines[r]);
+      for (let r = 1; r < grid.length; r++) {
         const tr = document.createElement('tr');
-        for (let i = 0; i < headerCells.length; i++) {
-          const td = document.createElement('td');
-          renderInlineMarkdown(td, cells[i] ?? '');
-          if (alignments[i]) td.style.textAlign = alignments[i]!;
-          tr.appendChild(td);
+        for (let i = 0; i < colCount; i++) {
+          tr.appendChild(makeCell('td', r, i));
         }
         tbody.appendChild(tr);
       }
       table.appendChild(tbody);
     }
 
-    // Clicking the table moves cursor into the raw markdown
+    // Clicks inside the table should NOT move cursor to raw markdown
     container.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      view.dispatch({ selection: { anchor: this.from } });
-      view.focus();
+      e.stopPropagation();
     });
 
     container.appendChild(table);
@@ -580,8 +725,8 @@ class TableWidget extends WidgetType {
   }
 
   ignoreEvent(event: Event): boolean {
-    // Allow mousedown to propagate so our listener can place the cursor
-    return event.type !== 'mousedown';
+    // Let all events through to our DOM handlers
+    return true;
   }
 
   eq(other: TableWidget): boolean {
@@ -2066,6 +2211,9 @@ const tableDecorationField = StateField.define<DecorationSet>({
     return Decoration.set(decorations);
   },
   update(prev, tr) {
+    // Don't rebuild widgets while a cell is being edited inline
+    if (isTableCellEditing) return prev.map(tr.changes);
+
     const selectionChanged = !tr.newSelection.eq(tr.startState.selection);
     const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state);
     if (!tr.docChanged && !selectionChanged && !treeChanged) return prev.map(tr.changes);
@@ -2361,20 +2509,40 @@ export const livePreviewStyles = EditorView.baseTheme({
   '.cm-live-table': {
     fontFamily: 'inherit',
     padding: '4px 0',
-    cursor: 'text',
   },
   '.cm-live-table table': {
     borderCollapse: 'collapse',
     width: '100%',
+    tableLayout: 'fixed',
   },
   '.cm-live-table th, .cm-live-table td': {
     border: '1px solid var(--color-border-default)',
     padding: '6px 12px',
-    outline: 'none', // Remove default browser focus outline
+    outline: 'none',
+    cursor: 'text',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    '&:focus': {
+      boxShadow: 'inset 0 0 0 2px var(--color-accent-fg)',
+    },
   },
   '.cm-live-table th': {
     backgroundColor: 'var(--color-canvas-subtle)',
     fontWeight: '600',
+    position: 'relative',
+  },
+  '.cm-table-resize-handle': {
+    position: 'absolute',
+    top: '0',
+    right: '-3px',
+    width: '6px',
+    height: '100%',
+    cursor: 'col-resize',
+    zIndex: '1',
+    '&:hover, &:active': {
+      backgroundColor: 'var(--color-accent-fg)',
+      opacity: '0.4',
+    },
   },
 
   // Frontmatter lines — reset any heading/formatting applied by the parser
