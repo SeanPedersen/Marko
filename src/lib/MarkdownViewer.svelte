@@ -23,6 +23,7 @@
 	import { buildFileIndex, resolveWikiLink, type FileIndex } from './utils/wikiLinks.js';
 	import { parseFrontmatter } from './utils/frontmatter.js';
 	import KanbanBoard from './components/KanbanBoard.svelte';
+	import MermaidView from './components/MermaidView.svelte';
 
 	let mode = $state<'loading' | 'app' | 'installer' | 'uninstall'>('loading');
 
@@ -32,12 +33,15 @@
 
 	// derived from tab manager
 	let currentFile = $derived(tabManager.activeTab?.path ?? '');
-	let currentFileType = $derived.by((): 'markdown' | 'text' => {
+	let currentFileType = $derived.by((): 'markdown' | 'mermaid' | 'text' => {
 		if (!currentFile) return 'text';
 		const ext = currentFile.split('.').pop()?.toLowerCase();
 		const markdownExts = ['md', 'markdown', 'mdown', 'mkd'];
-		return markdownExts.includes(ext || '') ? 'markdown' : 'text';
+		if (markdownExts.includes(ext || '')) return 'markdown';
+		if (ext === 'mmd') return 'mermaid';
+		return 'text';
 	});
+	let isMermaid = $derived(currentFileType === 'mermaid');
 	let hasHeadings = $derived(parseHeadings(tabManager.activeTab?.rawContent ?? '').length > 0);
 	let isKanban = $derived.by(() => {
 		if (currentFileType !== 'markdown') return false;
@@ -188,7 +192,7 @@
 			if (!activeId) return;
 
 			const ext = filePath.split('.').pop()?.toLowerCase();
-			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd'].includes(ext || '');
+			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd', 'mmd'].includes(ext || '');
 			const tab = tabManager.tabs.find((t) => t.id === activeId);
 
 			if (isMarkdown) {
@@ -532,6 +536,7 @@
 			multiple: false,
 			filters: [
 				{ name: 'Markdown', extensions: ['md', 'markdown', 'mdown', 'mkd'] },
+				{ name: 'Mermaid', extensions: ['mmd'] },
 				{ name: 'Text Files', extensions: ['txt', 'json', 'js', 'ts', 'py', 'rs', 'html', 'css', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf'] },
 				{ name: 'All Files', extensions: ['*'] },
 			],
@@ -599,7 +604,7 @@
 			if (!rawHref) return;
 
 			if (rawHref.startsWith('#')) return;
-			const isMarkdown = ['.md', '.markdown', '.mdown', '.mkd'].some((ext) => {
+			const isMarkdown = ['.md', '.markdown', '.mdown', '.mkd', '.mmd'].some((ext) => {
 				const urlNoHash = rawHref.split('#')[0].split('?')[0];
 				return urlNoHash.toLowerCase().endsWith(ext);
 			});
@@ -802,7 +807,7 @@
 			const rawUrl = detail.url;
 			if (rawUrl.startsWith('#')) return;
 
-			const isMarkdown = ['.md', '.markdown', '.mdown', '.mkd'].some((ext) => {
+			const isMarkdown = ['.md', '.markdown', '.mdown', '.mkd', '.mmd'].some((ext) => {
 				const urlNoHash = rawUrl.split('#')[0].split('?')[0];
 				return urlNoHash.toLowerCase().endsWith(ext);
 			});
@@ -1372,13 +1377,20 @@
 					{fileIndex}
 					bind:rawMode={kanbanRawMode}
 				/>
+			{:else if isMermaid}
+				<MermaidView
+					value={tabManager.activeTab?.rawContent ?? ''}
+					{theme}
+					readonly={false}
+					onchange={handleEditorChange}
+				/>
 			{:else}
 				<CodeMirrorEditor
 					bind:this={editorRef}
 					value={tabManager.activeTab?.rawContent ?? ''}
 					{theme}
 					readonly={false}
-					fileType={currentFileType}
+					fileType={currentFileType === 'mermaid' ? 'text' : currentFileType}
 					onchange={handleEditorChange}
 					editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
 					filePath={currentFile}
