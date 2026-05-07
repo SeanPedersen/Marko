@@ -85,54 +85,180 @@ function getLoadedParser(name: string, view: EditorView): import('@lezer/common'
 
   return null;
 }
-// Render inline markdown (bold, italic, strikethrough, code) into an element
-function renderInlineMarkdown(el: HTMLElement, text: string): void {
-  // Process inline formatting tokens in order
-  const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`(.+?)`)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
+// Render inline markdown into an element. Handles bold, italic, strikethrough,
+// inline code, images, wiki-links and standard links — the same inline tokens
+// the editor's main live-preview supports, so block-replaced contexts (e.g.
+// table cells) render consistently.
+//
+// Patterns are tried in priority order; the earliest match in the remaining
+// text wins, with array order resolving ties so more-specific tokens
+// (image > wiki-link > link > bold-italic > bold > italic) take precedence.
+type InlinePattern = {
+  regex: RegExp;
+  build: (match: RegExpExecArray) => Node;
+};
 
-  while ((match = regex.exec(text)) !== null) {
-    // Append text before the match
-    if (match.index > lastIndex) {
-      el.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
-    }
-
-    const span = document.createElement('span');
-    if (match[2]) {
-      // ***bold italic***
+const INLINE_PATTERNS: InlinePattern[] = [
+  // ![alt](url) — image
+  {
+    regex: /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+    build: (m) => {
+      const img = document.createElement('img');
+      img.alt = m[1];
+      img.src = m[2];
+      img.className = 'cm-live-image';
+      return img;
+    },
+  },
+  // [[target]] or [[target|display]] — wiki-link
+  {
+    regex: /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
+    build: (m) => {
+      const target = m[1].trim();
+      const display = (m[2] ?? m[1]).trim();
+      const span = document.createElement('span');
+      span.className = 'cm-wiki-link';
+      span.textContent = display;
+      const dispatch = (newTab: boolean) => {
+        span.dispatchEvent(new CustomEvent('marko:wiki-link', {
+          bubbles: true,
+          detail: { target, newTab },
+        }));
+      };
+      span.addEventListener('mousedown', (e) => {
+        // Stop the parent contentEditable cell from grabbing focus so the
+        // click can navigate instead of dropping into edit mode.
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      span.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dispatch(false);
+      });
+      span.addEventListener('auxclick', (e) => {
+        if (e.button !== 1) return;
+        e.preventDefault();
+        e.stopPropagation();
+        dispatch(true);
+      });
+      return span;
+    },
+  },
+  // [text](url) — markdown link
+  {
+    regex: /\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+    build: (m) => {
+      const url = m[2].trim();
+      const span = document.createElement('span');
+      span.className = 'cm-live-link';
+      renderInlineMarkdown(span, m[1]);
+      const dispatch = (newTab: boolean) => {
+        span.dispatchEvent(new CustomEvent('marko:link', {
+          bubbles: true,
+          detail: { url, newTab },
+        }));
+      };
+      span.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      span.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dispatch(false);
+      });
+      span.addEventListener('auxclick', (e) => {
+        if (e.button !== 1) return;
+        e.preventDefault();
+        e.stopPropagation();
+        dispatch(true);
+      });
+      return span;
+    },
+  },
+  // ***bold italic***
+  {
+    regex: /\*\*\*(.+?)\*\*\*/g,
+    build: (m) => {
+      const span = document.createElement('span');
       span.style.fontWeight = 'bold';
       span.style.fontStyle = 'italic';
-      span.textContent = match[2];
-    } else if (match[3]) {
-      // **bold**
+      span.textContent = m[1];
+      return span;
+    },
+  },
+  // **bold**
+  {
+    regex: /\*\*(.+?)\*\*/g,
+    build: (m) => {
+      const span = document.createElement('span');
       span.style.fontWeight = 'bold';
-      span.textContent = match[3];
-    } else if (match[4]) {
-      // *italic*
+      span.textContent = m[1];
+      return span;
+    },
+  },
+  // *italic*
+  {
+    regex: /\*(.+?)\*/g,
+    build: (m) => {
+      const span = document.createElement('span');
       span.style.fontStyle = 'italic';
-      span.textContent = match[4];
-    } else if (match[5]) {
-      // ~~strikethrough~~
+      span.textContent = m[1];
+      return span;
+    },
+  },
+  // ~~strikethrough~~
+  {
+    regex: /~~(.+?)~~/g,
+    build: (m) => {
+      const span = document.createElement('span');
       span.style.textDecoration = 'line-through';
-      span.textContent = match[5];
-    } else if (match[6]) {
-      // `code`
+      span.textContent = m[1];
+      return span;
+    },
+  },
+  // `code`
+  {
+    regex: /`([^`]+)`/g,
+    build: (m) => {
+      const span = document.createElement('span');
       span.className = 'cm-live-inline-code';
-      span.textContent = match[6];
+      span.textContent = m[1];
+      return span;
+    },
+  },
+];
+
+function renderInlineMarkdown(el: HTMLElement, text: string): void {
+  if (!text) {
+    el.textContent = '';
+    return;
+  }
+
+  let pos = 0;
+  while (pos < text.length) {
+    let best: { start: number; match: RegExpExecArray; pattern: InlinePattern } | null = null;
+    for (const pattern of INLINE_PATTERNS) {
+      pattern.regex.lastIndex = pos;
+      const m = pattern.regex.exec(text);
+      if (!m) continue;
+      if (best === null || m.index < best.start) {
+        best = { start: m.index, match: m, pattern };
+        if (m.index === pos) break;
+      }
     }
-    el.appendChild(span);
-    lastIndex = match.index + match[0].length;
-  }
 
-  // Append remaining text
-  if (lastIndex < text.length) {
-    el.appendChild(document.createTextNode(text.slice(lastIndex)));
-  }
+    if (!best) {
+      el.appendChild(document.createTextNode(text.slice(pos)));
+      return;
+    }
 
-  // If nothing was parsed (no formatting), just set text content
-  if (lastIndex === 0) {
-    el.textContent = text;
+    if (best.start > pos) {
+      el.appendChild(document.createTextNode(text.slice(pos, best.start)));
+    }
+    el.appendChild(best.pattern.build(best.match));
+    pos = best.start + best.match[0].length;
   }
 }
 
