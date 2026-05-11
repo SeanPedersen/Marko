@@ -24,6 +24,7 @@
 	import { parseFrontmatter } from './utils/frontmatter.js';
 	import KanbanBoard from './components/KanbanBoard.svelte';
 	import MermaidView from './components/MermaidView.svelte';
+	import HtmlView from './components/HtmlView.svelte';
 
 	let mode = $state<'loading' | 'app' | 'installer' | 'uninstall'>('loading');
 
@@ -33,15 +34,19 @@
 
 	// derived from tab manager
 	let currentFile = $derived(tabManager.activeTab?.path ?? '');
-	let currentFileType = $derived.by((): 'markdown' | 'mermaid' | 'text' => {
+	let currentFileType = $derived.by((): 'markdown' | 'mermaid' | 'html' | 'text' => {
 		if (!currentFile) return 'text';
 		const ext = currentFile.split('.').pop()?.toLowerCase();
 		const markdownExts = ['md', 'markdown', 'mdown', 'mkd'];
 		if (markdownExts.includes(ext || '')) return 'markdown';
 		if (ext === 'mmd') return 'mermaid';
+		if (ext === 'html' || ext === 'htm') return 'html';
 		return 'text';
 	});
 	let isMermaid = $derived(currentFileType === 'mermaid');
+	let isHtml = $derived(currentFileType === 'html');
+	let htmlRawMode = $state(false);
+	$effect(() => { if (!isHtml) htmlRawMode = false; });
 	let hasHeadings = $derived(parseHeadings(tabManager.activeTab?.rawContent ?? '').length > 0);
 	let isKanban = $derived.by(() => {
 		if (currentFileType !== 'markdown') return false;
@@ -1365,8 +1370,9 @@
 				oncommitandpush={handleGitCommitAndPush}
 				onrevert={handleGitRevert}
 				{isKanban}
-				rawMode={kanbanRawMode}
-				ontogglerawmode={() => { kanbanRawMode = !kanbanRawMode; }}
+				{isHtml}
+				rawMode={isHtml ? htmlRawMode : kanbanRawMode}
+				ontogglerawmode={() => { if (isHtml) { htmlRawMode = !htmlRawMode; } else { kanbanRawMode = !kanbanRawMode; } }}
 			/>
 			{#if isKanban}
 				<KanbanBoard
@@ -1384,13 +1390,23 @@
 					readonly={false}
 					onchange={handleEditorChange}
 				/>
+			{:else if isHtml}
+				<HtmlView
+					value={tabManager.activeTab?.rawContent ?? ''}
+					rawMode={htmlRawMode}
+					{theme}
+					readonly={false}
+					onchange={handleEditorChange}
+					editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
+					filePath={currentFile}
+				/>
 			{:else}
 				<CodeMirrorEditor
 					bind:this={editorRef}
 					value={tabManager.activeTab?.rawContent ?? ''}
 					{theme}
 					readonly={false}
-					fileType={currentFileType === 'mermaid' ? 'text' : currentFileType}
+					fileType={currentFileType === 'markdown' ? 'markdown' : 'text'}
 					onchange={handleEditorChange}
 					editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
 					filePath={currentFile}

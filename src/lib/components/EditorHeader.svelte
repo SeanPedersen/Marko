@@ -16,6 +16,7 @@
         onrevert,
         oncommitandpush,
         isKanban = false,
+        isHtml = false,
         rawMode = false,
         ontogglerawmode,
     } = $props<{
@@ -35,6 +36,7 @@
         onrevert?: () => void;
         oncommitandpush?: (message: string) => Promise<void>;
         isKanban?: boolean;
+        isHtml?: boolean;
         rawMode?: boolean;
         ontogglerawmode?: () => void;
     }>();
@@ -202,13 +204,16 @@
             </div>
         {/if}
 
-        {#if isKanban && ontogglerawmode}
+        {#if (isKanban || isHtml) && ontogglerawmode}
+            {@const renderedLabel = isHtml ? 'Preview' : 'Board'}
+            {@const rawTitle = isHtml ? 'Edit raw HTML' : 'Edit raw markdown'}
+            {@const renderedTitle = isHtml ? 'Show rendered preview' : 'Show board view'}
             <button
                 class="text-[11px] px-2 py-[2px] border rounded-[4px] bg-(--color-canvas-subtle) text-(--color-fg-muted) cursor-pointer shrink-0 transition-[background,color,border-color] duration-100 leading-5 hover:bg-(--color-accent-fg) hover:text-white hover:border-(--color-accent-fg) {rawMode ? 'bg-(--color-accent-fg) text-white border-(--color-accent-fg)' : 'border-(--color-border-default)'}"
                 onclick={ontogglerawmode}
-                title={rawMode ? 'Show board view' : 'Edit raw markdown'}
+                title={rawMode ? renderedTitle : rawTitle}
             >
-                {rawMode ? 'Board' : 'Raw'}
+                {rawMode ? renderedLabel : 'Raw'}
             </button>
         {/if}
 

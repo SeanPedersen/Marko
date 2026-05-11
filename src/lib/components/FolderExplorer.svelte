@@ -371,7 +371,7 @@
 			toggleDir(entry);
 		} else {
 			const ext = entry.name.split('.').pop()?.toLowerCase() || '';
-			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd', 'txt', 'mmd'].includes(ext);
+			const isMarkdown = ['md', 'markdown', 'mdown', 'mkd', 'txt', 'mmd', 'html', 'htm'].includes(ext);
 			if (isMarkdown && onopenfile) {
 				const newTab = event.button === 1; // Middle mouse button
 				onopenfile(entry.path, { newTab });
@@ -384,7 +384,7 @@
 			return isExpanded(entry.path) ? 'folder-open' : 'folder';
 		}
 		const ext = entry.name.split('.').pop()?.toLowerCase() || '';
-		if (['md', 'markdown', 'mdown', 'mkd', 'txt', 'mmd'].includes(ext)) {
+		if (['md', 'markdown', 'mdown', 'mkd', 'txt', 'mmd', 'html', 'htm'].includes(ext)) {
 			return 'markdown';
 		}
 		return 'file';
@@ -602,7 +602,7 @@
 
 {#snippet renderEntry(entry: DirEntry, depth: number)}
 	{@const icon = getFileIcon(entry)}
-	{@const isMarkdown = !entry.is_dir && ['md', 'markdown', 'mdown', 'mkd', 'txt', 'mmd'].includes(entry.name.split('.').pop()?.toLowerCase() || '')}
+	{@const isMarkdown = !entry.is_dir && ['md', 'markdown', 'mdown', 'mkd', 'txt', 'mmd', 'html', 'htm'].includes(entry.name.split('.').pop()?.toLowerCase() || '')}
 	{@const isLoading = loadingDirs.has(entry.path)}
 	{@const entryGitStatus = getEntryStatus(entry)}
 	{@const badge = entryGitStatus ? statusBadge(entryGitStatus) : null}
