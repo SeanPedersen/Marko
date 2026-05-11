@@ -340,19 +340,21 @@
 
 		if (!el) { dropTarget = null; return; }
 
-		const colEl = el.closest<HTMLElement>('[data-col-idx]');
+		const colEl = el.closest<HTMLElement>('[data-col-idx]:not([data-card-idx])');
 		if (!colEl) { dropTarget = null; return; }
 
 		const colIdx = parseInt(colEl.dataset.colIdx!);
-		const cardEl = el.closest<HTMLElement>('[data-card-idx]');
+		const cardEls = colEl.querySelectorAll<HTMLElement>('[data-card-idx]');
 
-		if (cardEl) {
-			const cardIdx = parseInt(cardEl.dataset.cardIdx!);
-			const mid = cardEl.getBoundingClientRect().top + cardEl.getBoundingClientRect().height / 2;
-			dropTarget = { colIdx, insertIdx: e.clientY < mid ? cardIdx : cardIdx + 1 };
-		} else {
-			dropTarget = { colIdx, insertIdx: columns[colIdx]?.cards.length ?? 0 };
+		let insertIdx = cardEls.length;
+		for (let i = 0; i < cardEls.length; i++) {
+			const rect = cardEls[i].getBoundingClientRect();
+			if (e.clientY < rect.top + rect.height / 2) {
+				insertIdx = i;
+				break;
+			}
 		}
+		dropTarget = { colIdx, insertIdx };
 	}
 
 	function onCardPointerUp(e: PointerEvent) {
