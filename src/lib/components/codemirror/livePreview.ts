@@ -860,6 +860,39 @@ class TableWidget extends WidgetType {
   }
 }
 
+// --- HTML block rendering ---
+
+class HtmlBlockWidget extends WidgetType {
+  constructor(
+    readonly html: string,
+    readonly from: number,
+  ) {
+    super();
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const container = document.createElement('div');
+    container.className = 'cm-live-html-block';
+
+    container.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      view.dispatch({ selection: { anchor: this.from } });
+      view.focus();
+    });
+
+    container.innerHTML = this.html;
+    return container;
+  }
+
+  ignoreEvent(event: Event): boolean {
+    return event.type !== 'mousedown';
+  }
+
+  eq(other: HtmlBlockWidget): boolean {
+    return this.html === other.html && this.from === other.from;
+  }
+}
+
 // --- Mermaid rendering ---
 let mermaidCurrentTheme: 'default' | 'dark' | null = null;
 let mermaidRenderCount = 0;
@@ -2415,6 +2448,56 @@ const mermaidDecorationField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
+// StateField for HTML block decorations (block replacements spanning line breaks)
+const htmlBlockDecorationField = StateField.define<DecorationSet>({
+  create(state) {
+    const cursorPos = state.selection.main.head;
+    const decorations: Range<Decoration>[] = [];
+    syntaxTree(state).iterate({
+      enter(node: SyntaxNodeRef) {
+        if (node.name !== 'HTMLBlock') return;
+        if (cursorPos >= node.from && cursorPos <= node.to) return;
+        const html = state.doc.sliceString(node.from, node.to);
+        decorations.push(
+          Decoration.replace({
+            widget: new HtmlBlockWidget(html, node.from),
+            block: true,
+          }).range(node.from, node.to)
+        );
+      },
+    });
+    decorations.sort((a, b) => a.from - b.from);
+    return Decoration.set(decorations);
+  },
+  update(prev, tr) {
+    const selectionChanged = !tr.newSelection.eq(tr.startState.selection);
+    const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state);
+    if (!tr.docChanged && !selectionChanged && !treeChanged) return prev.map(tr.changes);
+    if (isMouseDragging && !tr.docChanged) return prev;
+
+    const cursorPos = tr.state.selection.main.head;
+    const decorations: Range<Decoration>[] = [];
+
+    syntaxTree(tr.state).iterate({
+      enter(node: SyntaxNodeRef) {
+        if (node.name !== 'HTMLBlock') return;
+        if (cursorPos >= node.from && cursorPos <= node.to) return;
+        const html = tr.state.doc.sliceString(node.from, node.to);
+        decorations.push(
+          Decoration.replace({
+            widget: new HtmlBlockWidget(html, node.from),
+            block: true,
+          }).range(node.from, node.to)
+        );
+      },
+    });
+
+    decorations.sort((a, b) => a.from - b.from);
+    return Decoration.set(decorations);
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
 // Styles for live preview elements
 export const livePreviewStyles = EditorView.baseTheme({
   // Reset heading token styles when a setext marker is a single '-'
@@ -2720,6 +2803,14 @@ export const livePreviewStyles = EditorView.baseTheme({
     opacity: '0.6',
   },
 
+  // HTML blocks
+  '.cm-live-html-block': {
+    cursor: 'pointer',
+    display: 'block',
+    padding: '0.25em 0',
+    overflowX: 'auto',
+  },
+
 });
 
 export function livePreview(filePath = '') {
@@ -2728,6 +2819,7 @@ export function livePreview(filePath = '') {
     livePreviewPlugin,
     tableDecorationField,
     mermaidDecorationField,
+    htmlBlockDecorationField,
     livePreviewStyles,
   ];
 }
