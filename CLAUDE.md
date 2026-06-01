@@ -202,12 +202,12 @@ Theme colors defined in `MarkdownViewer.svelte`:
 
 - **MCP Bridge**: `tauri-plugin-mcp-bridge` is registered in debug builds only (`#[cfg(debug_assertions)]`), enabling automation via WebSocket on port 9223
 - **`withGlobalTauri: true`** is set in `tauri.conf.json` (required for MCP bridge communication)
-- Run `npx tauri dev` to start the app with MCP bridge active
+- Run `pnpm tauri dev` to start the app with MCP bridge active
 
 ## Commands
 
 ```bash
-npm run check        # TypeScript/Svelte type checking
+pnpm check        # TypeScript/Svelte type checking
 ```
 
 ## CLI Command

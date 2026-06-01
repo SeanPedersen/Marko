@@ -33,8 +33,8 @@ Right click on a markdown file and select "Open with" and select the downloaded 
 ## Installation from source
 
 - Clone the repository
-- Run `npm install` to install dependencies
-- Run `npm run tauri build` to build the installer
+- Run `pnpm install` to install dependencies
+- Run `pnpm tauri build` to build the installer
 - Repeat the steps above to set the executable as the default program to open `.md` files
 
 ## References
