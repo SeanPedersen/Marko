@@ -94,6 +94,11 @@ fn render_markdown(content: String) -> String {
 }
 
 #[tauri::command]
+fn file_exists(path: String) -> bool {
+    Path::new(&path).is_file()
+}
+
+#[tauri::command]
 fn read_file_content(path: String) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| e.to_string())
 }
@@ -1311,6 +1316,7 @@ pub fn run() {
             open_markdown,
             render_markdown,
             send_markdown_path,
+            file_exists,
             read_file_content,
             save_file_content,
             read_directory,

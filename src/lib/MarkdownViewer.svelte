@@ -609,16 +609,27 @@
 			if (!rawHref) return;
 
 			if (rawHref.startsWith('#')) return;
-			const isMarkdown = ['.md', '.markdown', '.mdown', '.mkd', '.mmd'].some((ext) => {
-				const urlNoHash = rawHref.split('#')[0].split('?')[0];
-				return urlNoHash.toLowerCase().endsWith(ext);
-			});
-
-			if (isMarkdown && !rawHref.match(/^[a-z]+:\/\//i)) {
+			if (rawHref.match(/^[a-z]+:\/\//i)) {
 				event.preventDefault();
-				const urlNoHash = rawHref.split('#')[0].split('?')[0];
-				const resolved = resolvePath(currentFile, urlNoHash);
-				await loadMarkdown(resolved, { navigate: true });
+				try { await openUrl(rawHref); } catch (err) { console.error('Failed to open URL:', rawHref, err); }
+				return;
+			}
+			const urlNoHash = rawHref.split('#')[0].split('?')[0];
+			const isMarkdownExt = ['.md', '.markdown', '.mdown', '.mkd', '.mmd'].some((ext) =>
+				urlNoHash.toLowerCase().endsWith(ext)
+			);
+			const noExt = hasNoFileExtension(urlNoHash);
+
+			if (isMarkdownExt || noExt) {
+				event.preventDefault();
+				let resolved: string | null;
+				if (urlNoHash.startsWith('/')) {
+					resolved = await resolveRootRelative(urlNoHash, noExt && !isMarkdownExt);
+				} else {
+					resolved = resolvePath(currentFile, urlNoHash);
+					if (noExt && !isMarkdownExt) resolved += '.md';
+				}
+				if (resolved) await loadMarkdown(resolved, { navigate: true });
 				return;
 			}
 
@@ -647,6 +658,26 @@
 			else parts.push(p);
 		}
 		return parts.join('/');
+	}
+
+	function hasNoFileExtension(urlPath: string) {
+		const lastSegment = urlPath.split('/').pop() ?? '';
+		return !lastSegment.includes('.');
+	}
+
+	// For root-relative paths (/foo/bar), walk up from currentFile's directory
+	// until we find a directory that contains the referenced file.
+	async function resolveRootRelative(relativePath: string, noExt: boolean): Promise<string | null> {
+		const pathWithExt = noExt ? relativePath + '.md' : relativePath;
+		const parts = currentFile.split(/[/\\]/);
+		parts.pop(); // remove filename
+		while (parts.length > 1) {
+			const candidate = parts.join('/') + pathWithExt;
+			const exists = await invoke('file_exists', { path: candidate }) as boolean;
+			if (exists) return candidate;
+			parts.pop();
+		}
+		return null;
 	}
 
 	async function handleUndoCloseTab() {
@@ -811,16 +842,26 @@
 
 			const rawUrl = detail.url;
 			if (rawUrl.startsWith('#')) return;
+			if (rawUrl.match(/^[a-z]+:\/\//i)) {
+				try { await openUrl(rawUrl); } catch (err) { console.error('Failed to open URL:', rawUrl, err); }
+				return;
+			}
 
-			const isMarkdown = ['.md', '.markdown', '.mdown', '.mkd', '.mmd'].some((ext) => {
-				const urlNoHash = rawUrl.split('#')[0].split('?')[0];
-				return urlNoHash.toLowerCase().endsWith(ext);
-			});
+			const urlNoHash = rawUrl.split('#')[0].split('?')[0];
+			const isMarkdownExt = ['.md', '.markdown', '.mdown', '.mkd', '.mmd'].some((ext) =>
+				urlNoHash.toLowerCase().endsWith(ext)
+			);
+			const noExt = hasNoFileExtension(urlNoHash);
 
-			if (isMarkdown && !rawUrl.match(/^[a-z]+:\/\//i)) {
-				const urlNoHash = rawUrl.split('#')[0].split('?')[0];
-				const resolved = resolvePath(currentFile, urlNoHash);
-				await loadMarkdown(resolved, { navigate: !detail.newTab, newTab: detail.newTab ?? false });
+			if (isMarkdownExt || noExt) {
+				let resolved: string | null;
+				if (urlNoHash.startsWith('/')) {
+					resolved = await resolveRootRelative(urlNoHash, noExt && !isMarkdownExt);
+				} else {
+					resolved = resolvePath(currentFile, urlNoHash);
+					if (noExt && !isMarkdownExt) resolved += '.md';
+				}
+				if (resolved) await loadMarkdown(resolved, { navigate: !detail.newTab, newTab: detail.newTab ?? false });
 				return;
 			}
 
