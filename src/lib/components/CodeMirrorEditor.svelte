@@ -80,6 +80,16 @@
 
 	let currentDocId = $derived(docId ?? filePath);
 
+	// Caret and scroll of every document this editor has hosted, so switching
+	// back to one (a tab switch reuses this single editor instance) resumes
+	// where the user left off instead of at the top.
+	interface ViewSnapshot {
+		anchor: number;
+		head: number;
+		scrollTop: number;
+	}
+	const snapshots = new Map<string, ViewSnapshot>();
+
 	// Compartments for dynamic configuration
 	const readonlyCompartment = new Compartment();
 	const themeCompartment = new Compartment();
@@ -240,13 +250,48 @@ function createExtensions() {
 		});
 	}
 
+	function captureSnapshot(target: EditorView, id: string) {
+		const { anchor, head } = target.state.selection.main;
+		snapshots.set(id, { anchor, head, scrollTop: target.scrollDOM.scrollTop });
+	}
+
+	// CodeMirror only knows the real content height after it has measured the
+	// freshly mounted document, so an immediate assignment would be clamped
+	// against the outgoing layout. Restore once measuring is done, and only if
+	// the same document is still loaded (fast tab cycling can overtake us).
+	function restoreScroll(target: EditorView, scrollTop: number, id: string) {
+		target.requestMeasure({
+			read: () => null,
+			write: () => {
+				if (loadedDocId !== id) return;
+				target.scrollDOM.scrollTop = scrollTop;
+			},
+		});
+	}
+
 	// A different document is taking over this editor: replace the state
-	// wholesale so caret, scroll and undo history all start fresh.
-	function loadDoc(target: EditorView, next: string) {
+	// wholesale so undo history starts fresh, then resume the caret and scroll
+	// this document was last left at.
+	function loadDoc(target: EditorView, next: string, id: string) {
 		target.setState(EditorState.create({ doc: next, extensions: createExtensions() }));
 		target.focus();
-		target.dispatch({ selection: { anchor: 0 } });
-		target.scrollDOM.scrollTop = 0;
+
+		const snapshot = snapshots.get(id);
+		if (!snapshot) {
+			target.dispatch({ selection: { anchor: 0 } });
+			target.scrollDOM.scrollTop = 0;
+			return;
+		}
+
+		const max = target.state.doc.length;
+		target.dispatch({
+			selection: {
+				anchor: Math.min(snapshot.anchor, max),
+				head: Math.min(snapshot.head, max),
+			},
+			scrollIntoView: false,
+		});
+		restoreScroll(target, snapshot.scrollTop, id);
 	}
 
 	// Same document, new text from outside the editor (file watcher, git
@@ -311,9 +356,10 @@ function createExtensions() {
 			if (!view) return;
 
 			if (nextDocId !== loadedDocId) {
+				if (loadedDocId !== null) captureSnapshot(view, loadedDocId);
 				loadedDocId = nextDocId;
 				syncedValue = next;
-				loadDoc(view, next);
+				loadDoc(view, next, nextDocId);
 				return;
 			}
 

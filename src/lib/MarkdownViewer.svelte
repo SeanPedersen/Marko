@@ -34,6 +34,10 @@
 
 	// derived from tab manager
 	let currentFile = $derived(tabManager.activeTab?.path ?? '');
+	// Identity of the document in the editor: per tab, and per file within a tab
+	// (wiki-link navigation). Untitled tabs share an empty path, so the tab id is
+	// what keeps their documents — and their caret/scroll — apart.
+	let editorDocId = $derived(`${tabManager.activeTabId ?? ''}::${currentFile}`);
 	let currentFileType = $derived.by((): 'markdown' | 'mermaid' | 'html' | 'text' => {
 		if (!currentFile) return 'text';
 		const ext = currentFile.split('.').pop()?.toLowerCase();
@@ -1463,6 +1467,7 @@
 					onchange={handleEditorChange}
 					editorWidth={EDITOR_WIDTH_VALUES[settings.editorWidth]}
 					filePath={currentFile}
+					docId={editorDocId}
 					{fileIndex}
 				/>
 			{/if}
