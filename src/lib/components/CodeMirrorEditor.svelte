@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { EditorView, keymap, highlightActiveLine, rectangularSelection, ViewPlugin } from '@codemirror/view';
-	import { EditorState, EditorSelection, Compartment } from '@codemirror/state';
+	import { EditorState, EditorSelection, Compartment, Transaction } from '@codemirror/state';
 	import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 	import { search, searchKeymap } from '@codemirror/search';
 	import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -52,6 +52,7 @@
 		fileType = 'markdown', // 'markdown' or 'text'
 		editorWidth = '720px',
 		filePath = '',
+		docId,
 		fileIndex = { entries: [], byBasename: new Map(), byFilename: new Map() } as FileIndex,
 	} = $props<{
 		value?: string;
@@ -61,13 +62,23 @@
 		fileType?: 'markdown' | 'text';
 		editorWidth?: string;
 		filePath?: string;
+		/** Identity of the document being edited. A change means "a different
+		 *  document is now in this editor" and resets caret, scroll and history;
+		 *  a `value` change alone is reconciled in place. Defaults to filePath. */
+		docId?: string;
 		fileIndex?: FileIndex;
 	}>();
 
 	let container: HTMLDivElement;
 	let view: EditorView | null = null;
-	let internalValue = '';
-	let suppressUpdate = false;
+
+	// Mirrors the text CodeMirror currently holds. Lets the sync effect tell an
+	// edit echoing back through the store from a genuine external replacement
+	// in O(1), instead of stringifying the document on every keystroke.
+	let syncedValue = '';
+	let loadedDocId: string | null = null;
+
+	let currentDocId = $derived(docId ?? filePath);
 
 	// Compartments for dynamic configuration
 	const readonlyCompartment = new Compartment();
@@ -169,11 +180,10 @@ function createExtensions() {
 
 			// Update listener
 			EditorView.updateListener.of((update) => {
-				if (update.docChanged && !suppressUpdate) {
-					const newValue = update.state.doc.toString();
-					internalValue = newValue;
-					onchange?.(newValue);
-				}
+				if (!update.docChanged) return;
+				const newValue = update.state.doc.toString();
+				syncedValue = newValue;
+				onchange?.(newValue);
 			}),
 
 			// Allow scrolling past the end (half viewport height)
@@ -216,7 +226,8 @@ function createExtensions() {
 			view = null;
 		}
 
-		internalValue = value;
+		syncedValue = value;
+		loadedDocId = currentDocId;
 
 		const state = EditorState.create({
 			doc: value,
@@ -226,6 +237,46 @@ function createExtensions() {
 		view = new EditorView({
 			state,
 			parent: container,
+		});
+	}
+
+	// A different document is taking over this editor: replace the state
+	// wholesale so caret, scroll and undo history all start fresh.
+	function loadDoc(target: EditorView, next: string) {
+		target.setState(EditorState.create({ doc: next, extensions: createExtensions() }));
+		target.focus();
+		target.dispatch({ selection: { anchor: 0 } });
+		target.scrollDOM.scrollTop = 0;
+	}
+
+	// Same document, new text from outside the editor (file watcher, git
+	// revert, kanban round-trip). Narrow the replacement to the range that
+	// actually differs so CodeMirror can map the selection and scroll position
+	// through it — replacing the whole document would send the caret to the top
+	// mid-edit, which is what made external writes feel like a desync.
+	function reconcileDoc(target: EditorView, next: string) {
+		const current = target.state.doc.toString();
+		if (current === next) return;
+
+		const maxCommon = Math.min(current.length, next.length);
+
+		let prefix = 0;
+		while (prefix < maxCommon && current[prefix] === next[prefix]) prefix++;
+
+		let suffix = 0;
+		while (
+			suffix < maxCommon - prefix &&
+			current[current.length - 1 - suffix] === next[next.length - 1 - suffix]
+		) suffix++;
+
+		target.dispatch({
+			changes: {
+				from: prefix,
+				to: current.length - suffix,
+				insert: next.slice(prefix, next.length - suffix),
+			},
+			annotations: Transaction.addToHistory.of(false),
+			scrollIntoView: false,
 		});
 	}
 
@@ -248,38 +299,28 @@ function createExtensions() {
 		}
 	});
 
-	// Sync external value changes (e.g. switching tabs/files).
-	// Compare against actual editor content — this is more reliable than
-	// tracking internalValue, which can drift due to reactive batching.
+	// The single reconciliation point between the owning store and CodeMirror's
+	// document. untrack() keeps the other props (which createExtensions reads)
+	// out of this effect's dependencies, so unrelated churn — a rebuilt
+	// fileIndex, say — cannot re-enter it.
 	$effect(() => {
-		if (!view) return;
-		const newValue = value;
+		const next = value;
+		const nextDocId = currentDocId;
 
-		// The editor already holds the right content — nothing to do.
-		// This covers both the normal typing roundtrip (value set from
-		// editor's own onchange) and any edge case where internalValue
-		// got out of sync.
-		if (newValue === view.state.doc.toString()) {
-			internalValue = newValue;
-			return;
-		}
+		untrack(() => {
+			if (!view) return;
 
-		// Use setState to cleanly replace the editor state.
-		// A transaction-based replacement can race with ongoing mouse
-		// interactions, causing the selection to map to the end of the
-		// new document (jump-to-bottom + select-all bug).
-		internalValue = newValue;
-		view.setState(EditorState.create({
-			doc: newValue,
-			extensions: createExtensions(),
-		}));
+			if (nextDocId !== loadedDocId) {
+				loadedDocId = nextDocId;
+				syncedValue = next;
+				loadDoc(view, next);
+				return;
+			}
 
-		// Place cursor at start and scroll to top for new file content
-		view.focus();
-		view.dispatch({
-			selection: { anchor: 0 },
+			if (next === syncedValue) return;
+			syncedValue = next;
+			reconcileDoc(view, next);
 		});
-		view.scrollDOM.scrollTop = 0;
 	});
 
 	// Update readonly state

@@ -47,7 +47,18 @@
 	let isHtml = $derived(currentFileType === 'html');
 	let htmlRawMode = $state(false);
 	$effect(() => { if (!isHtml) htmlRawMode = false; });
-	let hasHeadings = $derived(parseHeadings(tabManager.activeTab?.rawContent ?? '').length > 0);
+	// Only drives whether the TOC button is shown, but parseHeadings splits the
+	// whole document into lines — too expensive to run on every keystroke.
+	// A slight lag before the button appears is imperceptible.
+	const HAS_HEADINGS_DELAY_MS = 200;
+	let hasHeadings = $state(false);
+	const refreshHasHeadings = debounce((content: string) => {
+		hasHeadings = parseHeadings(content).length > 0;
+	}, HAS_HEADINGS_DELAY_MS);
+
+	$effect(() => {
+		refreshHasHeadings.call(tabManager.activeTab?.rawContent ?? '');
+	});
 	let isKanban = $derived.by(() => {
 		if (currentFileType !== 'markdown') return false;
 		const { fields } = parseFrontmatter(tabManager.activeTab?.rawContent ?? '');
@@ -992,6 +1003,7 @@
 			unlisteners.forEach((u) => u());
 			debouncedFolderRefresh.cancel();
 			debouncedFileReload.cancel();
+			refreshHasHeadings.cancel();
 			invoke('unwatch_folder').catch(console.error);
 			invoke('unwatch_file').catch(console.error);
 		};

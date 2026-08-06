@@ -5,11 +5,11 @@ import {
   WidgetType,
 } from '@codemirror/view';
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { RangeSetBuilder, StateField, Facet, Compartment, Transaction } from '@codemirror/state';
-import type { Range } from '@codemirror/state';
+import { RangeSetBuilder, StateField, StateEffect, Facet, Compartment } from '@codemirror/state';
+import type { Range, EditorState, Transaction, Text } from '@codemirror/state';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { syntaxTree, ensureSyntaxTree } from '@codemirror/language';
-import type { SyntaxNodeRef } from '@lezer/common';
+import type { SyntaxNodeRef, Tree } from '@lezer/common';
 import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { highlightTree, classHighlighter } from '@lezer/highlight';
@@ -28,6 +28,108 @@ export function updateCurrentFile(view: EditorView, filePath: string) {
     effects: currentFileCompartment.reconfigure(currentFileFacet.of(filePath)),
   });
 }
+
+// --- Interaction state -----------------------------------------------------
+// Decoration rebuilds are suppressed while a pointer drag or an inline table
+// cell edit is in progress, because rebuilding mid-interaction changes line
+// heights under the pointer.
+//
+// This state lives in the editor state rather than in module-level flags for
+// two reasons. It is per-view, so a drag in one editor instance cannot freeze
+// another's decorations. And every transition is carried by a transaction, so
+// decoration providers can observe the *end* of an interaction and run a
+// catch-up rebuild — without that, anything suppressed during the interaction
+// stays stale until an unrelated edit happens to trigger a rebuild.
+
+const setPointerActive = StateEffect.define<boolean>();
+const setCellEditing = StateEffect.define<boolean>();
+
+interface InteractionState {
+  pointerActive: boolean;
+  cellEditing: boolean;
+}
+
+const INTERACTION_IDLE: InteractionState = { pointerActive: false, cellEditing: false };
+
+const interactionState = StateField.define<InteractionState>({
+  create: () => INTERACTION_IDLE,
+  update(prev, tr) {
+    let next = prev;
+    for (const effect of tr.effects) {
+      if (effect.is(setPointerActive)) next = { ...next, pointerActive: effect.value };
+      else if (effect.is(setCellEditing)) next = { ...next, cellEditing: effect.value };
+    }
+    return next;
+  },
+});
+
+// Optional read: plain-text editors mount a subset of the extensions.
+function readInteraction(state: EditorState): InteractionState {
+  return state.field(interactionState, false) ?? INTERACTION_IDLE;
+}
+
+function rebuildsSuppressed(state: EditorState): boolean {
+  const { pointerActive, cellEditing } = readInteraction(state);
+  return pointerActive || cellEditing;
+}
+
+// True when a suppressing interaction ended in this transaction. Every
+// decoration provider treats this as a rebuild trigger.
+function interactionEnded(tr: Transaction): boolean {
+  const before = readInteraction(tr.startState);
+  const after = readInteraction(tr.state);
+  return (before.pointerActive && !after.pointerActive) ||
+         (before.cellEditing && !after.cellEditing);
+}
+
+function dispatchInteraction(
+  view: EditorView,
+  effect: typeof setPointerActive | typeof setCellEditing,
+  key: keyof InteractionState,
+  active: boolean,
+) {
+  if (readInteraction(view.state)[key] === active) return;
+  view.dispatch({ effects: effect.of(active) });
+}
+
+const setPointerState = (view: EditorView, active: boolean) =>
+  dispatchInteraction(view, setPointerActive, 'pointerActive', active);
+
+const setCellEditingState = (view: EditorView, active: boolean) =>
+  dispatchInteraction(view, setCellEditing, 'cellEditing', active);
+
+// Drives pointerActive. A drag can end anywhere — outside the window, on a
+// cancelled gesture, or by the window losing focus — and every one of those
+// has to release it, or decoration rebuilds stay suppressed indefinitely.
+const pointerTracker = ViewPlugin.fromClass(
+  class {
+    private onPointerDown: (e: PointerEvent) => void;
+    private release: () => void;
+
+    constructor(private view: EditorView) {
+      this.onPointerDown = (e) => {
+        if (view.contentDOM.contains(e.target as Node)) setPointerState(view, true);
+      };
+      this.release = () => setPointerState(view, false);
+
+      view.contentDOM.addEventListener('pointerdown', this.onPointerDown);
+      window.addEventListener('pointerup', this.release);
+      window.addEventListener('pointercancel', this.release);
+      window.addEventListener('blur', this.release);
+      document.addEventListener('visibilitychange', this.release);
+    }
+
+    destroy() {
+      this.view.contentDOM.removeEventListener('pointerdown', this.onPointerDown);
+      window.removeEventListener('pointerup', this.release);
+      window.removeEventListener('pointercancel', this.release);
+      window.removeEventListener('blur', this.release);
+      document.removeEventListener('visibilitychange', this.release);
+    }
+  }
+);
+
+const interactionTracking = [interactionState, pointerTracker];
 
 // Resolve a markdown image URL to a loadable src.
 // Remote/data URLs are returned as-is; relative/absolute local paths are
@@ -618,8 +720,19 @@ class HorizontalRuleWidget extends WidgetType {
   }
 }
 
-// Flag to suppress table widget rebuild during inline cell edits
-let isTableCellEditing = false;
+// Block widgets must not capture their document offsets: doing so makes eq()
+// position-sensitive, so any edit *above* the widget recreates its DOM and
+// forces a re-measure — the main source of height churn during typing.
+// Instead the widget asks the view where its own DOM currently sits.
+function widgetRange(view: EditorView, dom: HTMLElement, expected: string) {
+  const from = view.posAtDOM(dom);
+  const to = from + expected.length;
+  if (from < 0 || to > view.state.doc.length) return null;
+  // Only write back if the source still reads as this widget rendered it —
+  // a mismatch means the lookup is off, and writing would corrupt the file.
+  if (view.state.doc.sliceString(from, to) !== expected) return null;
+  return { from, to };
+}
 
 function parseTableRow(row: string): string[] {
   const trimmed = row.replace(/^\|/, '').replace(/\|$/, '');
@@ -649,19 +762,31 @@ function serializeTableRow(cells: string[]): string {
   return '| ' + cells.join(' | ') + ' |';
 }
 
-class TableWidget extends WidgetType {
-  from: number;
-  to: number;
+// Seed values for CM's height oracle so block widgets that have not been
+// measured yet don't make it guess a single text line — bad guesses are what
+// make the scroll position jump when an off-screen widget scrolls into view.
+const TABLE_ROW_ESTIMATED_HEIGHT_PX = 34;
+const DEFAULT_LINE_ESTIMATED_HEIGHT_PX = 22;
 
-  constructor(readonly rawText: string, from: number, to: number) {
+class TableWidget extends WidgetType {
+  constructor(readonly rawText: string) {
     super();
-    this.from = from;
-    this.to = to;
+  }
+
+  get estimatedHeight(): number {
+    const rows = this.rawText.split('\n').filter((l) => l.trim()).length;
+    // The alignment row renders as a border, not a row.
+    return Math.max(1, rows - 1) * TABLE_ROW_ESTIMATED_HEIGHT_PX;
   }
 
   toDOM(view: EditorView): HTMLElement {
     const container = document.createElement('div');
     container.className = 'cm-live-table';
+
+    // Tracks the source text this widget currently stands for. Cell commits
+    // rewrite the document in place while the widget instance is kept alive,
+    // so the length used to locate the widget has to follow along.
+    let currentRaw = this.rawText;
 
     const lines = this.rawText.split('\n').filter((l) => l.trim());
     if (lines.length < 2) return container;
@@ -715,13 +840,11 @@ class TableWidget extends WidgetType {
         newLines.push(serializeTableRow(grid[r]));
       }
       const newRaw = newLines.join('\n');
-      isTableCellEditing = true;
-      view.dispatch({
-        changes: { from: this.from, to: this.to, insert: newRaw },
-      });
-      // Update range for subsequent edits within same widget instance
-      this.to = this.from + newRaw.length;
-      isTableCellEditing = false;
+      const range = widgetRange(view, container, currentRaw);
+      if (!range) return;
+
+      view.dispatch({ changes: { ...range, insert: newRaw } });
+      currentRaw = newRaw;
     };
 
     // Create an editable cell
@@ -733,6 +856,9 @@ class TableWidget extends WidgetType {
       if (alignments[colIdx]) cell.style.textAlign = alignments[colIdx]!;
 
       cell.addEventListener('focus', () => {
+        // Freeze widget rebuilds for as long as a cell holds focus — a rebuild
+        // recreates the table DOM and would drop the caret mid-edit.
+        setCellEditingState(view, true);
         // Show raw markdown text for editing
         cell.textContent = grid[rowIdx][colIdx];
         // Move caret to end
@@ -750,6 +876,12 @@ class TableWidget extends WidgetType {
         // Re-render inline markdown
         cell.innerHTML = '';
         renderInlineMarkdown(cell, newText);
+        // Tab moves focus to a sibling cell, so only release the freeze once
+        // focus has actually left the table — that release is what triggers
+        // the catch-up rebuild.
+        queueMicrotask(() => {
+          if (!container.contains(document.activeElement)) setCellEditingState(view, false);
+        });
       });
 
       cell.addEventListener('keydown', (e) => {
@@ -856,18 +988,29 @@ class TableWidget extends WidgetType {
   }
 
   eq(other: TableWidget): boolean {
-    return this.rawText === other.rawText && this.from === other.from && this.to === other.to;
+    return this.rawText === other.rawText;
   }
 }
 
 // --- HTML block rendering ---
 
+// Clicking a block widget puts the cursor at the start of its source, which
+// reveals the raw markdown. The source position is resolved from the DOM so
+// the widget stays position-independent.
+function focusWidgetSource(view: EditorView, container: HTMLElement) {
+  const from = view.posAtDOM(container);
+  if (from < 0) return;
+  view.dispatch({ selection: { anchor: from } });
+  view.focus();
+}
+
 class HtmlBlockWidget extends WidgetType {
-  constructor(
-    readonly html: string,
-    readonly from: number,
-  ) {
+  constructor(readonly html: string) {
     super();
+  }
+
+  get estimatedHeight(): number {
+    return this.html.split('\n').length * DEFAULT_LINE_ESTIMATED_HEIGHT_PX;
   }
 
   toDOM(view: EditorView): HTMLElement {
@@ -876,8 +1019,7 @@ class HtmlBlockWidget extends WidgetType {
 
     container.addEventListener('mousedown', (e) => {
       e.preventDefault();
-      view.dispatch({ selection: { anchor: this.from } });
-      view.focus();
+      focusWidgetSource(view, container);
     });
 
     container.innerHTML = this.html;
@@ -889,7 +1031,7 @@ class HtmlBlockWidget extends WidgetType {
   }
 
   eq(other: HtmlBlockWidget): boolean {
-    return this.html === other.html && this.from === other.from;
+    return this.html === other.html;
   }
 }
 
@@ -911,13 +1053,15 @@ function resolveIsDark(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
+const MERMAID_ESTIMATED_HEIGHT_PX = 240;
+
 class MermaidWidget extends WidgetType {
-  constructor(
-    readonly code: string,
-    readonly from: number,
-    readonly to: number,
-  ) {
+  constructor(readonly code: string) {
     super();
+  }
+
+  get estimatedHeight(): number {
+    return MERMAID_ESTIMATED_HEIGHT_PX;
   }
 
   toDOM(view: EditorView): HTMLElement {
@@ -926,8 +1070,7 @@ class MermaidWidget extends WidgetType {
 
     container.addEventListener('mousedown', (e) => {
       e.preventDefault();
-      view.dispatch({ selection: { anchor: this.from } });
-      view.focus();
+      focusWidgetSource(view, container);
     });
 
     ensureMermaidInitialized(resolveIsDark());
@@ -948,14 +1091,9 @@ class MermaidWidget extends WidgetType {
   }
 
   eq(other: MermaidWidget): boolean {
-    return this.code === other.code && this.from === other.from;
+    return this.code === other.code;
   }
 }
-
-// Shared module-level flag: true while mouse is down in the editor.
-// All decoration sources skip rebuilds during mouse drag to prevent
-// layout shifts mid-interaction.
-let isMouseDragging = false;
 
 // Hide decoration — replaces text with nothing (zero-width).
 // Decoration.replace tells CM about the size change so its height oracle
@@ -1065,33 +1203,59 @@ const COMMON_TLDS = new Set([
 ]);
 
 // Function to detect plain URLs in text that aren't already parsed as links
+// Lines occupied by fenced code, which the regex-based finders all skip.
+function collectCodeBlockLines(view: EditorView, elements: ParsedElement[]): Set<number> {
+  const lines = new Set<number>();
+  for (const el of elements) {
+    if (el.type !== 'codeBlock') continue;
+    const endLine = view.state.doc.lineAt(el.to).number;
+    for (let i = el.line; i <= endLine; i++) lines.add(i);
+  }
+  return lines;
+}
+
+// List items, inline formatting and already-detected URLs do not block plain
+// URL detection: Lezer's URL node can stop early, so a plain-URL match is
+// allowed to span them.
+const URL_TRANSPARENT_TYPES = new Set([
+  'listItem',
+  'bold', 'boldEnd',
+  'italic', 'italicEnd',
+  'strikethrough', 'strikethroughEnd',
+  'inlineCode', 'inlineCodeEnd',
+  'url', 'emailUrl',
+]);
+
+// Ranges already claimed by other elements, bucketed by the line each element
+// starts on. Stored as intervals rather than one key per covered character:
+// the per-character form allocated a string for nearly every character in the
+// document on every keystroke, which dominated the entire parse.
+function buildCoveredRanges(elements: ParsedElement[]): Map<number, Range2[]> {
+  const covered = new Map<number, Range2[]>();
+  for (const el of elements) {
+    if (URL_TRANSPARENT_TYPES.has(el.type)) continue;
+    const bucket = covered.get(el.line);
+    if (bucket) bucket.push({ from: el.from, to: el.to });
+    else covered.set(el.line, [{ from: el.from, to: el.to }]);
+  }
+  return covered;
+}
+
+interface Range2 { from: number; to: number }
+
+function overlapsCovered(covered: Map<number, Range2[]>, line: number, from: number, to: number): boolean {
+  const bucket = covered.get(line);
+  if (!bucket) return false;
+  return bucket.some((r) => from < r.to && to > r.from);
+}
+
 function findPlainUrls(view: EditorView, existingElements: ParsedElement[]): ParsedElement[] {
   const elements: ParsedElement[] = [];
   const doc = view.state.doc;
   // Match URLs with protocol, www. prefix, or bare domains (word.tld)
   const urlRegex = /(?:https?:\/\/|www\.)[^\s<>"{}|\\^`\[\]]+|(?<![.@/\\\w])(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(?:\/[^\s<>"{}|\\^`\[\]]*)?/g;
 
-  // Create a set of ranges that are already covered by existing elements (excluding list items, inline formatting, and URLs)
-  const coveredRanges = new Set<string>();
-  for (const el of existingElements) {
-    // Don't consider list items, inline formatting, or existing URLs as covering content for URL detection
-    // This allows findPlainUrls to find complete URLs even if Lezer's URL node stops early
-    if (el.type !== 'listItem' &&
-        el.type !== 'bold' &&
-        el.type !== 'boldEnd' &&
-        el.type !== 'italic' &&
-        el.type !== 'italicEnd' &&
-        el.type !== 'strikethrough' &&
-        el.type !== 'strikethroughEnd' &&
-        el.type !== 'inlineCode' &&
-        el.type !== 'inlineCodeEnd' &&
-        el.type !== 'url' &&
-        el.type !== 'emailUrl') {
-      for (let i = el.from; i < el.to; i++) {
-        coveredRanges.add(`${el.line}-${i}`);
-      }
-    }
-  }
+  const coveredRanges = buildCoveredRanges(existingElements);
 
   for (let lineNum = 1; lineNum <= doc.lines; lineNum++) {
     const line = doc.line(lineNum);
@@ -1118,16 +1282,7 @@ function findPlainUrls(view: EditorView, existingElements: ParsedElement[]): Par
       const startPos = line.from + match.index;
       const endPos = startPos + url.length;
 
-      // Check if this range overlaps with any existing element
-      let isCovered = false;
-      for (let i = startPos; i < endPos; i++) {
-        if (coveredRanges.has(`${lineNum}-${i}`)) {
-          isCovered = true;
-          break;
-        }
-      }
-
-      if (!isCovered) {
+      if (!overlapsCovered(coveredRanges, lineNum, startPos, endPos)) {
         const href = isProtocolUrl ? url : `https://${url}`;
         elements.push({
           type: 'url',
@@ -1164,17 +1319,7 @@ function findWikiLinks(view: EditorView, existingElements: ParsedElement[]): Par
   // Match [[target]] or [[target|display text]]
   const wikiLinkRegex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
-  // Build set of code block lines to skip
-  const codeBlockLines = new Set<number>();
-  for (const el of existingElements) {
-    if (el.type === 'codeBlock') {
-      const startLine = el.line;
-      const endLine = view.state.doc.lineAt(el.to).number;
-      for (let i = startLine; i <= endLine; i++) {
-        codeBlockLines.add(i);
-      }
-    }
-  }
+  const codeBlockLines = collectCodeBlockLines(view, existingElements);
 
   for (let lineNum = 1; lineNum <= doc.lines; lineNum++) {
     // Skip code block lines
@@ -1217,17 +1362,7 @@ function findMathBlocks(view: EditorView, existingElements: ParsedElement[]): Pa
   // Match $$...$$ blocks (multiline support)
   const mathRegex = /\$\$([\s\S]*?)\$\$/g;
 
-  // Build set of code block lines to skip
-  const codeBlockLines = new Set<number>();
-  for (const el of existingElements) {
-    if (el.type === 'codeBlock') {
-      const startLine = el.line;
-      const endLine = view.state.doc.lineAt(el.to).number;
-      for (let i = startLine; i <= endLine; i++) {
-        codeBlockLines.add(i);
-      }
-    }
-  }
+  const codeBlockLines = collectCodeBlockLines(view, existingElements);
 
   for (let lineNum = 1; lineNum <= doc.lines; lineNum++) {
     // Skip code block lines
@@ -1260,17 +1395,7 @@ function findInlineMath(view: EditorView, existingElements: ParsedElement[]): Pa
   const elements: ParsedElement[] = [];
   const doc = view.state.doc;
 
-  // Build set of code block lines to skip
-  const codeBlockLines = new Set<number>();
-  for (const el of existingElements) {
-    if (el.type === 'codeBlock') {
-      const startLine = el.line;
-      const endLine = view.state.doc.lineAt(el.to).number;
-      for (let i = startLine; i <= endLine; i++) {
-        codeBlockLines.add(i);
-      }
-    }
-  }
+  const codeBlockLines = collectCodeBlockLines(view, existingElements);
 
   // Build set of inline code ranges to skip
   const inlineCodeRanges: { from: number; to: number }[] = [];
@@ -1324,18 +1449,10 @@ function findInlineMath(view: EditorView, existingElements: ParsedElement[]): Pa
   return elements;
 }
 
-function parseMarkdownElements(view: EditorView): ParsedElement[] {
+function parseMarkdownElements(view: EditorView, tree: Tree): ParsedElement[] {
   const elements: ParsedElement[] = [];
   const doc = view.state.doc;
 
-  // Parse the entire document so decorations are viewport-independent.
-  // This prevents viewport-change decoration rebuilds during scrollbar
-  // scrolling from desynchronizing CM's height oracle (root cause of the
-  // scroll-jump / selection-flash bug). The 50ms timeout ensures we don't
-  // block for very large files; partial results are fine — treeChanged
-  // triggers a rebuild when background parsing catches up.
-  const parseUpTo = doc.length;
-  const tree = ensureSyntaxTree(view.state, parseUpTo, 50) ?? syntaxTree(view.state);
   tree.iterate({
     enter(node: SyntaxNodeRef) {
       const { from, to, name } = node;
@@ -1768,18 +1885,94 @@ function getFrontmatterRange(view: EditorView): { startLine: number; endLine: nu
   return null;
 }
 
-function buildDecorations(view: EditorView): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>();
-  const decorations: Range<Decoration>[] = [];
+// --- Parse cache -----------------------------------------------------------
+// The element list is a pure function of (document, syntax tree). Caching it
+// keeps cursor movement off the parser: only the much cheaper decoration
+// assembly re-runs. `coveringLines` maps a line to the elements whose range
+// (including the parent range recorded on end markers) touches that line —
+// exactly the elements whose cursor-dependent predicates can change when the
+// caret is on that line.
 
-  // Wrap in try-catch to prevent entire editor from breaking if parser fails
+interface ParseCache {
+  doc: Text;
+  tree: Tree;
+  elements: ParsedElement[];
+  startLines: Map<number, number[]>;
+  coveringLines: Map<number, number[]>;
+}
+
+const EMPTY_INDICES: number[] = [];
+
+// Synchronous parse budget per rebuild. Kept short so a large file cannot
+// stall a keystroke; whatever the background parser finishes later arrives as
+// a tree change, which triggers its own rebuild.
+const PARSE_BUDGET_MS = 5;
+
+function indexElements(doc: Text, elements: ParsedElement[]): Pick<ParseCache, 'startLines' | 'coveringLines'> {
+  const startLines = new Map<number, number[]>();
+  const coveringLines = new Map<number, number[]>();
+
+  const push = (map: Map<number, number[]>, line: number, index: number) => {
+    const bucket = map.get(line);
+    if (bucket) bucket.push(index);
+    else map.set(line, [index]);
+  };
+
+  const clamp = (pos: number) => Math.max(0, Math.min(pos, doc.length));
+
+  elements.forEach((el, index) => {
+    push(startLines, el.line, index);
+    const from = clamp(Math.min(el.from, el.parentFrom ?? el.from));
+    const to = clamp(Math.max(el.to, el.parentTo ?? el.to));
+    const firstLine = doc.lineAt(from).number;
+    const lastLine = doc.lineAt(to).number;
+    for (let line = firstLine; line <= lastLine; line++) push(coveringLines, line, index);
+  });
+
+  return { startLines, coveringLines };
+}
+
+function parseCache(view: EditorView, previous: ParseCache | null): ParseCache {
+  const doc = view.state.doc;
+  const tree = ensureSyntaxTree(view.state, doc.length, PARSE_BUDGET_MS) ?? syntaxTree(view.state);
+  if (previous && previous.doc === doc && previous.tree === tree) return previous;
+
   let elements: ParsedElement[] = [];
   try {
-    elements = parseMarkdownElements(view);
+    elements = parseMarkdownElements(view, tree);
   } catch (error) {
     console.error('Error parsing markdown elements:', error);
-    return Decoration.none;
   }
+
+  return { doc, tree, elements, ...indexElements(doc, elements) };
+}
+
+// Identifies the cursor-dependent inputs of a decoration build. Two positions
+// with the same key produce the same decorations, so the rebuild can be
+// skipped entirely — which is most caret movement through ordinary prose.
+function revealKeyFor(state: EditorState, cache: ParseCache): string {
+  const cursorPos = state.selection.main.head;
+  const cursorLine = state.doc.lineAt(cursorPos).number;
+  const parts: (string | number)[] = [];
+
+  for (const index of cache.startLines.get(cursorLine) ?? EMPTY_INDICES) {
+    parts.push('L', index);
+  }
+  for (const index of cache.coveringLines.get(cursorLine) ?? EMPTY_INDICES) {
+    const el = cache.elements[index];
+    parts.push('C', index);
+    if (cursorPos >= el.from && cursorPos <= el.to) parts.push('i');
+    if (el.parentFrom !== undefined && el.parentTo !== undefined &&
+        cursorPos >= el.parentFrom && cursorPos <= el.parentTo) parts.push('p');
+  }
+
+  return parts.join(':');
+}
+
+function buildDecorations(view: EditorView, cache: ParseCache): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+  const decorations: Range<Decoration>[] = [];
+  const elements = cache.elements;
 
   // Get cursor line
   const cursorPos = view.state.selection.main.head;
@@ -2163,7 +2356,7 @@ function buildDecorations(view: EditorView): DecorationSet {
       }
 
       case 'table':
-        // Handled by tableDecorationField (StateField) since block replacements
+        // Handled by blockWidgetField (StateField) since block replacements
         // spanning line breaks cannot be provided via ViewPlugin
         break;
     }
@@ -2182,164 +2375,38 @@ function buildDecorations(view: EditorView): DecorationSet {
 export const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
-    private view: EditorView;
-    private rafId = 0;
-    private lastWheelTime = 0;
-    private scrollbarUsed = false;
+    private cache: ParseCache;
+    private revealKey: string;
 
     constructor(view: EditorView) {
-      this.view = view;
-      this.decorations = buildDecorations(view);
-      this.onMouseDown = this.onMouseDown.bind(this);
-      this.onMouseUp = this.onMouseUp.bind(this);
-      this.onWheel = this.onWheel.bind(this);
-      this.onScrollTrack = this.onScrollTrack.bind(this);
-      view.scrollDOM.addEventListener('mousedown', this.onMouseDown, { capture: true });
-      view.scrollDOM.addEventListener('wheel', this.onWheel, { passive: true });
-      view.scrollDOM.addEventListener('scroll', this.onScrollTrack, { passive: true });
-      window.addEventListener('mouseup', this.onMouseUp);
-    }
-
-    onWheel() {
-      this.lastWheelTime = Date.now();
-      this.scrollbarUsed = false;
-    }
-
-    onScrollTrack() {
-      // Scroll without a recent wheel event = scrollbar (or keyboard/programmatic).
-      // Ignore scroll events during mouse drag (those come from our own corrections).
-      if (isMouseDragging) return;
-      const WHEEL_DEBOUNCE_MS = 150;
-      if (Date.now() - this.lastWheelTime > WHEEL_DEBOUNCE_MS) {
-        this.scrollbarUsed = true;
-      }
-    }
-
-    onMouseDown(e: MouseEvent) {
-      if (!this.view.contentDOM.contains(e.target as Node)) return;
-      isMouseDragging = true;
-
-      // --- Scroll guard ---
-      // After scrollbar scrolling, CM's height estimates for off-screen
-      // lines are inaccurate (live preview decorations change heights).
-      // When CM measures newly visible lines in its next rAF, the height
-      // correction shifts scrollTop. Guard by reverting large jumps.
-      const scrollBefore = this.view.scrollDOM.scrollTop;
-      const threshold = this.view.defaultLineHeight * 3;
-
-      const onScroll = (ev: Event) => {
-        clearTimeout(scrollTimerId);
-        if (Math.abs(this.view.scrollDOM.scrollTop - scrollBefore) > threshold) {
-          ev.stopImmediatePropagation();
-          this.view.scrollDOM.scrollTop = scrollBefore;
-        }
-      };
-
-      const scrollTimerId = setTimeout(() => {
-        this.view.scrollDOM.removeEventListener('scroll', onScroll, true);
-      }, 150);
-
-      this.view.scrollDOM.addEventListener('scroll', onScroll,
-        { capture: true, once: true });
-
-      // --- Scrollbar click takeover ---
-      // After scrollbar scrolling, CM's stale height map causes
-      // posAtCoords to resolve wrong positions and MouseSelection's
-      // scroll-event tracking creates spurious range selections.
-      // Take over click handling entirely: preventDefault stops CM from
-      // starting mouse tracking, and we place the cursor ourselves.
-      if (!this.scrollbarUsed) return;
-      this.scrollbarUsed = false;
-
-      const pos = this.view.posAtCoords({ x: e.clientX, y: e.clientY });
-      if (pos == null) return;
-
-      e.preventDefault();
-
-      const anchor = pos;
-      let selection;
-      if (e.detail >= 3) {
-        const line = this.view.state.doc.lineAt(pos);
-        selection = { anchor: line.from, head: line.to };
-      } else if (e.detail === 2) {
-        const word = this.view.state.wordAt(pos);
-        selection = word
-          ? { anchor: word.from, head: word.to }
-          : { anchor: pos };
-      } else {
-        selection = { anchor: pos };
-      }
-
-      this.view.dispatch({
-        selection,
-        scrollIntoView: false,
-        annotations: Transaction.userEvent.of('select.pointer'),
-      });
-      this.view.focus();
-
-      // Drag-to-select: track mousemove to extend selection from anchor
-      if (e.detail <= 1) {
-        const onMove = (me: MouseEvent) => {
-          const head = this.view.posAtCoords({ x: me.clientX, y: me.clientY });
-          if (head != null && head !== anchor) {
-            this.view.dispatch({
-              selection: { anchor, head },
-              scrollIntoView: false,
-              annotations: Transaction.userEvent.of('select.pointer'),
-            });
-          }
-        };
-
-        const onUp = () => {
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
-        };
-
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp, { once: true });
-      }
-    }
-
-    onMouseUp() {
-      if (!isMouseDragging) return;
-      isMouseDragging = false;
-      // Deferred decoration rebuild for cursor-line reveal.
-      // Preserve scrollTop: changing decorations on the old cursor line
-      // (now far off-screen) alters heights above the viewport.
-      cancelAnimationFrame(this.rafId);
-      this.rafId = requestAnimationFrame(() => {
-        const scrollBefore = this.view.scrollDOM.scrollTop;
-        this.decorations = buildDecorations(this.view);
-        this.view.dispatch({});
-        this.view.scrollDOM.scrollTop = scrollBefore;
-      });
+      this.cache = parseCache(view, null);
+      this.revealKey = revealKeyFor(view.state, this.cache);
+      this.decorations = buildDecorations(view, this.cache);
     }
 
     update(update: ViewUpdate) {
-      this.view = update.view;
-      // Decorations are viewport-independent (full-document parse), so
-      // viewportChanged is intentionally NOT a rebuild trigger. This
-      // prevents scrollbar scrolling from changing line heights and
-      // desynchronizing CM's height oracle.
-      const treeChanged = syntaxTree(update.startState) !== syntaxTree(update.state);
-      if (update.docChanged || treeChanged) {
-        this.decorations = buildDecorations(update.view);
-      } else if (update.selectionSet) {
-        const isPointerInteraction = isMouseDragging &&
-          update.transactions.some(tr => tr.isUserEvent('select'));
-        if (!isPointerInteraction) {
-          this.decorations = buildDecorations(update.view);
-        }
-      }
-    }
+      // Reparse only when the document or the syntax tree actually changed;
+      // cursor movement reuses the cached element list.
+      const previous = this.cache;
+      this.cache = parseCache(update.view, this.cache);
+      const parseChanged = this.cache !== previous;
 
-    destroy() {
-      cancelAnimationFrame(this.rafId);
-      isMouseDragging = false;
-      this.view.scrollDOM.removeEventListener('mousedown', this.onMouseDown, { capture: true });
-      this.view.scrollDOM.removeEventListener('wheel', this.onWheel);
-      this.view.scrollDOM.removeEventListener('scroll', this.onScrollTrack);
-      window.removeEventListener('mouseup', this.onMouseUp);
+      // An interaction ending is a rebuild trigger in its own right: whatever
+      // was suppressed while it ran has to be caught up here.
+      const resumed = update.transactions.some(interactionEnded);
+
+      if (!parseChanged && !resumed) {
+        if (rebuildsSuppressed(update.state)) return;
+        // Decorations depend on the cursor only through the elements covering
+        // its line, so an unchanged reveal key means an unchanged result.
+        const key = revealKeyFor(update.state, this.cache);
+        if (key === this.revealKey) return;
+        this.revealKey = key;
+      } else {
+        this.revealKey = revealKeyFor(update.state, this.cache);
+      }
+
+      this.decorations = buildDecorations(update.view, this.cache);
     }
   },
   {
@@ -2347,153 +2414,74 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
   }
 );
 
-// StateField for table decorations (block replacements that span line breaks
-// cannot be provided via ViewPlugin — they require a StateField)
-const tableDecorationField = StateField.define<DecorationSet>({
-  create(state) {
-    const cursorPos = state.selection.main.head;
-    const decorations: Range<Decoration>[] = [];
-    syntaxTree(state).iterate({
-      enter(node: SyntaxNodeRef) {
-        if (node.name !== 'Table') return;
-        if (cursorPos >= node.from && cursorPos <= node.to) return;
-        const rawText = state.doc.sliceString(node.from, node.to);
-        decorations.push(
-          Decoration.replace({
-            widget: new TableWidget(rawText, node.from, node.to),
-            block: true,
-          }).range(node.from, node.to)
-        );
-      },
-    });
-    decorations.sort((a, b) => a.from - b.from);
-    return Decoration.set(decorations);
+// --- Block widget fields ---------------------------------------------------
+// Block replacements span line breaks, which a ViewPlugin cannot provide, so
+// each lives in a StateField. The three differ only in which syntax node they
+// match and which widget they build; the rebuild policy is shared so the
+// catch-up rebuild on interaction end cannot be forgotten in one of them.
+
+type BlockWidgetBuilder = (state: EditorState, from: number, to: number) => Decoration | null;
+
+// One builder per block node type. They share a single tree traversal — three
+// separate fields meant three full-document walks per keystroke.
+const BLOCK_WIDGET_BUILDERS: Record<string, BlockWidgetBuilder> = {
+  Table: (state, from, to) =>
+    Decoration.replace({
+      widget: new TableWidget(state.doc.sliceString(from, to)),
+      block: true,
+    }),
+
+  FencedCode: (state, from, to) => {
+    const openFenceLine = state.doc.lineAt(from);
+    const langMatch = openFenceLine.text.match(/^(`{3,}|~{3,})(\w+)?/);
+    if (langMatch?.[2]?.toLowerCase() !== 'mermaid') return null;
+
+    const closeFenceLine = state.doc.lineAt(to);
+    const codeFrom = openFenceLine.to + 1;
+    const codeTo = closeFenceLine.from > codeFrom ? closeFenceLine.from - 1 : codeFrom;
+    const code = codeFrom < codeTo ? state.doc.sliceString(codeFrom, codeTo) : '';
+
+    return Decoration.replace({ widget: new MermaidWidget(code), block: true });
   },
+
+  HTMLBlock: (state, from, to) =>
+    Decoration.replace({
+      widget: new HtmlBlockWidget(state.doc.sliceString(from, to)),
+      block: true,
+    }),
+};
+
+function collectBlockWidgets(state: EditorState): DecorationSet {
+  const cursorPos = state.selection.main.head;
+  const decorations: Range<Decoration>[] = [];
+
+  syntaxTree(state).iterate({
+    enter(node: SyntaxNodeRef) {
+      const build = BLOCK_WIDGET_BUILDERS[node.name];
+      if (!build) return;
+      // Cursor inside the block reveals the raw markdown.
+      if (cursorPos >= node.from && cursorPos <= node.to) return;
+      const decoration = build(state, node.from, node.to);
+      if (decoration) decorations.push(decoration.range(node.from, node.to));
+    },
+  });
+
+  decorations.sort((a, b) => a.from - b.from);
+  return Decoration.set(decorations);
+}
+
+const blockWidgetField = StateField.define<DecorationSet>({
+  create: collectBlockWidgets,
   update(prev, tr) {
-    // Don't rebuild widgets while a cell is being edited inline
-    if (isTableCellEditing) return prev.map(tr.changes);
+    // Whatever was suppressed during the interaction is caught up here.
+    if (interactionEnded(tr)) return collectBlockWidgets(tr.state);
+    if (rebuildsSuppressed(tr.state)) return prev.map(tr.changes);
 
     const selectionChanged = !tr.newSelection.eq(tr.startState.selection);
     const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state);
     if (!tr.docChanged && !selectionChanged && !treeChanged) return prev.map(tr.changes);
-    if (isMouseDragging && !tr.docChanged) return prev;
 
-    const cursorPos = tr.state.selection.main.head;
-    const decorations: Range<Decoration>[] = [];
-
-    syntaxTree(tr.state).iterate({
-      enter(node: SyntaxNodeRef) {
-        if (node.name !== 'Table') return;
-
-        const cursorInTable = cursorPos >= node.from && cursorPos <= node.to;
-        if (cursorInTable) return;
-
-        const rawText = tr.state.doc.sliceString(node.from, node.to);
-        decorations.push(
-          Decoration.replace({
-            widget: new TableWidget(rawText, node.from, node.to),
-            block: true,
-          }).range(node.from, node.to)
-        );
-      },
-    });
-
-    decorations.sort((a, b) => a.from - b.from);
-    return Decoration.set(decorations);
-  },
-  provide: (f) => EditorView.decorations.from(f),
-});
-
-// StateField for mermaid diagram decorations (block replacement spanning line breaks)
-const mermaidDecorationField = StateField.define<DecorationSet>({
-  create() {
-    return Decoration.none;
-  },
-  update(prev, tr) {
-    const selectionChanged = !tr.newSelection.eq(tr.startState.selection);
-    const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state);
-    if (!tr.docChanged && !selectionChanged && !treeChanged) return prev.map(tr.changes);
-    if (isMouseDragging && !tr.docChanged) return prev;
-
-    const cursorPos = tr.state.selection.main.head;
-    const decorations: Range<Decoration>[] = [];
-
-    syntaxTree(tr.state).iterate({
-      enter(node: SyntaxNodeRef) {
-        if (node.name !== 'FencedCode') return;
-
-        const openFenceLine = tr.state.doc.lineAt(node.from);
-        const langMatch = openFenceLine.text.match(/^(`{3,}|~{3,})(\w+)?/);
-        if (langMatch?.[2]?.toLowerCase() !== 'mermaid') return;
-
-        if (cursorPos >= node.from && cursorPos <= node.to) return;
-
-        const closeFenceLine = tr.state.doc.lineAt(node.to);
-        const codeFrom = openFenceLine.to + 1;
-        const codeTo = closeFenceLine.from > codeFrom ? closeFenceLine.from - 1 : codeFrom;
-        const code = codeFrom < codeTo ? tr.state.doc.sliceString(codeFrom, codeTo) : '';
-
-        decorations.push(
-          Decoration.replace({
-            widget: new MermaidWidget(code, node.from, node.to),
-            block: true,
-          }).range(node.from, node.to)
-        );
-      },
-    });
-
-    decorations.sort((a, b) => a.from - b.from);
-    return Decoration.set(decorations);
-  },
-  provide: (f) => EditorView.decorations.from(f),
-});
-
-// StateField for HTML block decorations (block replacements spanning line breaks)
-const htmlBlockDecorationField = StateField.define<DecorationSet>({
-  create(state) {
-    const cursorPos = state.selection.main.head;
-    const decorations: Range<Decoration>[] = [];
-    syntaxTree(state).iterate({
-      enter(node: SyntaxNodeRef) {
-        if (node.name !== 'HTMLBlock') return;
-        if (cursorPos >= node.from && cursorPos <= node.to) return;
-        const html = state.doc.sliceString(node.from, node.to);
-        decorations.push(
-          Decoration.replace({
-            widget: new HtmlBlockWidget(html, node.from),
-            block: true,
-          }).range(node.from, node.to)
-        );
-      },
-    });
-    decorations.sort((a, b) => a.from - b.from);
-    return Decoration.set(decorations);
-  },
-  update(prev, tr) {
-    const selectionChanged = !tr.newSelection.eq(tr.startState.selection);
-    const treeChanged = syntaxTree(tr.startState) !== syntaxTree(tr.state);
-    if (!tr.docChanged && !selectionChanged && !treeChanged) return prev.map(tr.changes);
-    if (isMouseDragging && !tr.docChanged) return prev;
-
-    const cursorPos = tr.state.selection.main.head;
-    const decorations: Range<Decoration>[] = [];
-
-    syntaxTree(tr.state).iterate({
-      enter(node: SyntaxNodeRef) {
-        if (node.name !== 'HTMLBlock') return;
-        if (cursorPos >= node.from && cursorPos <= node.to) return;
-        const html = tr.state.doc.sliceString(node.from, node.to);
-        decorations.push(
-          Decoration.replace({
-            widget: new HtmlBlockWidget(html, node.from),
-            block: true,
-          }).range(node.from, node.to)
-        );
-      },
-    });
-
-    decorations.sort((a, b) => a.from - b.from);
-    return Decoration.set(decorations);
+    return collectBlockWidgets(tr.state);
   },
   provide: (f) => EditorView.decorations.from(f),
 });
@@ -2816,10 +2804,9 @@ export const livePreviewStyles = EditorView.baseTheme({
 export function livePreview(filePath = '') {
   return [
     currentFileCompartment.of(currentFileFacet.of(filePath)),
+    interactionTracking,
     livePreviewPlugin,
-    tableDecorationField,
-    mermaidDecorationField,
-    htmlBlockDecorationField,
+    blockWidgetField,
     livePreviewStyles,
   ];
 }
@@ -2855,16 +2842,16 @@ const plainUrlPlugin = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged) {
-        this.decorations = buildPlainUrlDecorations(update.view);
-      } else if (update.selectionSet && !isMouseDragging) {
-        this.decorations = buildPlainUrlDecorations(update.view);
+      const resumed = update.transactions.some(interactionEnded);
+      if (!update.docChanged && !resumed) {
+        if (!update.selectionSet || rebuildsSuppressed(update.state)) return;
       }
+      this.decorations = buildPlainUrlDecorations(update.view);
     }
   },
   { decorations: (v) => v.decorations }
 );
 
 export function plainUrlDetection() {
-  return [plainUrlPlugin, livePreviewStyles];
+  return [interactionTracking, plainUrlPlugin, livePreviewStyles];
 }
