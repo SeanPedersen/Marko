@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { EditorView, keymap, highlightActiveLine, rectangularSelection, drawSelection, dropCursor, ViewPlugin } from '@codemirror/view';
-	import { EditorState, EditorSelection, Compartment, Transaction } from '@codemirror/state';
+	import { EditorState, EditorSelection, Compartment, Transaction, Annotation } from '@codemirror/state';
 	import { defaultKeymap, history, historyKeymap, indentMore, indentLess } from '@codemirror/commands';
 	import { search, searchKeymap } from '@codemirror/search';
 	import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -17,6 +17,13 @@
 	import type { Extension } from '@codemirror/state';
 
 
+
+	// Marks a transaction as text pushed in from the owning store (file load,
+	// watcher reload, git revert) rather than an edit made in the editor. Such a
+	// transaction must not be reported back through onchange — the caller already
+	// has that text, and echoing it re-enters the auto-save path, rewriting the
+	// file on disk just because it was opened.
+	const storeSync = Annotation.define<boolean>();
 
 	// Custom scrollPastEnd that only adds half viewport height
 	const scrollPastEndHalfPlugin = ViewPlugin.fromClass(
@@ -217,6 +224,7 @@ function createExtensions() {
 				if (!update.docChanged) return;
 				const newValue = update.state.doc.toString();
 				syncedValue = newValue;
+				if (update.transactions.some((tr) => tr.annotation(storeSync))) return;
 				onchange?.(newValue);
 			}),
 
@@ -384,7 +392,7 @@ function createExtensions() {
 				to: current.length - suffix,
 				insert: next.slice(prefix, next.length - suffix),
 			},
-			annotations: Transaction.addToHistory.of(false),
+			annotations: [Transaction.addToHistory.of(false), storeSync.of(true)],
 			scrollIntoView: false,
 		});
 	}
