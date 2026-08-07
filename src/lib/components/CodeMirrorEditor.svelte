@@ -1,17 +1,18 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import { EditorView, keymap, highlightActiveLine, rectangularSelection, ViewPlugin } from '@codemirror/view';
+	import { EditorView, keymap, highlightActiveLine, rectangularSelection, drawSelection, dropCursor, ViewPlugin } from '@codemirror/view';
 	import { EditorState, EditorSelection, Compartment, Transaction } from '@codemirror/state';
-	import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+	import { defaultKeymap, history, historyKeymap, indentMore, indentLess } from '@codemirror/commands';
 	import { search, searchKeymap } from '@codemirror/search';
 	import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 	import { Table } from '@lezer/markdown';
 	import { languages } from '@codemirror/language-data';
-	import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from '@codemirror/language';
+	import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, indentUnit } from '@codemirror/language';
 	import { createTheme } from './codemirror/theme.js';
 	import { livePreview, plainUrlDetection, updateCurrentFile } from './codemirror/livePreview.js';
 	import { wikiLinkCompletion, fileIndexFacet, fileIndexCompartment, updateFileIndex } from './codemirror/wikiLinkCompletion.js';
 	import { readSnapshot, writeSnapshot, nextAnonymousDocId } from './codemirror/viewSnapshots.js';
+	import { clickPlacesCursor } from './codemirror/clickSelection.js';
 	import type { FileIndex } from '$lib/utils/wikiLinks';
 	import type { Extension } from '@codemirror/state';
 
@@ -123,7 +124,14 @@ function createExtensions() {
 			// Basic editing
 			history(),
 			EditorState.allowMultipleSelections.of(true),
+			// The caret and selection are drawn by CodeMirror rather than left to
+			// the platform: WKWebView repaints the native caret lazily and strands
+			// a frozen copy of it at the old offset when an edit rewrites the line
+			// around it (Tab followed by Cmd+Backspace is the reliable trigger).
+			drawSelection(),
+			dropCursor(),
 			rectangularSelection(),
+			clickPlacesCursor(),
 			bracketMatching(),
 
 			// Line wrapping (no horizontal scroll)
@@ -150,7 +158,27 @@ function createExtensions() {
 				...searchKeymap,
 				...defaultKeymap,
 				...historyKeymap,
-				indentWithTab,
+
+				// Tab indents at the caret. CodeMirror's indentWithTab runs
+				// indentMore, which always inserts at the start of the logical line —
+				// on a wrapped paragraph that lands nowhere near the caret. Whole-line
+				// indenting is still what a non-empty selection means.
+				{
+					key: 'Tab',
+					run: (view) => {
+						const { state } = view;
+						if (state.readOnly) return false;
+						if (state.selection.ranges.some((range) => !range.empty)) return indentMore(view);
+						view.dispatch(
+							state.update(state.replaceSelection(state.facet(indentUnit)), {
+								scrollIntoView: true,
+								userEvent: 'input.indent',
+							})
+						);
+						return true;
+					},
+					shift: indentLess,
+				},
 			]),
 
 			// Search panel (Cmd/Ctrl+F)
@@ -185,6 +213,7 @@ function createExtensions() {
 
 			// Update listener
 			EditorView.updateListener.of((update) => {
+				if (update.selectionSet || update.docChanged) recordSnapshot();
 				if (!update.docChanged) return;
 				const newValue = update.state.doc.toString();
 				syncedValue = newValue;
@@ -243,28 +272,57 @@ function createExtensions() {
 			state,
 			parent: container,
 		});
+		view.scrollDOM.addEventListener('scroll', recordSnapshot, { passive: true });
 
-		// A fresh mount is a tab returning from a view that replaced this editor
-		// (kanban, mermaid, HTML), so it resumes from the store just like a
-		// tab switch does.
+		// A fresh mount is either the app opening its first document or a tab
+		// returning from a view that replaced this editor (kanban, mermaid, HTML),
+		// so it resumes from the store just like a tab switch does — and takes
+		// focus, so the caret is live and visible without a click first.
 		applySnapshot(view, currentDocId);
+		view.focus();
 	}
 
-	function captureSnapshot(target: EditorView, id: string) {
-		const { anchor, head } = target.state.selection.main;
-		writeSnapshot(id, { anchor, head, scrollTop: target.scrollDOM.scrollTop });
+	// Set while a snapshot is being applied. The caret and scroll assignments made
+	// during that window are echoes of the stored value, and recording them back
+	// before the scroll has landed would overwrite it with the pre-restore zero.
+	let restoring = false;
+
+	// Recording on every caret move and scroll — rather than only on teardown —
+	// makes restoring independent of unmount ordering. A tab handing the editor
+	// over to another view (kanban, mermaid, HTML) destroys this component rather
+	// than swapping its document, so teardown is not a reliable last word.
+	function recordSnapshot() {
+		if (restoring || !view || loadedDocId === null) return;
+		const { anchor, head } = view.state.selection.main;
+		// Svelte detaches a component's nodes before running onDestroy, and a
+		// detached scroller reports 0 — so the teardown record must not be allowed
+		// to overwrite the position the document was actually left at. The caret
+		// comes from editor state, which detaching does not touch.
+		const scrollTop = view.scrollDOM.isConnected
+			? view.scrollDOM.scrollTop
+			: (readSnapshot(loadedDocId)?.scrollTop ?? 0);
+		writeSnapshot(loadedDocId, { anchor, head, scrollTop });
 	}
 
-	// CodeMirror only knows the real content height after it has measured the
-	// freshly mounted document, so an immediate assignment would be clamped
-	// against the outgoing layout. Restore once measuring is done, and only if
-	// the same document is still loaded (fast tab cycling can overtake us).
-	function restoreScroll(target: EditorView, scrollTop: number, id: string) {
+	// A freshly mounted editor reports a content height that is still growing as
+	// CodeMirror measures, so a single assignment gets clamped to whatever fits
+	// the incomplete layout. Re-apply until the value sticks, bounded so an
+	// offset the document can no longer reach cannot spin.
+	const SCROLL_RESTORE_ATTEMPTS = 5;
+
+	function restoreScroll(target: EditorView, scrollTop: number, id: string, attempt = 0) {
 		target.requestMeasure({
 			read: () => null,
 			write: () => {
+				// A newer restore has taken over and owns `restoring` from here.
 				if (loadedDocId !== id) return;
+
 				target.scrollDOM.scrollTop = scrollTop;
+				if (target.scrollDOM.scrollTop === scrollTop || attempt >= SCROLL_RESTORE_ATTEMPTS) {
+					restoring = false;
+					return;
+				}
+				restoreScroll(target, scrollTop, id, attempt + 1);
 			},
 		});
 	}
@@ -272,10 +330,12 @@ function createExtensions() {
 	// Resume the caret and scroll this document was last left at. Positions are
 	// clamped: the document may have been edited elsewhere since.
 	function applySnapshot(target: EditorView, id: string) {
+		restoring = true;
 		const snapshot = readSnapshot(id);
 		if (!snapshot) {
 			target.dispatch({ selection: { anchor: 0 } });
 			target.scrollDOM.scrollTop = 0;
+			restoring = false;
 			return;
 		}
 
@@ -343,9 +403,9 @@ function createExtensions() {
 
 	onDestroy(() => {
 		if (!view) return;
-		// Last chance to record where this document was left — the component is
-		// unmounting because another view is taking over the tab.
-		if (loadedDocId !== null) captureSnapshot(view, loadedDocId);
+		// Catches a caret move that landed after the last recorded one; the scroll
+		// position is already stored, since the nodes are detached by now.
+		recordSnapshot();
 		view.destroy();
 		view = null;
 	});
@@ -362,7 +422,7 @@ function createExtensions() {
 			if (!view) return;
 
 			if (nextDocId !== loadedDocId) {
-				if (loadedDocId !== null) captureSnapshot(view, loadedDocId);
+				recordSnapshot();
 				loadedDocId = nextDocId;
 				syncedValue = next;
 				loadDoc(view, next, nextDocId);
