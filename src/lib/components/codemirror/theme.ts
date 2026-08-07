@@ -18,8 +18,15 @@ const baseTheme = EditorView.theme({
   '.cm-cursor, .cm-dropCursor': {
     borderLeftColor: 'var(--color-fg-default)',
   },
-  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
     backgroundColor: 'var(--color-selection) !important',
+  },
+  // drawSelection() paints the selection itself, so the native highlight has to
+  // stay invisible or it stacks a second translucent blue on top of the drawn
+  // one. CodeMirror only suppresses it under .cm-line, which misses block
+  // widgets (tables, mermaid, HTML blocks) — they are siblings of .cm-line.
+  '.cm-content ::selection, .cm-content::selection': {
+    backgroundColor: 'transparent !important',
   },
   '.cm-activeLine': {
     backgroundColor: 'transparent',

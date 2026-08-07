@@ -137,9 +137,15 @@
 
 /* ─── Base layer ─────────────────────────────────────────────────────────── */
 @layer base {
+	/* No !important: for important declarations the cascade-layer order inverts,
+	   so a layered !important beats an unlayered one whatever its specificity.
+	   That silently overrode CodeMirror's rule hiding the native selection, and
+	   WKWebView paints that over the whole line box while drawSelection covers
+	   only the text box — the leftover leading showed up as a strip above and
+	   below the selection, worst on headings. */
 	::selection {
-		background-color: var(--color-selection) !important;
-		color: inherit !important;
+		background-color: var(--color-selection);
+		color: inherit;
 	}
 
 	html,
