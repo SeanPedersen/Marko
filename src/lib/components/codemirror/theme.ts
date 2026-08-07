@@ -203,13 +203,12 @@ const markdownHighlighting = HighlightStyle.define([
   { tag: t.emphasis, fontStyle: 'italic' },
   { tag: t.strikethrough, textDecoration: 'line-through' },
 
-  // Code
+  // Code — background/padding come from the live-preview decorations
+  // (.cm-live-inline-code for inline code, .cm-live-code-block-line for fences),
+  // so plain fenced content is not double-tinted per character run.
   {
     tag: t.monospace,
     fontFamily: '"Monaco", "Menlo", "Ubuntu Mono", monospace',
-    backgroundColor: 'var(--color-neutral-muted)',
-    borderRadius: '3px',
-    padding: '0.2em 0.4em',
   },
 
   // Links
