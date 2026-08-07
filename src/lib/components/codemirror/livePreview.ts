@@ -105,12 +105,27 @@ const pointerTracker = ViewPlugin.fromClass(
   class {
     private onPointerDown: (e: PointerEvent) => void;
     private release: () => void;
+    private pendingRelease = -1;
 
     constructor(private view: EditorView) {
       this.onPointerDown = (e) => {
-        if (view.contentDOM.contains(e.target as Node)) setPointerState(view, true);
+        if (!view.contentDOM.contains(e.target as Node)) return;
+        this.cancelRelease();
+        setPointerState(view, true);
       };
-      this.release = () => setPointerState(view, false);
+      // CodeMirror resolves the final selection of a click or drag from the
+      // pointer's coordinates on mouseup — which the browser dispatches after
+      // pointerup. Releasing synchronously would let the catch-up rebuild move
+      // text under those coordinates first, landing the caret away from where
+      // the user actually clicked. A timeout resumes after the whole
+      // pointerup/mouseup/click sequence has been handled.
+      this.release = () => {
+        if (this.pendingRelease > -1) return;
+        this.pendingRelease = window.setTimeout(() => {
+          this.pendingRelease = -1;
+          setPointerState(view, false);
+        });
+      };
 
       view.contentDOM.addEventListener('pointerdown', this.onPointerDown);
       window.addEventListener('pointerup', this.release);
@@ -119,7 +134,14 @@ const pointerTracker = ViewPlugin.fromClass(
       document.addEventListener('visibilitychange', this.release);
     }
 
+    private cancelRelease() {
+      if (this.pendingRelease < 0) return;
+      clearTimeout(this.pendingRelease);
+      this.pendingRelease = -1;
+    }
+
     destroy() {
+      this.cancelRelease();
       this.view.contentDOM.removeEventListener('pointerdown', this.onPointerDown);
       window.removeEventListener('pointerup', this.release);
       window.removeEventListener('pointercancel', this.release);
@@ -2395,8 +2417,18 @@ export const livePreviewPlugin = ViewPlugin.fromClass(
       // was suppressed while it ran has to be caught up here.
       const resumed = update.transactions.some(interactionEnded);
 
+      // Suppression has to hold even when the parse changed. A drag-selection
+      // takes its head from pointer coordinates while its anchor stays a fixed
+      // document position, so any rebuild that moves text under the pointer —
+      // an incremental parse finishing, an external write landing — silently
+      // redirects the head and leaves everything back to the old position
+      // selected. Carry the decorations through instead; resuming rebuilds.
+      if (rebuildsSuppressed(update.state) && !resumed) {
+        this.decorations = this.decorations.map(update.changes);
+        return;
+      }
+
       if (!parseChanged && !resumed) {
-        if (rebuildsSuppressed(update.state)) return;
         // Decorations depend on the cursor only through the elements covering
         // its line, so an unchanged reveal key means an unchanged result.
         const key = revealKeyFor(update.state, this.cache);
@@ -2843,9 +2875,11 @@ const plainUrlPlugin = ViewPlugin.fromClass(
 
     update(update: ViewUpdate) {
       const resumed = update.transactions.some(interactionEnded);
-      if (!update.docChanged && !resumed) {
-        if (!update.selectionSet || rebuildsSuppressed(update.state)) return;
+      if (rebuildsSuppressed(update.state) && !resumed) {
+        this.decorations = this.decorations.map(update.changes);
+        return;
       }
+      if (!update.docChanged && !resumed && !update.selectionSet) return;
       this.decorations = buildPlainUrlDecorations(update.view);
     }
   },

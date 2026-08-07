@@ -11,6 +11,7 @@
 	import { createTheme } from './codemirror/theme.js';
 	import { livePreview, plainUrlDetection, updateCurrentFile } from './codemirror/livePreview.js';
 	import { wikiLinkCompletion, fileIndexFacet, fileIndexCompartment, updateFileIndex } from './codemirror/wikiLinkCompletion.js';
+	import { readSnapshot, writeSnapshot, nextAnonymousDocId } from './codemirror/viewSnapshots.js';
 	import type { FileIndex } from '$lib/utils/wikiLinks';
 	import type { Extension } from '@codemirror/state';
 
@@ -78,17 +79,11 @@
 	let syncedValue = '';
 	let loadedDocId: string | null = null;
 
-	let currentDocId = $derived(docId ?? filePath);
-
-	// Caret and scroll of every document this editor has hosted, so switching
-	// back to one (a tab switch reuses this single editor instance) resumes
-	// where the user left off instead of at the top.
-	interface ViewSnapshot {
-		anchor: number;
-		head: number;
-		scrollTop: number;
-	}
-	const snapshots = new Map<string, ViewSnapshot>();
+	// Editors mounted without any document identity (kanban raw view, card
+	// detail pane) still need a key of their own, or they would share — and
+	// overwrite — each other's entry in the process-wide snapshot store.
+	const anonymousDocId = nextAnonymousDocId();
+	let currentDocId = $derived(docId ?? (filePath || anonymousDocId));
 
 	// Compartments for dynamic configuration
 	const readonlyCompartment = new Compartment();
@@ -248,11 +243,16 @@ function createExtensions() {
 			state,
 			parent: container,
 		});
+
+		// A fresh mount is a tab returning from a view that replaced this editor
+		// (kanban, mermaid, HTML), so it resumes from the store just like a
+		// tab switch does.
+		applySnapshot(view, currentDocId);
 	}
 
 	function captureSnapshot(target: EditorView, id: string) {
 		const { anchor, head } = target.state.selection.main;
-		snapshots.set(id, { anchor, head, scrollTop: target.scrollDOM.scrollTop });
+		writeSnapshot(id, { anchor, head, scrollTop: target.scrollDOM.scrollTop });
 	}
 
 	// CodeMirror only knows the real content height after it has measured the
@@ -269,14 +269,10 @@ function createExtensions() {
 		});
 	}
 
-	// A different document is taking over this editor: replace the state
-	// wholesale so undo history starts fresh, then resume the caret and scroll
-	// this document was last left at.
-	function loadDoc(target: EditorView, next: string, id: string) {
-		target.setState(EditorState.create({ doc: next, extensions: createExtensions() }));
-		target.focus();
-
-		const snapshot = snapshots.get(id);
+	// Resume the caret and scroll this document was last left at. Positions are
+	// clamped: the document may have been edited elsewhere since.
+	function applySnapshot(target: EditorView, id: string) {
+		const snapshot = readSnapshot(id);
 		if (!snapshot) {
 			target.dispatch({ selection: { anchor: 0 } });
 			target.scrollDOM.scrollTop = 0;
@@ -292,6 +288,14 @@ function createExtensions() {
 			scrollIntoView: false,
 		});
 		restoreScroll(target, snapshot.scrollTop, id);
+	}
+
+	// A different document is taking over this editor: replace the state
+	// wholesale so undo history starts fresh, then resume where it was left.
+	function loadDoc(target: EditorView, next: string, id: string) {
+		target.setState(EditorState.create({ doc: next, extensions: createExtensions() }));
+		target.focus();
+		applySnapshot(target, id);
 	}
 
 	// Same document, new text from outside the editor (file watcher, git
@@ -338,10 +342,12 @@ function createExtensions() {
 	});
 
 	onDestroy(() => {
-		if (view) {
-			view.destroy();
-			view = null;
-		}
+		if (!view) return;
+		// Last chance to record where this document was left — the component is
+		// unmounting because another view is taking over the tab.
+		if (loadedDocId !== null) captureSnapshot(view, loadedDocId);
+		view.destroy();
+		view = null;
 	});
 
 	// The single reconciliation point between the owning store and CodeMirror's
