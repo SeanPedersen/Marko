@@ -532,23 +532,12 @@
 
 	// Collect all markdown files in a folder recursively (for wiki-link autocomplete)
 	async function collectMarkdownFiles(folder: string): Promise<string[]> {
-		const files: string[] = [];
 		try {
-			const entries = await invoke('read_directory', { path: folder }) as { name: string; path: string; is_dir: boolean }[];
-			for (const entry of entries) {
-				if (entry.is_dir) {
-					// Skip hidden directories
-					if (!entry.name.startsWith('.')) {
-						files.push(...await collectMarkdownFiles(entry.path));
-					}
-				} else if (entry.name.endsWith('.md') || entry.name.endsWith('.markdown') || entry.name.endsWith('.mdown') || entry.name.endsWith('.mkd')) {
-					files.push(entry.path);
-				}
-			}
-		} catch (e) {
+			return await invoke('collect_markdown_files', { path: folder }) as string[];
+		} catch {
 			// Directory might not exist or be readable
+			return [];
 		}
-		return files;
 	}
 
 	async function selectFile() {
@@ -1036,6 +1025,10 @@
 		const _ = folderRefreshKey; // Also react to folder refresh
 		if (root) {
 			collectMarkdownFiles(root).then(files => {
+				// A folder refresh usually finds the same files. Assigning anyway
+				// would rebuild fileIndex and push a reconfiguration into the
+				// editor — every time an auto-save woke the folder watcher.
+				if (files.length === allMarkdownFiles.length && files.every((f, i) => f === allMarkdownFiles[i])) return;
 				allMarkdownFiles = files;
 			});
 		} else {

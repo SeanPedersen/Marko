@@ -82,7 +82,11 @@ fn convert_markdown(content: &str) -> String {
     markdown_to_html(&processed, &options)
 }
 
-#[tauri::command]
+// Every command that touches the disk or git is marked `(async)`. A plain
+// `#[tauri::command]` runs on the main thread, and on macOS every key event
+// reaches the webview through that same thread — so a directory walk or a
+// `git status` over a large folder freezes typing for as long as it runs.
+#[tauri::command(async)]
 fn open_markdown(path: String) -> Result<String, String> {
     let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
     Ok(convert_markdown(&content))
@@ -98,12 +102,12 @@ fn file_exists(path: String) -> bool {
     Path::new(&path).is_file()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn read_file_content(path: String) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn save_file_content(path: String, content: String) -> Result<(), String> {
     fs::write(path, content).map_err(|e| e.to_string())
 }
@@ -113,12 +117,12 @@ fn open_file_folder(path: String) -> Result<(), String> {
     opener::reveal(path).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
     fs::rename(old_path, new_path).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn trash_file(path: String) -> Result<(), String> {
     trash::delete(&path).map_err(|e| e.to_string())
 }
@@ -144,7 +148,7 @@ fn is_directory(path: String) -> bool {
     Path::new(clean_path).is_dir()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
     let dir_path = Path::new(&path);
     if !dir_path.is_dir() {
@@ -190,7 +194,48 @@ fn read_directory(path: String) -> Result<Vec<DirEntry>, String> {
     Ok(entries)
 }
 
-#[tauri::command]
+// The wiki-link index needs every markdown file under a folder. Walking the
+// tree from the frontend meant one `read_directory` round trip per directory,
+// serialized — the walk re-runs whenever the folder changes, so a deep vault
+// spent that cost repeatedly while the user typed.
+#[tauri::command(async)]
+fn collect_markdown_files(path: String) -> Result<Vec<String>, String> {
+    const MARKDOWN_EXTENSIONS: &[&str] = &["md", "markdown", "mdown", "mkd"];
+    let mut files: Vec<String> = Vec::new();
+
+    fn walk(dir: &Path, extensions: &[&str], files: &mut Vec<String>) {
+        let entries = match fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if entry.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
+            if path.is_dir() {
+                walk(&path, extensions, files);
+                continue;
+            }
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if extensions.contains(&ext.as_str()) {
+                files.push(path.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    walk(Path::new(&path), MARKDOWN_EXTENSIONS, &mut files);
+    // Directory order is filesystem-dependent; wiki-link resolution picks
+    // between same-named files by index order, so it has to be deterministic.
+    files.sort();
+    Ok(files)
+}
+
+#[tauri::command(async)]
 fn search_file_content(
     folder_path: String,
     query: String,
@@ -623,7 +668,7 @@ fn git_status_to_string(status: git2::Status) -> Option<&'static str> {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_git_status(path: String) -> Result<HashMap<String, String>, String> {
     let repo = match Repository::discover(&path) {
         Ok(r) => r,
@@ -655,7 +700,7 @@ fn get_git_status(path: String) -> Result<HashMap<String, String>, String> {
     Ok(result)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_file_git_status(path: String) -> Result<Option<String>, String> {
     let file_path = Path::new(&path);
     let repo = match Repository::discover(file_path.parent().unwrap_or(file_path)) {
@@ -675,7 +720,7 @@ fn get_file_git_status(path: String) -> Result<Option<String>, String> {
     Ok(git_status_to_string(status).map(|s| s.to_string()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn git_commit_file(path: String, message: String) -> Result<(), String> {
     let file_path = Path::new(&path);
     let repo = Repository::discover(file_path.parent().unwrap_or(file_path))
@@ -710,7 +755,7 @@ fn git_commit_file(path: String, message: String) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn git_revert_file(path: String) -> Result<(), String> {
     let file_path = Path::new(&path);
     let repo = Repository::discover(file_path.parent().unwrap_or(file_path))
@@ -744,7 +789,7 @@ struct GitAheadBehind {
     behind: usize,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn get_git_ahead_behind(path: String) -> Result<Option<GitAheadBehind>, String> {
     let repo = match Repository::discover(&path) {
         Ok(r) => r,
@@ -1344,7 +1389,8 @@ pub fn run() {
             git_sync,
             get_git_ahead_behind,
             git_revert_file,
-            search_file_content
+            search_file_content,
+            collect_markdown_files
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
