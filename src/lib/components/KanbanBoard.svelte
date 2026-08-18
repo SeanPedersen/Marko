@@ -7,9 +7,9 @@
 	import CodeMirrorEditor from './CodeMirrorEditor.svelte';
 	import CardDetailPane from './CardDetailPane.svelte';
 	import Modal from './Modal.svelte';
-	import { parseInline } from 'marked';
+	import { parseInline, Marked, type Token } from 'marked';
 	import DOMPurify from 'dompurify';
-	import { EditorView, keymap } from '@codemirror/view';
+	import { EditorView, keymap, drawSelection } from '@codemirror/view';
 	import { EditorState } from '@codemirror/state';
 	import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 	import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -48,6 +48,10 @@
 		colIdx: number; cardIdx: number; cardEl: HTMLElement;
 		startX: number; startY: number; offsetX: number; offsetY: number;
 	} | null = null;
+
+	// True once a pointer gesture became an actual drag (movement past the
+	// threshold). Suppresses the edit trigger on the click that follows a drag.
+	let didDrag = false;
 
 	// Column delete confirmation
 	let confirmDeleteCol = $state<number | null>(null);
@@ -124,15 +128,19 @@
 		return renderWikiLinks(sanitized);
 	}
 
-	function handleCardClick(e: MouseEvent) {
+	function handleCardClick(e: MouseEvent, colIdx: number, cardIdx: number) {
 		const link = (e.target as HTMLElement).closest<HTMLAnchorElement>('a.wiki-link');
-		if (!link) return;
-		e.preventDefault();
-		e.stopPropagation();
-		const target = link.dataset.target;
-		if (!target) return;
-		const newTab = e.ctrlKey || e.metaKey || e.button === 1;
-		document.dispatchEvent(new CustomEvent('marko:wiki-link', { detail: { target, newTab } }));
+		if (link) {
+			e.preventDefault();
+			e.stopPropagation();
+			const target = link.dataset.target;
+			if (!target) return;
+			const newTab = e.ctrlKey || e.metaKey || e.button === 1;
+			document.dispatchEvent(new CustomEvent('marko:wiki-link', { detail: { target, newTab } }));
+			return;
+		}
+		if (didDrag) return;
+		startEditCard(colIdx, cardIdx, e.clientX, e.clientY);
 	}
 
 	function handleCardAuxClick(e: MouseEvent) {
@@ -176,6 +184,7 @@
 				]),
 				markdown({ base: markdownLanguage }),
 				syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+				drawSelection(),
 				createTheme(),
 				EditorView.contentAttributes.of({
 					autocomplete: 'off',
@@ -192,7 +201,7 @@
 		sharedView = new EditorView({ state, parent: sharedEditorEl });
 	}
 
-	async function startEditCard(colIdx: number, cardIdx: number) {
+	async function startEditCard(colIdx: number, cardIdx: number, clickX?: number, clickY?: number) {
 		if (readonly) return;
 		editingCard = { colIdx, cardIdx };
 		const text = columns[colIdx].cards[cardIdx].text;
@@ -210,10 +219,26 @@
 
 		sharedView.dispatch({
 			changes: { from: 0, to: sharedView.state.doc.length, insert: text },
-			selection: { anchor: 0, head: text.length },
 		});
 		editorVisible = true;
+
+		// Wait for the popup to become visible and lay out before measuring or
+		// focusing. CodeMirror's focus() is a no-op while the element is hidden.
+		await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 		sharedView.focus();
+
+		// Place the caret where the click landed. The editor text is aligned over
+		// the card text, so the click's screen coordinates map straight to a
+		// document position once the popup has laid out.
+		let caret = text.length;
+		if (clickX !== undefined && clickY !== undefined) {
+			const pos = sharedView.posAtCoords({ x: clickX, y: clickY });
+			if (pos !== null) caret = Math.min(pos, text.length);
+		}
+		sharedView.dispatch({
+			selection: { anchor: caret, head: caret },
+			scrollIntoView: true,
+		});
 	}
 
 	function commitEditCard() {
@@ -286,6 +311,7 @@
 		if ((e.target as HTMLElement).closest('input, button, textarea, a')) return;
 		if (e.button !== 0) return;
 
+		didDrag = false;
 		const cardEl = e.currentTarget as HTMLElement;
 		const rect = cardEl.getBoundingClientRect();
 		pendingDrag = {
@@ -322,6 +348,7 @@
 				].join(';');
 				document.body.appendChild(ghostEl);
 				dragSrc = { colIdx, cardIdx };
+				didDrag = true;
 				document.body.style.cursor = 'grabbing';
 			}
 		}
@@ -530,7 +557,7 @@
 
 <!-- Shared CodeMirror instance for card editing (always mounted, hidden when inactive) -->
 <div bind:this={sharedEditorEl}
-	class="shared-editor {editorVisible ? 'block' : 'hidden'} fixed z-[1000] bg-(--color-canvas-default) border border-(--color-accent-fg) rounded-[6px] px-2 py-[6px] shadow-[0_4px_16px_rgba(0,0,0,0.18)] box-border min-h-[36px] select-text"
+	class="shared-editor {editorVisible ? 'block' : 'hidden'} fixed z-[1000] bg-(--color-canvas-default) border border-(--color-border-default) rounded-[6px] px-[10px] py-2 shadow-[0_4px_16px_rgba(0,0,0,0.18)] box-border min-h-[36px] select-text"
 	style:left="{editorPos.left}px"
 	style:top="{editorPos.top}px"
 	style:width="{editorPos.width}px"
@@ -643,9 +670,8 @@
 											class="card-text flex-1 text-(--color-fg-default) leading-[1.45] break-words tracking-[-0.01em]"
 											role="button"
 											tabindex={readonly ? -1 : 0}
-											onclick={handleCardClick}
+											onclick={(e) => handleCardClick(e, colIdx, cardIdx)}
 											onauxclick={handleCardAuxClick}
-											ondblclick={() => startEditCard(colIdx, cardIdx)}
 											onkeydown={(e) => { if (e.key === 'Enter') startEditCard(colIdx, cardIdx); }}
 										>{@html renderCardMarkdown(card.text)}</span>
 										{#if !readonly && card.body}
@@ -810,7 +836,6 @@
 		letter-spacing: -0.01em;
 		line-height: 1.45;
 		padding: 0;
-		min-height: 20px;
 	}
 
 	.shared-editor :global(.cm-line) {
