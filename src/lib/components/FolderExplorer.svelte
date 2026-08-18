@@ -363,6 +363,8 @@
 			path: entry.path,
 			tabId: null,
 			hasSelection: false,
+			x: event.clientX,
+			y: event.clientY,
 		}).catch(console.error);
 	}
 

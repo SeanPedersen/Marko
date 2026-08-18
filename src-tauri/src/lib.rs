@@ -871,6 +871,8 @@ fn show_context_menu(
     path: Option<String>,
     tab_id: Option<String>,
     has_selection: bool,
+    x: Option<f64>,
+    y: Option<f64>,
 ) -> Result<(), String> {
     {
         let mut path_lock = state.active_path.lock().unwrap();
@@ -1092,6 +1094,34 @@ fn show_context_menu(
             }
         }
     }
+
+    // On Linux, GTK's default popup position doesn't reliably track the
+    // cursor (especially under Wayland, where the absolute pointer position
+    // can't be queried), so the menu ends up centered on the window instead
+    // of under the click. Popping up at the click's window-relative
+    // coordinates sidesteps that; other platforms already position the
+    // native menu at the cursor correctly without this.
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    if let (Some(x), Some(y)) = (x, y) {
+        menu.popup_at(window, tauri::LogicalPosition::new(x, y))
+            .map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    )))]
+    let _ = (x, y);
 
     menu.popup(window).map_err(|e| e.to_string())?;
     Ok(())
