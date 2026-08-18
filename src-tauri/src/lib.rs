@@ -871,6 +871,7 @@ fn show_context_menu(
     path: Option<String>,
     tab_id: Option<String>,
     has_selection: bool,
+    is_dir: Option<bool>,
     x: Option<f64>,
     y: Option<f64>,
 ) -> Result<(), String> {
@@ -971,6 +972,22 @@ fn show_context_menu(
             menu.append(&undo).map_err(|e| e.to_string())?;
         }
         "file_tree" => {
+            if is_dir != Some(true) {
+                let open_new_tab = tauri::menu::MenuItem::with_id(
+                    &app,
+                    "ctx_file_open_new_tab",
+                    "Open in New Tab",
+                    true,
+                    None::<&str>,
+                )
+                .map_err(|e| e.to_string())?;
+                menu.append(&open_new_tab).map_err(|e| e.to_string())?;
+
+                let sep0 =
+                    tauri::menu::PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+                menu.append(&sep0).map_err(|e| e.to_string())?;
+            }
+
             let reveal_label = if cfg!(target_os = "macos") {
                 "Reveal in Finder"
             } else {
@@ -1257,6 +1274,14 @@ pub fn run() {
                     if let Some(tab_id) = tab_lock.as_ref() {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.emit("menu-tab-close-right", tab_id);
+                        }
+                    }
+                }
+                "ctx_file_open_new_tab" => {
+                    let path_lock = state.active_path.lock().unwrap();
+                    if let Some(path) = path_lock.as_ref() {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("menu-file-open-new-tab", path);
                         }
                     }
                 }

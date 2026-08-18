@@ -898,6 +898,9 @@
 					appWindow.destroy();
 				}),
 				listen<string>('file-path', (event) => { handleFilePath(event.payload); }),
+				listen<string>('menu-file-open-new-tab', (event) => {
+					loadMarkdown(event.payload, { newTab: true });
+				}),
 				listen<string>('menu-file-copy-name', (event) => {
 					const name = event.payload.split(/[/\\]/).pop() || event.payload;
 					navigator.clipboard.writeText(name).catch(console.error);

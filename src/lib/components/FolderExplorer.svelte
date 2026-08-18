@@ -363,6 +363,7 @@
 			path: entry.path,
 			tabId: null,
 			hasSelection: false,
+			isDir: entry.is_dir,
 			x: event.clientX,
 			y: event.clientY,
 		}).catch(console.error);
