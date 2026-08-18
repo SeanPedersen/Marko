@@ -1434,6 +1434,7 @@
 					readonly={false}
 					{theme}
 					{fileIndex}
+					{zoomLevel}
 					bind:rawMode={kanbanRawMode}
 				/>
 			{:else if isMermaid}

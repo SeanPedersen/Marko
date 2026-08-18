@@ -23,6 +23,7 @@
 		theme = 'system',
 		rawMode = $bindable(false),
 		fileIndex = { entries: [], byBasename: new Map(), byFilename: new Map() } as FileIndex,
+		zoomLevel = 100,
 	}: {
 		content: string;
 		onchange: (s: string) => void;
@@ -30,6 +31,7 @@
 		theme?: 'system' | 'dark' | 'light';
 		rawMode?: boolean;
 		fileIndex?: FileIndex;
+		zoomLevel?: number;
 	} = $props();
 
 	let columns = $state<KanbanColumn[]>([]);
@@ -77,8 +79,12 @@
 
 	// Shared CodeMirror instance for card editing
 	let sharedEditorEl: HTMLDivElement;
+	let backdropEl: HTMLDivElement | undefined = $state();
 	let sharedView: EditorView | null = null;
-	let editorPos = $state({ left: 0, top: 0, width: 280, height: 36 });
+	let editorPos = $state({
+		left: 0, top: 0, width: 280, height: 36, zoom: 1,
+		clip: { top: 0, right: 0, bottom: 0, left: 0 },
+	});
 	let editorVisible = $state(false);
 
 	// Parse content whenever it changes externally (but not when rawMode is active)
@@ -160,11 +166,79 @@
 
 	// --- Shared CodeMirror editor ---
 
+	// The card editor popup and its backdrop must render outside the
+	// zoomed content wrapper (MarkdownViewer's `zoom: {zoomLevel/100}`
+	// container). WebKitGTK (Linux) re-applies an ancestor's CSS `zoom` to
+	// the left/top/transform of `position: fixed` descendants, even though
+	// getBoundingClientRect() already returns true, post-zoom viewport
+	// pixels — so a fixed popup positioned from that rect and left inside
+	// the zoomed subtree ends up double-scaled away from the card. Portaling
+	// to <body> removes the zoomed ancestor from the chain entirely.
+	function portal(node: HTMLElement) {
+		document.body.appendChild(node);
+		return { destroy() { node.remove(); } };
+	}
+
+	// Cumulative `zoom` of an element's ancestors (e.g. MarkdownViewer's
+	// content-zoom wrapper), so the portaled popup can re-apply it and match
+	// the card's rendered font/padding size once it's outside that ancestor.
+	function getAncestorZoom(el: HTMLElement): number {
+		let zoom = 1;
+		for (let node = el.parentElement; node; node = node.parentElement) {
+			const z = parseFloat(getComputedStyle(node).zoom);
+			if (!Number.isNaN(z)) zoom *= z;
+		}
+		return zoom;
+	}
+
+	// The popup and its full-viewport backdrop (needed to catch outside
+	// clicks that commit the edit) both sit above the board in paint order,
+	// so a wheel event over either one never reaches the column/board
+	// scroll containers underneath. Forward it manually to whichever is
+	// under the pointer, unless the pointer is over the CodeMirror content
+	// itself and its own internal scroller can still consume the scroll.
+	function forwardWheelToBoard(e: WheelEvent) {
+		const scroller = (e.target as HTMLElement)?.closest?.<HTMLElement>('.cm-scroller');
+		if (scroller) {
+			const atTop = scroller.scrollTop <= 0;
+			const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+			if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) return;
+		}
+
+		const prevPopupPointerEvents = sharedEditorEl.style.pointerEvents;
+		const prevBackdropPointerEvents = backdropEl?.style.pointerEvents;
+		sharedEditorEl.style.pointerEvents = 'none';
+		if (backdropEl) backdropEl.style.pointerEvents = 'none';
+		const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+		sharedEditorEl.style.pointerEvents = prevPopupPointerEvents;
+		if (backdropEl) backdropEl.style.pointerEvents = prevBackdropPointerEvents ?? '';
+
+		const vScroll = el?.closest<HTMLElement>('.overflow-y-auto');
+		const hScroll = el?.closest<HTMLElement>('.overflow-x-auto');
+		if (!vScroll && !hScroll) return;
+
+		e.preventDefault();
+		if (vScroll) vScroll.scrollTop += e.deltaY;
+		if (hScroll) hScroll.scrollLeft += e.deltaX;
+	}
+
+	// Scrolling a column moves the (invisible) card being edited, but the
+	// popup is `position: fixed` at a snapshot of its old screen position —
+	// re-sync on every scroll anywhere (wheel, scrollbar drag, keyboard) so
+	// it stays glued to the card instead of appearing stuck in place.
+	function handleAnyScroll() {
+		if (!editorVisible || !editingCard) return;
+		const cardEl = findCardEl(editingCard.colIdx, editingCard.cardIdx);
+		if (cardEl) syncEditorPosition(cardEl);
+	}
+
 	onMount(() => {
 		initSharedEditor();
+		document.addEventListener('scroll', handleAnyScroll, true);
 	});
 
 	onDestroy(() => {
+		document.removeEventListener('scroll', handleAnyScroll, true);
 		sharedView?.destroy();
 		sharedView = null;
 		debouncedPaneCommit.cancel();
@@ -201,6 +275,74 @@
 		sharedView = new EditorView({ state, parent: sharedEditorEl });
 	}
 
+	// getBoundingClientRect() already returns true viewport pixels (it
+	// accounts for the MarkdownViewer zoom wrapper's `zoom` CSS), but the
+	// popup is portaled to <body> (see `portal` above) and so no longer
+	// inherits that zoom — without it, its font/padding would render at
+	// 1x while the card's render at the zoomed size. Reapplying the same
+	// `zoom` directly on the popup fixes the font, but then also rescales
+	// the popup's own left/top/width/height by that factor (verified: a
+	// self-zoomed fixed element's transform and box are multiplied by its
+	// zoom too), so those are pre-divided here to cancel it back out. Left
+	// unrounded: rounding before the zoom re-multiplies it introduces up to
+	// half a zoomed pixel of drift from the card's true edge — invisible
+	// most of the time, but noticeable once focus draws the eye to the
+	// border/caret.
+	function syncEditorPosition(cardEl: HTMLElement) {
+		const rect = cardEl.getBoundingClientRect();
+		const zoom = getAncestorZoom(cardEl);
+		editorPos = {
+			left: rect.left / zoom,
+			top: rect.top / zoom,
+			width: rect.width / zoom,
+			height: rect.height / zoom,
+			zoom,
+			clip: computeEditorClip(cardEl, rect, zoom),
+		};
+	}
+
+	// The popup is portaled to <body> (see `portal` above), so it no longer
+	// gets clipped by the column's `overflow-y-auto` (or the board's
+	// `overflow-x-auto`) the way the real card would when scrolled out of
+	// view — it would otherwise render on top of the column header/board
+	// edge instead of disappearing behind it. `clip-path: inset()` restores
+	// that by cutting the popup to the intersection of those containers'
+	// (unmoving) viewport bounds, same as the browser would for the card.
+	function computeEditorClip(cardEl: HTMLElement, rect: DOMRect, zoom: number) {
+		const column = cardEl.closest<HTMLElement>('.overflow-y-auto');
+		const board = cardEl.closest<HTMLElement>('.overflow-x-auto');
+		const bounds = [column, board].filter((el) => el !== null).map((el) => el.getBoundingClientRect());
+		if (bounds.length === 0) return { top: 0, right: 0, bottom: 0, left: 0 };
+
+		const visTop = Math.max(...bounds.map((b) => b.top));
+		const visBottom = Math.min(...bounds.map((b) => b.bottom));
+		const visLeft = Math.max(...bounds.map((b) => b.left));
+		const visRight = Math.min(...bounds.map((b) => b.right));
+
+		return {
+			top: Math.max(0, visTop - rect.top) / zoom,
+			right: Math.max(0, rect.right - visRight) / zoom,
+			bottom: Math.max(0, rect.bottom - visBottom) / zoom,
+			left: Math.max(0, visLeft - rect.left) / zoom,
+		};
+	}
+
+	function findCardEl(colIdx: number, cardIdx: number): HTMLElement | null {
+		return document.querySelector<HTMLElement>(
+			`[data-col-idx="${colIdx}"][data-card-idx="${cardIdx}"]`
+		);
+	}
+
+	// Re-measure the card whenever the content zoom changes while the popup
+	// is open, otherwise a stale editorPos (captured at the old zoom) drifts
+	// off the card as soon as the user zooms in/out mid-edit.
+	$effect(() => {
+		void zoomLevel;
+		if (!editorVisible || !editingCard) return;
+		const cardEl = findCardEl(editingCard.colIdx, editingCard.cardIdx);
+		if (cardEl) syncEditorPosition(cardEl);
+	});
+
 	async function startEditCard(colIdx: number, cardIdx: number, clickX?: number, clickY?: number) {
 		if (readonly) return;
 		editingCard = { colIdx, cardIdx };
@@ -209,13 +351,10 @@
 
 		await tick();
 
-		const cardEl = document.querySelector<HTMLElement>(
-			`[data-col-idx="${colIdx}"][data-card-idx="${cardIdx}"]`
-		);
+		const cardEl = findCardEl(colIdx, cardIdx);
 		if (!cardEl || !sharedView) return;
 
-		const rect = cardEl.getBoundingClientRect();
-		editorPos = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+		syncEditorPosition(cardEl);
 
 		sharedView.dispatch({
 			changes: { from: 0, to: sharedView.state.doc.length, insert: text },
@@ -559,19 +698,24 @@
 />
 
 <!-- Shared CodeMirror instance for card editing (always mounted, hidden when inactive) -->
-<div bind:this={sharedEditorEl}
-	class="shared-editor {editorVisible ? 'block' : 'hidden'} fixed z-[1000] bg-(--color-canvas-default) border border-(--color-border-default) rounded-[6px] px-[10px] py-2 shadow-[0_4px_16px_rgba(0,0,0,0.18)] box-border select-text"
-	style:left="{editorPos.left}px"
-	style:top="{editorPos.top}px"
+<div bind:this={sharedEditorEl} use:portal
+	class="shared-editor {editorVisible ? 'block' : 'hidden'} fixed left-0 top-0 z-[1000] bg-(--color-canvas-default) border border-(--color-border-default) rounded-[6px] px-[10px] py-2 shadow-[0_4px_16px_rgba(0,0,0,0.18)] box-border select-text will-change-transform"
+	style:transform="translate({editorPos.left}px, {editorPos.top}px)"
 	style:width="{editorPos.width}px"
 	style:height="{editorPos.height}px"
+	style:zoom={editorPos.zoom}
+	style:clip-path="inset({editorPos.clip.top}px {editorPos.clip.right}px {editorPos.clip.bottom}px {editorPos.clip.left}px)"
+	onwheel={forwardWheelToBoard}
 ></div>
 
 <!-- Backdrop: commits on outside click -->
 {#if editorVisible}
 	<div
+		bind:this={backdropEl}
+		use:portal
 		class="fixed inset-0 z-[999]"
 		role="presentation"
+		onwheel={forwardWheelToBoard}
 		onpointerdown={(e) => {
 			// Check if the click is on a kanban card underneath the backdrop
 			const elements = document.elementsFromPoint(e.clientX, e.clientY);
@@ -852,6 +996,7 @@
 		padding: 0;
 		max-height: 180px;
 		overflow-y: auto;
+		scrollbar-gutter: stable;
 	}
 
 	.shared-editor :global(.cm-content) {
