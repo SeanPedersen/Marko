@@ -962,7 +962,7 @@
 				try {
 					const paths = await invoke('send_markdown_path') as string[];
 					if (paths.length > 0) {
-						loadMarkdown(paths[0], { newTab: true });
+						handleFilePath(paths[0]);
 					} else {
 						// On macOS, the Opened event (file association) may arrive after
 						// the frontend initializes. Retry a few times to catch it.
@@ -974,7 +974,7 @@
 								const retryPaths = await invoke('send_markdown_path') as string[];
 								if (retryPaths.length > 0) {
 									clearInterval(retryInterval);
-									loadMarkdown(retryPaths[0], { newTab: true });
+									handleFilePath(retryPaths[0]);
 								} else if (retries >= maxRetries) {
 									clearInterval(retryInterval);
 								}

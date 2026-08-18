@@ -464,13 +464,11 @@ fn is_win11() -> bool {
 fn install_cli(_app: AppHandle) -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
-        let app_path = std::env::current_exe().map_err(|e| e.to_string())?;
-
         let cli_path = Path::new("/usr/local/bin/marko");
 
-        // Create a shell script wrapper
-        let script_content = format!(
-            r#"#!/bin/bash
+        // Route everything through `open -a "Marko"` (LaunchServices resolves the app
+        // by name) so the wrapper never embeds a build-specific binary path.
+        let script_content = r#"#!/bin/bash
 # Marko CLI - opens files with Marko markdown editor
 if [ $# -eq 0 ]; then
     open -a "Marko"
@@ -485,16 +483,14 @@ else
             file="$(cd "$(dirname "$arg")" && pwd)/$(basename "$arg")"
         fi
         # Remove trailing /. if present
-        file="${{file%/.}}"
-        "{}" "$file" &
+        file="${file%/.}"
+        open -a "Marko" "$file"
     done
 fi
-"#,
-            app_path.display()
-        );
+"#;
 
         // Try to write directly first, then fall back to using osascript for admin rights
-        match fs::write(cli_path, &script_content) {
+        match fs::write(cli_path, script_content) {
             Ok(_) => {
                 // Make executable
                 std::process::Command::new("chmod")
@@ -506,7 +502,7 @@ fi
             Err(_) => {
                 // Need elevated permissions - write to temp file first, then use osascript to copy
                 let temp_path = "/tmp/marko_cli_script.sh";
-                fs::write(temp_path, &script_content).map_err(|e| e.to_string())?;
+                fs::write(temp_path, script_content).map_err(|e| e.to_string())?;
 
                 let apple_script = r#"do shell script "cp /tmp/marko_cli_script.sh /usr/local/bin/marko && chmod +x /usr/local/bin/marko && rm /tmp/marko_cli_script.sh" with administrator privileges"#;
 
@@ -533,12 +529,17 @@ fi
 
         fs::create_dir_all(&cli_dir).map_err(|e| e.to_string())?;
 
+        // Copy the running binary into the CLI dir so the shim keeps working even if
+        // `app_path` (e.g. a dev build under target/release) is later removed or moved.
+        let cli_bin = cli_dir.join("marko-bin.exe");
+        fs::copy(&app_path, &cli_bin).map_err(|e| e.to_string())?;
+
         let bat_path = cli_dir.join("marko.cmd");
         let script_content = format!(
             r#"@echo off
 "{}" %*
 "#,
-            app_path.display()
+            cli_bin.display()
         );
 
         fs::write(&bat_path, script_content).map_err(|e| e.to_string())?;
@@ -588,14 +589,18 @@ fi
 
     #[cfg(target_os = "linux")]
     {
+        // Copy the running binary into a stable location so the CLI keeps working
+        // even if `app_path` (e.g. a dev build under target/release) is later removed.
         let app_path = std::env::current_exe().map_err(|e| e.to_string())?;
+        let cli_dir = Path::new("/usr/local/lib/marko");
+        let cli_bin = cli_dir.join("marko-bin");
         let cli_path = Path::new("/usr/local/bin/marko");
 
         let script_content = format!(
             r#"#!/bin/bash
 # Marko CLI - opens files with Marko markdown editor
 if [ $# -eq 0 ]; then
-    "{}" &
+    "{bin}" &
 else
     for arg in "$@"; do
         # Resolve to absolute path and normalize
@@ -608,37 +613,55 @@ else
         fi
         # Remove trailing /. if present
         file="${{file%/.}}"
-        "{}" "$file" &
+        "{bin}" "$file" &
     done
 fi
 "#,
-            app_path.display(),
-            app_path.display()
+            bin = cli_bin.display()
         );
 
-        // Try direct write first
-        match fs::write(cli_path, &script_content) {
+        // Try direct write first (copy binary + write wrapper script)
+        let direct_result = (|| -> std::io::Result<()> {
+            fs::create_dir_all(cli_dir)?;
+            fs::copy(&app_path, &cli_bin)?;
+            fs::write(cli_path, &script_content)?;
+            Ok(())
+        })();
+
+        match direct_result {
             Ok(_) => {
                 std::process::Command::new("chmod")
-                    .args(["+x", "/usr/local/bin/marko"])
+                    .args(["+x", cli_bin.to_str().unwrap(), "/usr/local/bin/marko"])
                     .output()
                     .map_err(|e| e.to_string())?;
                 Ok("CLI installed successfully".to_string())
             }
             Err(_) => {
-                // Use pkexec for elevated permissions - write to temp first
-                let temp_path = "/tmp/marko_cli_script.sh";
-                fs::write(temp_path, &script_content).map_err(|e| e.to_string())?;
+                // Use pkexec for elevated permissions - write to temp files first
+                let temp_script = "/tmp/marko_cli_script.sh";
+                let temp_bin = "/tmp/marko_cli_bin";
+                fs::write(temp_script, &script_content).map_err(|e| e.to_string())?;
+                fs::copy(&app_path, temp_bin).map_err(|e| e.to_string())?;
+
+                let install_cmd = format!(
+                    "mkdir -p {dir} && cp {temp_bin} {bin} && chmod +x {bin} && cp {temp_script} {path} && chmod +x {path} && rm {temp_bin} {temp_script}",
+                    dir = cli_dir.display(),
+                    bin = cli_bin.display(),
+                    temp_bin = temp_bin,
+                    temp_script = temp_script,
+                    path = cli_path.display(),
+                );
 
                 let output = std::process::Command::new("pkexec")
-                    .args(["bash", "-c", "cp /tmp/marko_cli_script.sh /usr/local/bin/marko && chmod +x /usr/local/bin/marko && rm /tmp/marko_cli_script.sh"])
+                    .args(["bash", "-c", &install_cmd])
                     .output()
                     .map_err(|e| e.to_string())?;
 
                 if output.status.success() {
                     Ok("CLI installed successfully".to_string())
                 } else {
-                    let _ = fs::remove_file(temp_path);
+                    let _ = fs::remove_file(temp_script);
+                    let _ = fs::remove_file(temp_bin);
                     Err(String::from_utf8_lossy(&output.stderr).to_string())
                 }
             }
