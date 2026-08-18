@@ -53,6 +53,7 @@
 	const DEBUG_MACOS = false;
 
 	const isMac = typeof navigator !== 'undefined' && (navigator.userAgent.includes('Macintosh') || DEBUG_MACOS);
+	const isLinux = typeof navigator !== 'undefined' && navigator.userAgent.includes('Linux') && !isMac;
 
 	let isWin11 = $state(false);
 
@@ -145,7 +146,7 @@
 <div
 	class="h-9 bg-(--color-canvas-default) flex justify-between items-center select-none fixed top-0 left-0 right-0 z-[9999] [font-family:var(--font-win)] border-b transition-[border-color] duration-200 {isScrolled ? 'border-(--color-border-muted)' : 'border-transparent'}"
 >
-	{#if !isMac && !isWin11}
+	{#if !isMac && !isWin11 && !isLinux}
 		<div class="absolute top-0 left-0 right-0 h-px bg-(--color-window-border-top) z-[10002] pointer-events-none"></div>
 	{/if}
 	<div class="flex items-center pl-[10px] gap-3 relative z-[10000]" data-tauri-drag-region>
@@ -269,7 +270,19 @@
 	</div>
 
 	<div class="flex h-full relative z-[10000]" data-tauri-drag-region>
-		{#if !isMac}
+		{#if isLinux}
+			<div class="flex items-center gap-[6px] px-[10px] h-full" data-tauri-drag-region>
+				<button class="w-7 h-7 rounded-full flex justify-center items-center bg-(--color-canvas-subtle) text-(--color-fg-muted) border-none cursor-default transition-colors duration-100 hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)" onclick={() => appWindow.minimize()} aria-label="Minimize">
+					<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="currentColor" width="10" height="1" x="1" y="6" /></svg>
+				</button>
+				<button class="w-7 h-7 rounded-full flex justify-center items-center bg-(--color-canvas-subtle) text-(--color-fg-muted) border-none cursor-default transition-colors duration-100 hover:bg-(--color-neutral-muted) hover:text-(--color-fg-default)" onclick={() => appWindow.toggleMaximize()} aria-label="Maximize">
+					<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="none" stroke="currentColor" stroke-width="1" width="9" height="9" x="1.5" y="1.5" /></svg>
+				</button>
+				<button class="w-7 h-7 rounded-full flex justify-center items-center bg-(--color-canvas-subtle) text-(--color-fg-muted) border-none cursor-default transition-colors duration-100 hover:bg-[#e81123] hover:text-white" onclick={() => appWindow.close()} aria-label="Close">
+					<svg width="12" height="12" viewBox="0 0 12 12"><path fill="currentColor" d="M11 1.7L10.3 1 6 5.3 1.7 1 1 1.7 5.3 6 1 10.3 1.7 11 6 6.7 10.3 11 11 10.3 6.7 6z" /></svg>
+				</button>
+			</div>
+		{:else if !isMac}
 			<button class="w-[46px] h-8 flex justify-center items-center bg-transparent border-none text-(--color-fg-default) opacity-80 cursor-default transition-all duration-100 hover:bg-(--color-canvas-subtle) hover:opacity-100" onclick={() => appWindow.minimize()} aria-label="Minimize">
 				<svg width="12" height="12" viewBox="0 0 12 12"><rect fill="currentColor" width="10" height="1" x="1" y="6" /></svg>
 			</button>
