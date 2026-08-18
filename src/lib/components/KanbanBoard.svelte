@@ -78,7 +78,7 @@
 	// Shared CodeMirror instance for card editing
 	let sharedEditorEl: HTMLDivElement;
 	let sharedView: EditorView | null = null;
-	let editorPos = $state({ left: 0, top: 0, width: 280 });
+	let editorPos = $state({ left: 0, top: 0, width: 280, height: 36 });
 	let editorVisible = $state(false);
 
 	// Parse content whenever it changes externally (but not when rawMode is active)
@@ -215,7 +215,7 @@
 		if (!cardEl || !sharedView) return;
 
 		const rect = cardEl.getBoundingClientRect();
-		editorPos = { left: rect.left, top: rect.top, width: rect.width };
+		editorPos = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
 
 		sharedView.dispatch({
 			changes: { from: 0, to: sharedView.state.doc.length, insert: text },
@@ -225,20 +225,23 @@
 		// Wait for the popup to become visible and lay out before measuring or
 		// focusing. CodeMirror's focus() is a no-op while the element is hidden.
 		await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-		sharedView.focus();
 
-		// Place the caret where the click landed. The editor text is aligned over
-		// the card text, so the click's screen coordinates map straight to a
-		// document position once the popup has laid out.
+		// Place the caret where the click landed. Compute the position BEFORE
+		// focus so the cursor never flashes at position 0.
 		let caret = text.length;
 		if (clickX !== undefined && clickY !== undefined) {
-			const pos = sharedView.posAtCoords({ x: clickX, y: clickY });
+			let pos = sharedView.posAtCoords({ x: clickX, y: clickY });
+			if (pos === null) {
+				await new Promise((r) => requestAnimationFrame(r));
+				pos = sharedView.posAtCoords({ x: clickX, y: clickY });
+			}
 			if (pos !== null) caret = Math.min(pos, text.length);
 		}
 		sharedView.dispatch({
 			selection: { anchor: caret, head: caret },
 			scrollIntoView: true,
 		});
+		sharedView.focus();
 	}
 
 	function commitEditCard() {
@@ -557,15 +560,36 @@
 
 <!-- Shared CodeMirror instance for card editing (always mounted, hidden when inactive) -->
 <div bind:this={sharedEditorEl}
-	class="shared-editor {editorVisible ? 'block' : 'hidden'} fixed z-[1000] bg-(--color-canvas-default) border border-(--color-border-default) rounded-[6px] px-[10px] py-2 shadow-[0_4px_16px_rgba(0,0,0,0.18)] box-border min-h-[36px] select-text"
+	class="shared-editor {editorVisible ? 'block' : 'hidden'} fixed z-[1000] bg-(--color-canvas-default) border border-(--color-border-default) rounded-[6px] px-[10px] py-2 shadow-[0_4px_16px_rgba(0,0,0,0.18)] box-border select-text"
 	style:left="{editorPos.left}px"
 	style:top="{editorPos.top}px"
 	style:width="{editorPos.width}px"
+	style:height="{editorPos.height}px"
 ></div>
 
 <!-- Backdrop: commits on outside click -->
 {#if editorVisible}
-	<div class="fixed inset-0 z-[999]" onpointerdown={commitEditCard} role="presentation"></div>
+	<div
+		class="fixed inset-0 z-[999]"
+		role="presentation"
+		onpointerdown={(e) => {
+			// Check if the click is on a kanban card underneath the backdrop
+			const elements = document.elementsFromPoint(e.clientX, e.clientY);
+			for (const el of elements) {
+				const card = (el as HTMLElement).closest?.<HTMLElement>('.kanban-card');
+				if (card) {
+					const colIdx = parseInt(card.dataset.colIdx ?? '');
+					const cardIdx = parseInt(card.dataset.cardIdx ?? '');
+					if (!isNaN(colIdx) && !isNaN(cardIdx)) {
+						commitEditCard();
+						startEditCard(colIdx, cardIdx, e.clientX, e.clientY);
+						return;
+					}
+				}
+			}
+			commitEditCard();
+		}}
+	></div>
 {/if}
 
 <div class="kanban-board flex flex-col h-full bg-(--color-canvas-default) overflow-hidden [font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] select-none">
@@ -820,6 +844,7 @@
 
 	/* Shared CodeMirror card editor */
 	.shared-editor :global(.cm-editor) {
+		height: 100%;
 		outline: none;
 	}
 
