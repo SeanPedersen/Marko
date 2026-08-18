@@ -529,17 +529,41 @@ fi
 
         fs::create_dir_all(&cli_dir).map_err(|e| e.to_string())?;
 
-        // Copy the running binary into the CLI dir so the shim keeps working even if
-        // `app_path` (e.g. a dev build under target/release) is later removed or moved.
+        // The NSIS installer's "both" mode lets the user pick per-user or per-machine
+        // install, so the packaged binary can land in either location. The shim checks
+        // both at launch time (in that order) so it always resolves to whatever is
+        // currently installed there — no reinstalling the CLI after every app update.
+        // Only fall back to a copy of the running binary when neither install is found
+        // (e.g. invoked from a dev build).
         let cli_bin = cli_dir.join("marko-bin.exe");
-        fs::copy(&app_path, &cli_bin).map_err(|e| e.to_string())?;
+        let per_machine = std::env::var("ProgramFiles")
+            .map(|p| Path::new(&p).join("marko").join("marko.exe"))
+            .ok();
+        let per_user = Path::new(&local_app_data).join("marko").join("marko.exe");
+        let has_packaged_install =
+            per_machine.as_deref().is_some_and(|p| p.exists()) || per_user.exists();
+
+        if !has_packaged_install {
+            fs::copy(&app_path, &cli_bin).map_err(|e| e.to_string())?;
+        }
 
         let bat_path = cli_dir.join("marko.cmd");
         let script_content = format!(
             r#"@echo off
-"{}" %*
+if exist "{per_machine}" (
+    "{per_machine}" %*
+) else if exist "{per_user}" (
+    "{per_user}" %*
+) else (
+    "{fallback}" %*
+)
 "#,
-            cli_bin.display()
+            per_machine = per_machine
+                .as_deref()
+                .unwrap_or_else(|| Path::new(""))
+                .display(),
+            per_user = per_user.display(),
+            fallback = cli_bin.display()
         );
 
         fs::write(&bat_path, script_content).map_err(|e| e.to_string())?;
@@ -589,12 +613,21 @@ fi
 
     #[cfg(target_os = "linux")]
     {
-        // Copy the running binary into a stable location so the CLI keeps working
-        // even if `app_path` (e.g. a dev build under target/release) is later removed.
         let app_path = std::env::current_exe().map_err(|e| e.to_string())?;
         let cli_dir = Path::new("/usr/local/lib/marko");
         let cli_bin = cli_dir.join("marko-bin");
         let cli_path = Path::new("/usr/local/bin/marko");
+
+        // Prefer the fixed path the .deb/.pkg.tar.zst package installs to, so the CLI
+        // wrapper always resolves to whatever is currently installed there — no
+        // reinstalling the CLI after every app update. Only fall back to copying the
+        // running binary when there's no packaged install (e.g. a dev build).
+        let packaged_bin = Path::new("/usr/bin/marko");
+        let target_bin: &Path = if packaged_bin.exists() {
+            packaged_bin
+        } else {
+            &cli_bin
+        };
 
         let script_content = format!(
             r#"#!/bin/bash
@@ -617,13 +650,18 @@ else
     done
 fi
 "#,
-            bin = cli_bin.display()
+            bin = target_bin.display()
         );
 
-        // Try direct write first (copy binary + write wrapper script)
+        // Try direct write first (copy binary if needed + write wrapper script)
         let direct_result = (|| -> std::io::Result<()> {
-            fs::create_dir_all(cli_dir)?;
-            fs::copy(&app_path, &cli_bin)?;
+            if !packaged_bin.exists() {
+                fs::create_dir_all(cli_dir)?;
+                fs::copy(&app_path, &cli_bin)?;
+                std::process::Command::new("chmod")
+                    .args(["+x", cli_bin.to_str().unwrap()])
+                    .output()?;
+            }
             fs::write(cli_path, &script_content)?;
             Ok(())
         })();
@@ -631,7 +669,7 @@ fi
         match direct_result {
             Ok(_) => {
                 std::process::Command::new("chmod")
-                    .args(["+x", cli_bin.to_str().unwrap(), "/usr/local/bin/marko"])
+                    .args(["+x", "/usr/local/bin/marko"])
                     .output()
                     .map_err(|e| e.to_string())?;
                 Ok("CLI installed successfully".to_string())
@@ -639,18 +677,26 @@ fi
             Err(_) => {
                 // Use pkexec for elevated permissions - write to temp files first
                 let temp_script = "/tmp/marko_cli_script.sh";
-                let temp_bin = "/tmp/marko_cli_bin";
                 fs::write(temp_script, &script_content).map_err(|e| e.to_string())?;
-                fs::copy(&app_path, temp_bin).map_err(|e| e.to_string())?;
 
-                let install_cmd = format!(
-                    "mkdir -p {dir} && cp {temp_bin} {bin} && chmod +x {bin} && cp {temp_script} {path} && chmod +x {path} && rm {temp_bin} {temp_script}",
-                    dir = cli_dir.display(),
-                    bin = cli_bin.display(),
-                    temp_bin = temp_bin,
-                    temp_script = temp_script,
-                    path = cli_path.display(),
-                );
+                let install_cmd = if packaged_bin.exists() {
+                    format!(
+                        "cp {temp_script} {path} && chmod +x {path} && rm {temp_script}",
+                        temp_script = temp_script,
+                        path = cli_path.display(),
+                    )
+                } else {
+                    let temp_bin = "/tmp/marko_cli_bin";
+                    fs::copy(&app_path, temp_bin).map_err(|e| e.to_string())?;
+                    format!(
+                        "mkdir -p {dir} && cp {temp_bin} {bin} && chmod +x {bin} && cp {temp_script} {path} && chmod +x {path} && rm {temp_bin} {temp_script}",
+                        dir = cli_dir.display(),
+                        bin = cli_bin.display(),
+                        temp_bin = temp_bin,
+                        temp_script = temp_script,
+                        path = cli_path.display(),
+                    )
+                };
 
                 let output = std::process::Command::new("pkexec")
                     .args(["bash", "-c", &install_cmd])
@@ -661,7 +707,7 @@ fi
                     Ok("CLI installed successfully".to_string())
                 } else {
                     let _ = fs::remove_file(temp_script);
-                    let _ = fs::remove_file(temp_bin);
+                    let _ = fs::remove_file("/tmp/marko_cli_bin");
                     Err(String::from_utf8_lossy(&output.stderr).to_string())
                 }
             }
