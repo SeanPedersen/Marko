@@ -835,7 +835,7 @@
 									<div class="flex items-start w-full">
 										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 										<span
-											class="card-text flex-1 text-(--color-fg-default) leading-[1.45] break-words tracking-[-0.01em]"
+											class="card-text flex-1 min-w-0 text-(--color-fg-default) leading-[1.45] break-words tracking-[-0.01em]"
 											role="button"
 											tabindex={readonly ? -1 : 0}
 											onclick={(e) => handleCardClick(e, colIdx, cardIdx)}
