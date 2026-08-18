@@ -841,4 +841,9 @@
 	.shared-editor :global(.cm-line) {
 		padding: 0;
 	}
+
+	.shared-editor :global(.cm-cursor) {
+		margin-left: 0;
+		border-left-width: 2px;
+	}
 </style>
