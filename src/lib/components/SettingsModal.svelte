@@ -1,7 +1,16 @@
 <script lang="ts">
 	import { fade, scale } from 'svelte/transition';
 	import { invoke } from '@tauri-apps/api/core';
-	import { settings, EDITOR_WIDTH_VALUES, type EditorWidth, type SidebarPosition } from '../stores/settings.svelte.js';
+	import {
+		settings,
+		EDITOR_WIDTH_VALUES,
+		EDITOR_FONT_VALUES,
+		EDITOR_FONT_SIZE_MIN,
+		EDITOR_FONT_SIZE_MAX,
+		type EditorWidth,
+		type EditorFont,
+		type SidebarPosition,
+	} from '../stores/settings.svelte.js';
 
 	let {
 		show,
@@ -26,6 +35,13 @@
 	const positionOptions: { value: SidebarPosition; label: string }[] = [
 		{ value: 'left', label: 'Left' },
 		{ value: 'right', label: 'Right' },
+	];
+
+	const editorFontOptions: { value: EditorFont; label: string }[] = [
+		{ value: 'system', label: 'System' },
+		{ value: 'sans', label: 'Sans' },
+		{ value: 'serif', label: 'Serif' },
+		{ value: 'mono', label: 'Mono' },
 	];
 
 	$effect(() => {
@@ -126,6 +142,45 @@
 							</button>
 						{/each}
 					</div>
+				</div>
+
+				<div class="flex flex-col gap-2">
+					<div class="text-[13px] font-semibold text-(--color-fg-default)">Editor Font</div>
+					<p class="text-[12px] text-(--color-fg-muted) m-0 leading-[1.4]">Choose the font used for writing and reading your notes.</p>
+					<div class="flex border border-(--color-border-default) rounded-[6px] overflow-hidden bg-(--color-canvas-subtle)">
+						{#each editorFontOptions as option}
+							<button
+								class="flex-1 py-2 px-3 border-none text-[13px] cursor-pointer transition-all duration-150 border-r border-r-(--color-border-default) last:border-r-0 hover:[&:not(.active)]:bg-(--color-neutral-muted) hover:[&:not(.active)]:text-(--color-fg-default)"
+								style="font-family: {EDITOR_FONT_VALUES[option.value]}"
+								class:active={settings.editorFont === option.value}
+								class:bg-(--color-canvas-default)={settings.editorFont === option.value}
+								class:bg-transparent={settings.editorFont !== option.value}
+								class:text-(--color-accent-fg)={settings.editorFont === option.value}
+								class:text-(--color-fg-muted)={settings.editorFont !== option.value}
+								class:font-semibold={settings.editorFont === option.value}
+								class:font-medium={settings.editorFont !== option.value}
+								class:shadow-[0_1px_3px_rgba(0,0,0,0.1)]={settings.editorFont === option.value}
+								onclick={() => settings.setEditorFont(option.value)}
+								title={option.label}>
+								{option.label}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<div class="flex flex-col gap-2">
+					<div class="flex items-center justify-between">
+						<div class="text-[13px] font-semibold text-(--color-fg-default)">Editor Font Size</div>
+						<span class="text-[12px] text-(--color-fg-muted) tabular-nums">{settings.editorFontSize}px</span>
+					</div>
+					<input
+						type="range"
+						min={EDITOR_FONT_SIZE_MIN}
+						max={EDITOR_FONT_SIZE_MAX}
+						step="1"
+						value={settings.editorFontSize}
+						oninput={(e) => settings.setEditorFontSize(Number(e.currentTarget.value))}
+						class="w-full accent-(--color-accent-fg) cursor-pointer" />
 				</div>
 
 				<div class="flex flex-col gap-2">

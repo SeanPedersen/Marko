@@ -11,7 +11,8 @@ const baseTheme = EditorView.theme({
     height: '100%',
   },
   '.cm-content': {
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontFamily: 'var(--editor-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
+    fontSize: 'var(--editor-font-size, 16px)',
     padding: '0',
     caretColor: 'var(--color-fg-default)',
   },
@@ -41,7 +42,7 @@ const baseTheme = EditorView.theme({
   },
   '.cm-scroller': {
     overflowY: 'scroll',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontFamily: 'var(--editor-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
     lineHeight: '1.6',
   },
   '.cm-line': {
