@@ -63,6 +63,8 @@
 			path: tab.path || null,
 			tabId: tab.id,
 			hasSelection: false,
+			x: e.clientX,
+			y: e.clientY,
 		}).catch(console.error);
 	}
 

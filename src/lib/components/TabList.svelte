@@ -150,6 +150,8 @@
 			path: null,
 			tabId: null,
 			hasSelection: false,
+			x: e.clientX,
+			y: e.clientY,
 		}).catch(console.error);
 	}
 </script>
