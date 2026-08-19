@@ -67,6 +67,10 @@
 
 	// Inline card editing
 	let editingCard = $state<{ colIdx: number; cardIdx: number } | null>(null);
+	// Bumped on every startEditCard/close call so a stale in-flight edit-open
+	// (still mid-`await` when a newer card switch starts) can detect it's been
+	// superseded and bail out instead of clobbering the newer card's popup.
+	let editToken = 0;
 	let editingText = '';
 
 	// Detail pane
@@ -79,7 +83,6 @@
 
 	// Shared CodeMirror instance for card editing
 	let sharedEditorEl: HTMLDivElement;
-	let backdropEl: HTMLDivElement | undefined = $state();
 	let sharedView: EditorView | null = null;
 	let editorPos = $state({
 		left: 0, top: 0, width: 280, height: 36, zoom: 1,
@@ -166,7 +169,7 @@
 
 	// --- Shared CodeMirror editor ---
 
-	// The card editor popup and its backdrop must render outside the
+	// The card editor popup must render outside the
 	// zoomed content wrapper (MarkdownViewer's `zoom: {zoomLevel/100}`
 	// container). WebKitGTK (Linux) re-applies an ancestor's CSS `zoom` to
 	// the left/top/transform of `position: fixed` descendants, even though
@@ -191,12 +194,11 @@
 		return zoom;
 	}
 
-	// The popup and its full-viewport backdrop (needed to catch outside
-	// clicks that commit the edit) both sit above the board in paint order,
-	// so a wheel event over either one never reaches the column/board
-	// scroll containers underneath. Forward it manually to whichever is
-	// under the pointer, unless the pointer is over the CodeMirror content
-	// itself and its own internal scroller can still consume the scroll.
+	// The popup sits above the board in paint order, so a wheel event over
+	// it never reaches the column/board scroll containers underneath.
+	// Forward it manually to whichever is under the pointer, unless the
+	// pointer is over the CodeMirror content itself and its own internal
+	// scroller can still consume the scroll.
 	function forwardWheelToBoard(e: WheelEvent) {
 		const scroller = (e.target as HTMLElement)?.closest?.<HTMLElement>('.cm-scroller');
 		if (scroller) {
@@ -206,12 +208,9 @@
 		}
 
 		const prevPopupPointerEvents = sharedEditorEl.style.pointerEvents;
-		const prevBackdropPointerEvents = backdropEl?.style.pointerEvents;
 		sharedEditorEl.style.pointerEvents = 'none';
-		if (backdropEl) backdropEl.style.pointerEvents = 'none';
 		const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
 		sharedEditorEl.style.pointerEvents = prevPopupPointerEvents;
-		if (backdropEl) backdropEl.style.pointerEvents = prevBackdropPointerEvents ?? '';
 
 		const vScroll = el?.closest<HTMLElement>('.overflow-y-auto');
 		const hScroll = el?.closest<HTMLElement>('.overflow-x-auto');
@@ -232,13 +231,35 @@
 		if (cardEl) syncEditorPosition(cardEl);
 	}
 
+	// Closes/switches the popup on a click elsewhere on the board. Unlike a
+	// full-viewport backdrop, this doesn't intercept the pointer itself — it
+	// only observes the pointerdown in the capture phase and saves the
+	// outgoing card, then lets the event continue completely untouched. That
+	// way the real target's own handler (a different card's title span, its
+	// body-preview button, the drag-start logic, ordinary hover/cursor
+	// styling — all of it) fires exactly as it would if no card were being
+	// edited, instead of a second, synthetic startEditCard() call racing it.
+	function handleOutsidePointerDown(e: PointerEvent) {
+		if (!editorVisible) return;
+		const target = e.target as HTMLElement;
+		if (sharedEditorEl.contains(target)) return;
+		const card = target.closest<HTMLElement>('.kanban-card');
+		if (!card) {
+			commitEditCard();
+			return;
+		}
+		saveEditingCard();
+	}
+
 	onMount(() => {
 		initSharedEditor();
 		document.addEventListener('scroll', handleAnyScroll, true);
+		document.addEventListener('pointerdown', handleOutsidePointerDown, true);
 	});
 
 	onDestroy(() => {
 		document.removeEventListener('scroll', handleAnyScroll, true);
+		document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
 		sharedView?.destroy();
 		sharedView = null;
 		debouncedPaneCommit.cancel();
@@ -352,11 +373,17 @@
 
 	async function startEditCard(colIdx: number, cardIdx: number, clickX?: number, clickY?: number) {
 		if (readonly) return;
+		const token = ++editToken;
 		editingCard = { colIdx, cardIdx };
-		const text = columns[colIdx].cards[cardIdx].text;
+		const card = columns[colIdx].cards[cardIdx];
+		const text = card.body ? `${card.text}\n---\n${card.body}` : card.text;
 		editingText = text;
 
 		await tick();
+		// Superseded by a newer startEditCard/close call while we were
+		// awaiting — applying our (now stale) card's content/position here
+		// would clobber whatever the newer call already set up.
+		if (token !== editToken) return;
 
 		const cardEl = findCardEl(colIdx, cardIdx);
 		if (!cardEl || !sharedView) return;
@@ -371,6 +398,7 @@
 		// Wait for the popup to become visible and lay out before measuring or
 		// focusing. CodeMirror's focus() is a no-op while the element is hidden.
 		await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+		if (token !== editToken) return;
 
 		// Place the caret where the click landed. Compute the position BEFORE
 		// focus so the cursor never flashes at position 0.
@@ -379,6 +407,7 @@
 			let pos = sharedView.posAtCoords({ x: clickX, y: clickY });
 			if (pos === null) {
 				await new Promise((r) => requestAnimationFrame(r));
+				if (token !== editToken) return;
 				pos = sharedView.posAtCoords({ x: clickX, y: clickY });
 			}
 			if (pos !== null) caret = Math.min(pos, text.length);
@@ -390,7 +419,7 @@
 		sharedView.focus();
 	}
 
-	function commitEditCard() {
+	function saveEditingCard() {
 		if (!editingCard) return;
 		const raw = editingText;
 		const sepMatch = raw.match(/\n---\s*(\n|$)/);
@@ -410,12 +439,18 @@
 				commit();
 			}
 		}
+	}
+
+	function commitEditCard() {
+		saveEditingCard();
+		editToken++;
 		editorVisible = false;
 		editingCard = null;
 		editingText = '';
 	}
 
 	function cancelEditCard() {
+		editToken++;
 		editorVisible = false;
 		editingCard = null;
 		editingText = '';
@@ -715,34 +750,6 @@
 	style:clip-path="inset({editorPos.clip.top}px {editorPos.clip.right}px {editorPos.clip.bottom}px {editorPos.clip.left}px)"
 	onwheel={forwardWheelToBoard}
 ></div>
-
-<!-- Backdrop: commits on outside click -->
-{#if editorVisible}
-	<div
-		bind:this={backdropEl}
-		use:portal
-		class="fixed inset-0 z-[999]"
-		role="presentation"
-		onwheel={forwardWheelToBoard}
-		onpointerdown={(e) => {
-			// Check if the click is on a kanban card underneath the backdrop
-			const elements = document.elementsFromPoint(e.clientX, e.clientY);
-			for (const el of elements) {
-				const card = (el as HTMLElement).closest?.<HTMLElement>('.kanban-card');
-				if (card) {
-					const colIdx = parseInt(card.dataset.colIdx ?? '');
-					const cardIdx = parseInt(card.dataset.cardIdx ?? '');
-					if (!isNaN(colIdx) && !isNaN(cardIdx)) {
-						commitEditCard();
-						startEditCard(colIdx, cardIdx, e.clientX, e.clientY);
-						return;
-					}
-				}
-			}
-			commitEditCard();
-		}}
-	></div>
-{/if}
 
 <div class="kanban-board flex flex-col h-full bg-(--color-canvas-default) overflow-hidden [font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] select-none">
 	{#if rawMode}
