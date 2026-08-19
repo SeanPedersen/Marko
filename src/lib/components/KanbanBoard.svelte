@@ -291,14 +291,19 @@
 	// the compositor to rasterize the layer off the pixel grid, which blurs
 	// its text — the card's own text never has this problem since it's
 	// painted in normal flow, not via a GPU-composited transform. Rounding
-	// here trades up to half a pixel of edge drift (imperceptible) for
-	// crisp text once the popup is focused.
+	// to the nearest *device* pixel (not CSS pixel) matters here: under
+	// fractional display scaling (125%/150%, common on Linux) a whole CSS
+	// pixel isn't a whole device pixel, so rounding in CSS-pixel space both
+	// misses the device-pixel grid and overshoots the correction, producing
+	// a bigger drift than necessary — visible as the popup text jumping
+	// slightly relative to the card underneath it.
 	function syncEditorPosition(cardEl: HTMLElement) {
 		const rect = cardEl.getBoundingClientRect();
 		const zoom = getAncestorZoom(cardEl);
+		const dpr = window.devicePixelRatio || 1;
 		editorPos = {
-			left: Math.round(rect.left) / zoom,
-			top: Math.round(rect.top) / zoom,
+			left: Math.round(rect.left * dpr) / dpr / zoom,
+			top: Math.round(rect.top * dpr) / dpr / zoom,
 			width: rect.width / zoom,
 			height: rect.height / zoom,
 			zoom,
