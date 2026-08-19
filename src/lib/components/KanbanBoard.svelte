@@ -283,17 +283,22 @@
 	// `zoom` directly on the popup fixes the font, but then also rescales
 	// the popup's own left/top/width/height by that factor (verified: a
 	// self-zoomed fixed element's transform and box are multiplied by its
-	// zoom too), so those are pre-divided here to cancel it back out. Left
-	// unrounded: rounding before the zoom re-multiplies it introduces up to
-	// half a zoomed pixel of drift from the card's true edge — invisible
-	// most of the time, but noticeable once focus draws the eye to the
-	// border/caret.
+	// zoom too), so those are pre-divided here to cancel it back out.
+	//
+	// left/top are rounded to whole device pixels BEFORE dividing by zoom
+	// (rather than after), so the zoom re-multiplication cancels back to
+	// that same whole-pixel value exactly. A fractional `translate()` forces
+	// the compositor to rasterize the layer off the pixel grid, which blurs
+	// its text — the card's own text never has this problem since it's
+	// painted in normal flow, not via a GPU-composited transform. Rounding
+	// here trades up to half a pixel of edge drift (imperceptible) for
+	// crisp text once the popup is focused.
 	function syncEditorPosition(cardEl: HTMLElement) {
 		const rect = cardEl.getBoundingClientRect();
 		const zoom = getAncestorZoom(cardEl);
 		editorPos = {
-			left: rect.left / zoom,
-			top: rect.top / zoom,
+			left: Math.round(rect.left) / zoom,
+			top: Math.round(rect.top) / zoom,
 			width: rect.width / zoom,
 			height: rect.height / zoom,
 			zoom,
