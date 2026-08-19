@@ -189,18 +189,23 @@
 	// Load root directory when folderPath or refreshKey changes
 	$effect(() => {
 		const _refresh = refreshKey;
-		if (folderPath) {
+		const requestedFolder = folderPath;
+		if (requestedFolder) {
 			// Restore sort preference for this folder
 			const prefs = getSortPrefsMap();
-			if (prefs[folderPath]) sortMode = prefs[folderPath];
+			if (prefs[requestedFolder]) sortMode = prefs[requestedFolder];
 			else sortMode = 'az';
 
-			loadDirectory(folderPath).then(async (result) => {
+			loadDirectory(requestedFolder).then(async (result) => {
+				// Folder changed again while this request was in flight — discard
+				// the stale response so it can't clobber knownFiles for the new folder.
+				if (requestedFolder !== folderPath) return;
+
 				entries = result;
 				// Load any previously expanded directories
 				const expandedLoads: Promise<void>[] = [];
 				for (const dir of expandedDirs) {
-					if (dir.startsWith(folderPath)) {
+					if (dir.startsWith(requestedFolder)) {
 						expandedLoads.push(
 							loadDirectory(dir).then((contents) => {
 								dirContents.set(dir, contents);
@@ -210,6 +215,8 @@
 					}
 				}
 				await Promise.all(expandedLoads);
+
+				if (requestedFolder !== folderPath) return;
 
 				const newFiles = collectFilePaths(entries, dirContents);
 				if (knownFiles.size > 0 && onfileschanged) {
