@@ -285,25 +285,22 @@
 	// self-zoomed fixed element's transform and box are multiplied by its
 	// zoom too), so those are pre-divided here to cancel it back out.
 	//
-	// left/top are rounded to whole device pixels BEFORE dividing by zoom
-	// (rather than after), so the zoom re-multiplication cancels back to
-	// that same whole-pixel value exactly. A fractional `translate()` forces
-	// the compositor to rasterize the layer off the pixel grid, which blurs
-	// its text — the card's own text never has this problem since it's
-	// painted in normal flow, not via a GPU-composited transform. Rounding
-	// to the nearest *device* pixel (not CSS pixel) matters here: under
-	// fractional display scaling (125%/150%, common on Linux) a whole CSS
-	// pixel isn't a whole device pixel, so rounding in CSS-pixel space both
-	// misses the device-pixel grid and overshoots the correction, producing
-	// a bigger drift than necessary — visible as the popup text jumping
-	// slightly relative to the card underneath it.
+	// Positioned via `left`/`top` (normal layout), not `transform: translate()`
+	// — a transform forces the element onto its own GPU-composited layer,
+	// which rasterizes independently of the page and blurs text whenever the
+	// translate is fractional. Getting that fractional-pixel rounding right
+	// turned out to be engine-specific (Chromium/WebKitGTK/WKWebView each
+	// snap compositor layers differently, so a fix verified on Linux still
+	// blurred/shifted on the macOS build) and was never going to be robust
+	// across Tauri's three platform webviews. `left`/`top` sidesteps the
+	// whole problem: it's laid out and rasterized the same way the card's
+	// own (non-transformed) text is, on every platform, with no rounding.
 	function syncEditorPosition(cardEl: HTMLElement) {
 		const rect = cardEl.getBoundingClientRect();
 		const zoom = getAncestorZoom(cardEl);
-		const dpr = window.devicePixelRatio || 1;
 		editorPos = {
-			left: Math.round(rect.left * dpr) / dpr / zoom,
-			top: Math.round(rect.top * dpr) / dpr / zoom,
+			left: rect.left / zoom,
+			top: rect.top / zoom,
 			width: rect.width / zoom,
 			height: rect.height / zoom,
 			zoom,
@@ -709,8 +706,9 @@
 
 <!-- Shared CodeMirror instance for card editing (always mounted, hidden when inactive) -->
 <div bind:this={sharedEditorEl} use:portal
-	class="shared-editor {editorVisible ? 'block' : 'hidden'} fixed left-0 top-0 z-[1000] bg-(--color-canvas-default) border border-(--color-border-default) rounded-[6px] px-[10px] py-2 shadow-[0_4px_16px_rgba(0,0,0,0.18)] box-border select-text will-change-transform"
-	style:transform="translate({editorPos.left}px, {editorPos.top}px)"
+	class="shared-editor {editorVisible ? 'block' : 'hidden'} fixed z-[1000] bg-(--color-canvas-default) border border-(--color-border-default) rounded-[6px] px-[10px] py-2 shadow-[0_4px_16px_rgba(0,0,0,0.18)] box-border select-text"
+	style:left="{editorPos.left}px"
+	style:top="{editorPos.top}px"
 	style:width="{editorPos.width}px"
 	style:height="{editorPos.height}px"
 	style:zoom={editorPos.zoom}
