@@ -1,3 +1,4 @@
+/** Serializes Marko Kanban boards with card bodies and normalized frontmatter boundaries. */
 import type { KanbanCard, KanbanColumn } from './kanban.js';
 
 const MARKO_PLUGIN_KEY = 'marko-kanban-plugin';
@@ -16,12 +17,18 @@ function serializeCard(card: KanbanCard): string {
 	return `${line}\n---\n${card.body}`;
 }
 
+function normalizeFrontmatter(frontmatter: string): string {
+	return frontmatter
+		.replace(/^(---[ \t]*\r?\n)(?:[ \t]*\r?\n)+/, '$1')
+		.replace(/(?:\r?\n[ \t]*)+(\r?\n---[ \t]*(?:\r?\n)?$)/, '$1');
+}
+
 /**
  * Marko-extended serializer — emits card bodies, uses two blank lines between columns
  * so `## ` headings inside bodies are unambiguous.
  */
 export function serializeMarkoKanban(columns: KanbanColumn[], frontmatter: string): string {
-	const parts: string[] = [frontmatter];
+	const parts: string[] = [normalizeFrontmatter(frontmatter)];
 
 	for (const col of columns) {
 		const cardLines = col.cards.map(serializeCard);
