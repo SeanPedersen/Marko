@@ -47,6 +47,7 @@ urlencoding = "2"
 
 [target.'cfg(windows)'.dependencies]
 mslnk = "0.1"
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 winreg = "0.52"
 
 [profile.release]
