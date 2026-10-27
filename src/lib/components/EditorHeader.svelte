@@ -11,6 +11,7 @@
         ontoggleToc,
         showTocButton = false,
         onopenFileLocation,
+        onprint,
         gitStatus,
         oncommit,
         onrevert,
@@ -31,6 +32,7 @@
         ontoggleToc?: () => void;
         showTocButton?: boolean;
         onopenFileLocation?: () => void;
+        onprint?: () => void;
         gitStatus?: string | null;
         oncommit?: (message: string) => void;
         onrevert?: () => void;
@@ -202,6 +204,15 @@
             <div class="flex items-center gap-0 [font-family:'Monaco','Menlo','Ubuntu_Mono','SF_Mono','JetBrains_Mono','Fira_Code',monospace] text-[12px] text-(--color-fg-muted) overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0 leading-[1.2] tracking-[0.025em]">
                 {#if displayPath.root}<span class="text-(--color-accent-fg) font-semibold opacity-90">{displayPath.root}</span><span class="text-(--color-fg-muted) opacity-80 font-normal px-[3px]">/</span>{/if}{#if displayPath.dir}<span class="text-(--color-fg-muted) opacity-80">{displayPath.dir}</span><span class="text-(--color-fg-muted) opacity-80 font-normal px-[3px]">/</span>{/if}<span class="text-(--color-fg-default) font-semibold opacity-95">{displayPath.filename}</span>{#if gitStatus}{@const badge = gitBadge(gitStatus)}<span class="text-[10px] font-bold [font-family:'SF_Mono','Monaco','Menlo',monospace] ml-1.5 shrink-0" style="color: {badge.color};" title="Git: {gitStatus}">{badge.letter}</span>{/if}
             </div>
+        {/if}
+
+        {#if onprint}
+            <button class="btn-icon" onclick={onprint} title="Print (⌘/Ctrl+P)" aria-label="Print document">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                    <path d="M6 14h12v8H6zM18 12h.01" />
+                </svg>
+            </button>
         {/if}
 
         {#if (isKanban || isHtml) && ontogglerawmode}

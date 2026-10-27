@@ -965,3 +965,35 @@
 .split-bar:active {
 	background-color: var(--color-accent-fg);
 }
+
+/* Print the rendered document without the editor chrome or scroll containers. */
+#marko-print-document { display: none; }
+@media print {
+	@page { margin: 0; }
+	html, body { height: auto; overflow: visible; border-radius: 0; }
+	body > *:not(#marko-print-document) { display: none !important; }
+	#marko-print-document {
+		display: block;
+		padding: 1in;
+		color: #1f2328;
+		background: white;
+		font: 11pt/1.5 system-ui, sans-serif;
+		overflow-wrap: anywhere;
+	}
+	#marko-print-document h1, #marko-print-document h2, #marko-print-document h3 { break-after: avoid; font-weight: bold; }
+	#marko-print-document h1 { font-size: 2em; }
+	#marko-print-document h2 { font-size: 1.5em; }
+	#marko-print-document h3 { font-size: 1.25em; }
+	#marko-print-document p, #marko-print-document ul, #marko-print-document ol, #marko-print-document pre, #marko-print-document blockquote { margin: 0.75em 0; }
+	#marko-print-document > :first-child { margin-top: 0; }
+	#marko-print-document ul, #marko-print-document ol { padding-left: 2em; }
+	#marko-print-document ul { list-style: disc; }
+	#marko-print-document ol { list-style: decimal; }
+	#marko-print-document pre { white-space: pre-wrap; }
+	#marko-print-document code { font-family: monospace; }
+	#marko-print-document blockquote { border-left: 3px solid #999; padding-left: 1em; }
+	#marko-print-document img { max-width: 100%; height: auto; }
+	#marko-print-document table { border-collapse: collapse; }
+	#marko-print-document th, #marko-print-document td { border: 1px solid #999; padding: 0.3em 0.6em; }
+	#marko-print-document a { color: #0969da; text-decoration: underline; }
+}

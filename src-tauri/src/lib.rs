@@ -93,6 +93,22 @@ fn open_markdown(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn print_document(webview: tauri::WebviewWindow) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let print_webview = webview.clone();
+        return webview.run_on_main_thread(move || {
+            objc2_app_kit::NSPrintInfo::sharedPrintInfo().setVerticallyCentered(false);
+            if let Err(error) = print_webview.print() {
+                log::error!("Unable to open print dialog: {error}");
+            }
+        }).map_err(|error| error.to_string());
+    }
+    #[cfg(not(target_os = "macos"))]
+    webview.print().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn render_markdown(content: String) -> String {
     convert_markdown(&content)
 }
@@ -1484,6 +1500,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_markdown,
             render_markdown,
+            print_document,
             send_markdown_path,
             file_exists,
             read_file_content,

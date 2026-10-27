@@ -2450,6 +2450,7 @@ dependencies = [
  "log",
  "mslnk",
  "notify",
+ "objc2-app-kit 0.3.2",
  "opener",
  "regex",
  "serde",

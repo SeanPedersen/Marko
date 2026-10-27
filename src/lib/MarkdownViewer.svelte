@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
+	import { printMarkdown } from './utils/printMarkdown.js';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import { listen } from '@tauri-apps/api/event';
 	import { onMount, tick, untrack } from 'svelte';
@@ -709,6 +710,12 @@
 		});
 	}
 
+	function handlePrint() {
+		const tab = tabManager.activeTab;
+		if (!tab || currentFileType !== 'markdown') return;
+		printMarkdown(tab.rawContent, tab.path);
+	}
+
 	function handleKeyDown(e: KeyboardEvent) {
 		if (mode !== 'app') return;
 
@@ -716,6 +723,10 @@
 		const key = e.key.toLowerCase();
 		const code = e.code;
 
+		if (cmdOrCtrl && !e.shiftKey && key === 'p') {
+			e.preventDefault();
+			handlePrint();
+		}
 		if (cmdOrCtrl && key === 'w') {
 			e.preventDefault();
 			closeFile();
@@ -1408,6 +1419,7 @@
 		>
 			<EditorHeader
 				filePath={currentFile}
+				onprint={currentFileType === 'markdown' ? handlePrint : undefined}
 				folderPath={currentFolder}
 				{canGoBack}
 				{canGoForward}
