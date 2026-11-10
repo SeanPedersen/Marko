@@ -662,6 +662,45 @@ class MathWidget extends WidgetType {
   }
 }
 
+const MATH_BLOCK_ESTIMATED_HEIGHT_PX = 64;
+
+/** Display-mode equation for `$$ ... $$` spanning several lines. */
+class MathBlockWidget extends WidgetType {
+  constructor(readonly latex: string) {
+    super();
+  }
+
+  get estimatedHeight(): number {
+    return MATH_BLOCK_ESTIMATED_HEIGHT_PX;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const container = document.createElement('div');
+    container.className = 'cm-live-math-block';
+
+    container.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      focusWidgetSource(view, container);
+    });
+
+    try {
+      render(this.latex, container, { throwOnError: false, displayMode: true, strict: false });
+    } catch {
+      container.textContent = `$$${this.latex}$$`;
+    }
+
+    return container;
+  }
+
+  ignoreEvent(event: Event): boolean {
+    return event.type !== 'mousedown';
+  }
+
+  eq(other: MathBlockWidget): boolean {
+    return this.latex === other.latex;
+  }
+}
+
 class WikiLinkWidget extends WidgetType {
   constructor(
     readonly target: string,
@@ -2483,23 +2522,84 @@ const BLOCK_WIDGET_BUILDERS: Record<string, BlockWidgetBuilder> = {
     }),
 };
 
+const MATH_DELIMITER = '$$';
+
+interface TextRange {
+  from: number;
+  to: number;
+}
+
+interface MathBlockRange extends TextRange {
+  latex: string;
+}
+
+/**
+ * Finds `$$ … $$` equations spanning several lines. The markdown parser is
+ * bypassed on purpose: blank lines inside an equation split it into separate
+ * paragraphs. The opening `$$` must start a line and the closing one end a
+ * line; an unclosed opener is ignored so a stray `$$` cannot swallow the rest
+ * of the document.
+ */
+function findMultilineMathBlocks(state: EditorState, codeRanges: readonly TextRange[]): MathBlockRange[] {
+  const { doc } = state;
+  const blocks: MathBlockRange[] = [];
+  const isInCode = (pos: number) => codeRanges.some((range) => pos >= range.from && pos <= range.to);
+
+  let lineNumber = 1;
+  while (lineNumber <= doc.lines) {
+    const openLine = doc.line(lineNumber);
+    lineNumber++;
+    if (!openLine.text.startsWith(MATH_DELIMITER) || isInCode(openLine.from)) continue;
+    if (openLine.text.indexOf(MATH_DELIMITER, MATH_DELIMITER.length) !== -1) continue; // single-line: inline widget
+
+    for (let closeNumber = lineNumber; closeNumber <= doc.lines; closeNumber++) {
+      const closeLine = doc.line(closeNumber);
+      if (!closeLine.text.includes(MATH_DELIMITER)) continue;
+      if (!closeLine.text.trimEnd().endsWith(MATH_DELIMITER)) break;
+      const latex = doc.sliceString(openLine.from + MATH_DELIMITER.length, closeLine.to - MATH_DELIMITER.length);
+      blocks.push({ from: openLine.from, to: closeLine.to, latex: latex.trim() });
+      lineNumber = closeNumber + 1;
+      break;
+    }
+  }
+  return blocks;
+}
+
 function collectBlockWidgets(state: EditorState): DecorationSet {
   const cursorPos = state.selection.main.head;
   const decorations: Range<Decoration>[] = [];
+  const codeRanges: TextRange[] = [];
+  const containsCursor = (from: number, to: number) => cursorPos >= from && cursorPos <= to;
 
   syntaxTree(state).iterate({
     enter(node: SyntaxNodeRef) {
+      if (node.name === 'FencedCode' || node.name === 'CodeBlock') {
+        codeRanges.push({ from: node.from, to: node.to });
+      }
       const build = BLOCK_WIDGET_BUILDERS[node.name];
       if (!build) return;
       // Cursor inside the block reveals the raw markdown.
-      if (cursorPos >= node.from && cursorPos <= node.to) return;
+      if (containsCursor(node.from, node.to)) return;
       const decoration = build(state, node.from, node.to);
       if (decoration) decorations.push(decoration.range(node.from, node.to));
     },
   });
 
-  decorations.sort((a, b) => a.from - b.from);
-  return Decoration.set(decorations);
+  const mathBlocks = findMultilineMathBlocks(state, codeRanges).filter(
+    (block) => block.latex && !containsCursor(block.from, block.to)
+  );
+  const overlapsMath = (from: number, to: number) =>
+    mathBlocks.some((block) => from <= block.to && to >= block.from);
+
+  const widgetDecorations = decorations.filter((d) => !overlapsMath(d.from, d.to));
+  for (const block of mathBlocks) {
+    widgetDecorations.push(
+      Decoration.replace({ widget: new MathBlockWidget(block.latex), block: true }).range(block.from, block.to)
+    );
+  }
+
+  widgetDecorations.sort((a, b) => a.from - b.from);
+  return Decoration.set(widgetDecorations);
 }
 
 const blockWidgetField = StateField.define<DecorationSet>({
@@ -2804,6 +2904,16 @@ export const livePreviewStyles = EditorView.baseTheme({
   },
   '.cm-live-math .katex': {
     fontSize: '1.1em',
+  },
+  '.cm-live-math-block': {
+    cursor: 'pointer',
+    display: 'block',
+    textAlign: 'center',
+    overflowX: 'auto',
+    padding: '0.5em 0',
+  },
+  '.cm-live-math-block .katex-display': {
+    margin: '0 !important',
   },
 
   // Mermaid diagrams

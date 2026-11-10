@@ -3,6 +3,7 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { parseFrontmatter } from './frontmatter.js';
+import { extractMath, restoreMath } from './markdownMath.js';
 
 export function printMarkdown(content: string, filePath: string): void {
 	const previous = document.getElementById('marko-print-document');
@@ -10,7 +11,9 @@ export function printMarkdown(content: string, filePath: string): void {
 
 	const article = document.createElement('article');
 	article.id = 'marko-print-document';
-	article.innerHTML = DOMPurify.sanitize(marked.parse(parseFrontmatter(content).body, { async: false }));
+	const { markdown, equations } = extractMath(parseFrontmatter(content).body);
+	const sanitizedHtml = DOMPurify.sanitize(marked.parse(markdown, { async: false }));
+	article.innerHTML = restoreMath(sanitizedHtml, equations);
 
 	const directory = filePath.slice(0, Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\')) + 1);
 	for (const image of article.querySelectorAll('img')) {

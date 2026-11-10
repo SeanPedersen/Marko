@@ -9,6 +9,10 @@ A Tauri-based markdown editor with Obsidian-style WYSIWYG inline editor.
 - **Editor**: CodeMirror 6 with custom live preview extension
 - **Styling**: Tailwind CSS v4 (`@tailwindcss/vite`) + CSS variables for theming
 
+## Math
+
+KaTeX renders in the live preview (`livePreview.ts`): inline `$…$` and single-line `$$…$$` via `MathWidget`; multi-line `$$ … $$` blocks (blank lines allowed, opener at line start, closer at line end) via `MathBlockWidget`, found by a line scan in `collectBlockWidgets`. Click reveals the source. Print uses `utils/markdownMath.ts` (placeholders around `marked`, KaTeX after sanitizing).
+
 ## Styling
 
 ### Tailwind CSS v4
