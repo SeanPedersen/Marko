@@ -912,6 +912,7 @@
 									class="flex items-center w-full py-[3px] px-2 border-none bg-none text-[12.5px] leading-[1.4] text-left overflow-hidden gap-[6px] text-(--color-fg-muted) cursor-pointer hover:text-(--color-accent-fg) hover:bg-(--color-neutral-muted)"
 									onclick={() => onopenfile?.(result.path)}
 									onauxclick={(e) => { if (e.button === 1) { e.preventDefault(); onopenfile?.(result.path, { newTab: true }); } }}
+									oncontextmenu={(e) => handleContextMenu(e, { name: fileName, path: result.path, is_dir: false, modified_at: 0 })}
 									title={result.path}
 								>
 									<svg class="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
